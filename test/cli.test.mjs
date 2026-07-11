@@ -20,3 +20,21 @@ test("pack compile requires catalog, pack, and output paths", async () => {
     /pack compile requires --catalog PATH --pack PATH --output PATH/
   );
 });
+
+test("adapter commands require a source path", async () => {
+  await assert.rejects(
+    runCli(["adapter", "apply"]),
+    /adapter apply requires --source PATH/
+  );
+  await assert.rejects(
+    runCli(["adapter", "revert"]),
+    /adapter revert requires --source PATH/
+  );
+});
+
+test("doctor requires source and compiled catalog paths", async () => {
+  await assert.rejects(
+    runCli(["doctor", "--source", "codex"]),
+    /doctor requires --source PATH --catalog PATH/
+  );
+});

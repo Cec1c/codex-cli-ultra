@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import {
@@ -8,11 +8,19 @@ import {
 } from "./catalog/extract.mjs";
 import { MESSAGE_SPECS } from "./catalog/message-specs.mjs";
 import { compileLanguagePack } from "./pack/compile.mjs";
+import {
+  applyCodexPatch,
+  doctorCodexPatch,
+  revertCodexPatch
+} from "./adapter/codex-0.144.1.mjs";
 
 const USAGE = [
   "Usage:",
   "  node src/cli.mjs catalog extract --source PATH",
-  "  node src/cli.mjs pack compile --catalog PATH --pack PATH --output PATH"
+  "  node src/cli.mjs pack compile --catalog PATH --pack PATH --output PATH",
+  "  node src/cli.mjs adapter apply --source PATH",
+  "  node src/cli.mjs adapter revert --source PATH",
+  "  node src/cli.mjs doctor --source PATH --catalog PATH"
 ].join("\n");
 
 function optionValue(args, name) {
@@ -23,7 +31,10 @@ function optionValue(args, name) {
   return args[index + 1];
 }
 
-export async function runCli(args, { cwd = process.cwd() } = {}) {
+export async function runCli(
+  args,
+  { cwd = process.cwd(), stdout = process.stdout } = {}
+) {
   const [group, action] = args;
   if (group === "catalog" && action === "extract") {
     const source = optionValue(args, "--source");
@@ -69,6 +80,38 @@ export async function runCli(args, { cwd = process.cwd() } = {}) {
       messages: Object.keys(compiled.messages).length,
       output: outputPath
     };
+  }
+  if (group === "adapter" && (action === "apply" || action === "revert")) {
+    const source = optionValue(args, "--source");
+    if (!source) {
+      throw new Error(`adapter ${action} requires --source PATH`);
+    }
+    const sourceRoot = resolve(cwd, source);
+    if (action === "apply") {
+      await applyCodexPatch(sourceRoot);
+    } else {
+      await revertCodexPatch(sourceRoot);
+    }
+    return { command: `adapter ${action}`, source: sourceRoot };
+  }
+  if (group === "doctor") {
+    const source = optionValue(args, "--source");
+    const catalog = optionValue(args, "--catalog");
+    if (!source || !catalog) {
+      throw new Error("doctor requires --source PATH --catalog PATH");
+    }
+    const [adapter, compiledSource] = await Promise.all([
+      doctorCodexPatch(resolve(cwd, source)),
+      readFile(resolve(cwd, catalog), "utf8")
+    ]);
+    const compiled = JSON.parse(compiledSource);
+    const report = {
+      ...adapter,
+      locale: compiled.locale,
+      compiledMessages: Object.keys(compiled.messages ?? {}).length
+    };
+    stdout.write(JSON.stringify(report, null, 2) + "\n");
+    return report;
   }
   throw new Error(USAGE);
 }
