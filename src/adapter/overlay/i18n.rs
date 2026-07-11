@@ -28,10 +28,7 @@ impl Translator {
         }
     }
 
-    pub(crate) fn from_catalog_path(path: Option<&Path>) -> Self {
-        let Some(path) = path else {
-            return Self::default();
-        };
+    pub(crate) fn from_catalog_path(path: &Path) -> Self {
         let Ok(source) = fs::read_to_string(path) else {
             return Self::default();
         };
@@ -49,7 +46,9 @@ impl Translator {
 pub(crate) fn global() -> &'static Translator {
     static TRANSLATOR: OnceLock<Translator> = OnceLock::new();
     TRANSLATOR.get_or_init(|| {
-        let catalog_path = std::env::var_os("CODEX_ULTRA_CATALOG");
-        Translator::from_catalog_path(catalog_path.as_deref().map(Path::new))
+        let Some(catalog_path) = std::env::var_os("CODEX_ULTRA_CATALOG") else {
+            return Translator::default();
+        };
+        Translator::from_catalog_path(Path::new(&catalog_path))
     })
 }

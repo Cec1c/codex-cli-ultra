@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  access,
   mkdtemp,
   mkdir,
   readFile,
@@ -19,6 +20,7 @@ import {
 
 const LIB_SOURCE = [
   "mod history_cell;",
+  "mod hooks_rpc;",
   "mod ide_context;",
   "mod keymap;",
   ""
@@ -61,6 +63,18 @@ const STATUS_SOURCE = [
   ""
 ].join("\n");
 
+const SNAPSHOT_FILE_NAME =
+  "codex_tui__bottom_pane__status_line_setup__tests__setup_view_snapshot_uses_zh_cn_catalog.snap";
+
+async function pathExists(path) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function createFixture() {
   const sourceRoot = await mkdtemp(join(tmpdir(), "codex-ultra-adapter-"));
   const overlayDir = join(sourceRoot, "overlay");
@@ -81,6 +95,11 @@ async function createFixture() {
   await writeFile(
     join(overlayDir, "i18n_tests.rs"),
     "#[test]\nfn marker_test() {}\n",
+    "utf8"
+  );
+  await writeFile(
+    join(overlayDir, SNAPSHOT_FILE_NAME),
+    "配置状态栏\n",
     "utf8"
   );
   return { sourceRoot, overlayDir, statusPath };
@@ -113,7 +132,7 @@ test("planCodexPatch changes no files during preflight", async () => {
     overlayDir: fixture.overlayDir
   });
 
-  assert.equal(plan.files.length, 4);
+  assert.equal(plan.files.length, 5);
   assert.deepEqual(await snapshotTree(fixture.sourceRoot), before);
 });
 
@@ -134,6 +153,21 @@ test("applyCodexPatch installs overlays and localized call sites", async () => {
       "utf8"
     ),
     "pub(crate) fn marker() {}\n"
+  );
+  assert.match(
+    await readFile(
+      join(
+        fixture.sourceRoot,
+        "codex-rs",
+        "tui",
+        "src",
+        "bottom_pane",
+        "snapshots",
+        SNAPSHOT_FILE_NAME
+      ),
+      "utf8"
+    ),
+    /配置状态栏/
   );
 });
 
@@ -157,6 +191,35 @@ test("drift in one anchor leaves every file untouched", async () => {
   assert.deepEqual(await snapshotTree(fixture.sourceRoot), before);
 });
 
+test("backup failure removes adapter state without touching sources", async () => {
+  const fixture = await createFixture();
+  const before = await snapshotTree(fixture.sourceRoot);
+
+  await assert.rejects(
+    applyCodexPatch(fixture.sourceRoot, {
+      verifyGit: false,
+      overlayDir: fixture.overlayDir,
+      writeFileImpl: async (path, ...args) => {
+        if (
+          path
+            .replaceAll("\\", "/")
+            .includes("/.codex-ultra-mvp/backups/")
+        ) {
+          throw new Error("simulated backup failure");
+        }
+        return writeFile(path, ...args);
+      }
+    }),
+    /simulated backup failure/
+  );
+
+  assert.deepEqual(await snapshotTree(fixture.sourceRoot), before);
+  assert.equal(
+    await pathExists(join(fixture.sourceRoot, ".codex-ultra-mvp")),
+    false
+  );
+});
+
 test("revertCodexPatch restores exact original bytes", async () => {
   const fixture = await createFixture();
   const before = await snapshotTree(fixture.sourceRoot);
@@ -168,6 +231,31 @@ test("revertCodexPatch restores exact original bytes", async () => {
   await revertCodexPatch(fixture.sourceRoot);
 
   assert.deepEqual(await snapshotTree(fixture.sourceRoot), before);
+});
+
+test("revertCodexPatch rejects a state path outside the source root", async () => {
+  const fixture = await createFixture();
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  const statePath = join(
+    fixture.sourceRoot,
+    ".codex-ultra-mvp",
+    "state.json"
+  );
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.files[0].relativePath = "../outside-source.txt";
+  await writeFile(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
+
+  await assert.rejects(
+    revertCodexPatch(fixture.sourceRoot),
+    /unsafe adapter file path/
+  );
+  assert.equal(
+    await pathExists(join(fixture.sourceRoot, "..", "outside-source.txt")),
+    false
+  );
 });
 
 test("doctorCodexPatch reports whether the adapter state is applied", async () => {

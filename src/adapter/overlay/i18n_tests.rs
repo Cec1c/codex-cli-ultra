@@ -34,9 +34,8 @@ fn invalid_catalog_falls_back_to_english() {
 
 #[test]
 fn missing_or_empty_message_falls_back_to_english() {
-    let translator = Translator::from_json_str(
-        r#"{"messages":{"tui.status-line.setup.configure-title":""}}"#,
-    );
+    let translator =
+        Translator::from_json_str(r#"{"messages":{"tui.status-line.setup.configure-title":""}}"#);
 
     assert_eq!(translator.text("missing", "English"), "English");
     assert_eq!(
@@ -58,7 +57,7 @@ fn catalog_path_loads_a_valid_file() {
     )
     .expect("write catalog");
 
-    let translator = Translator::from_catalog_path(Some(&catalog_path));
+    let translator = Translator::from_catalog_path(&catalog_path);
 
     assert_eq!(
         translator.text(
@@ -71,15 +70,14 @@ fn catalog_path_loads_a_valid_file() {
 
 #[test]
 fn missing_catalog_configuration_falls_back_to_english() {
-    let translator = Translator::from_catalog_path(None);
+    let translator = Translator::default();
 
     assert_eq!(translator.text("missing", "English"), "English");
 }
 
 #[test]
 fn unreadable_catalog_file_falls_back_to_english() {
-    let translator =
-        Translator::from_catalog_path(Some(Path::new("missing-codex-ultra-catalog.json")));
+    let translator = Translator::from_catalog_path(Path::new("missing-codex-ultra-catalog.json"));
 
     assert_eq!(translator.text("missing", "English"), "English");
 }

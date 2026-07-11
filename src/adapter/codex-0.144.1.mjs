@@ -21,6 +21,10 @@ const STATUS_LINE_PATH =
   "codex-rs/tui/src/bottom_pane/status_line_setup.rs";
 const I18N_PATH = "codex-rs/tui/src/i18n.rs";
 const I18N_TESTS_PATH = "codex-rs/tui/src/i18n_tests.rs";
+const SNAPSHOT_FILE_NAME =
+  "codex_tui__bottom_pane__status_line_setup__tests__setup_view_snapshot_uses_zh_cn_catalog.snap";
+const SNAPSHOT_PATH =
+  "codex-rs/tui/src/bottom_pane/snapshots/" + SNAPSHOT_FILE_NAME;
 const STATE_DIRECTORY = ".codex-ultra-mvp";
 const DEFAULT_OVERLAY_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -103,7 +107,13 @@ const SNAPSHOT_TEST = [
   "            &translator,",
   "        );",
   "",
-  "        assert_snapshot!(render_lines(&view, /*width*/ 72));",
+  "        let rendered = render_lines(&view, /*width*/ 72);",
+  "        let rendered = rendered",
+  "            .lines()",
+  "            .map(str::trim_end)",
+  "            .collect::<Vec<_>>()",
+  '            .join("\\n");',
+  "        assert_snapshot!(rendered);",
   "    }",
   "",
   SNAPSHOT_ANCHOR
@@ -144,8 +154,8 @@ function transformLib(source) {
   return transformWithOriginalLineEndings(source, (normalized) =>
     replaceExact(
       normalized,
-      "mod ide_context;",
-      ["mod ide_context;", "mod i18n;"].join("\n"),
+      "mod hooks_rpc;",
+      ["mod hooks_rpc;", "mod i18n;"].join("\n"),
       "tui lib module declaration"
     )
   );
@@ -162,12 +172,7 @@ function transformStatusLine(source) {
     result = replaceExact(
       result,
       'name: "Use theme colors".to_string(),',
-      [
-        "name: translator.text(",
-        '                "tui.status-line.setup.use-theme-colors",',
-        '                "Use theme colors",',
-        "            ),"
-      ].join("\n"),
+      'name: translator.text("tui.status-line.setup.use-theme-colors", "Use theme colors"),',
       "use theme colors"
     );
     result = replaceExact(
@@ -249,15 +254,22 @@ export async function planCodexPatch(
 
   const libPath = join(resolvedRoot, MODULE_PATH);
   const statusPath = join(resolvedRoot, STATUS_LINE_PATH);
-  const [libSource, statusSource, i18nSource, i18nTestsSource] =
+  const [
+    libSource,
+    statusSource,
+    i18nSource,
+    i18nTestsSource,
+    snapshotSource
+  ] =
     await Promise.all([
       readFile(libPath, "utf8"),
       readFile(statusPath, "utf8"),
       readFile(join(overlayDir, "i18n.rs"), "utf8"),
-      readFile(join(overlayDir, "i18n_tests.rs"), "utf8")
+      readFile(join(overlayDir, "i18n_tests.rs"), "utf8"),
+      readFile(join(overlayDir, SNAPSHOT_FILE_NAME), "utf8")
     ]);
 
-  const overlayTargets = [I18N_PATH, I18N_TESTS_PATH];
+  const overlayTargets = [I18N_PATH, I18N_TESTS_PATH, SNAPSHOT_PATH];
   for (const relativePath of overlayTargets) {
     if (await pathExists(join(resolvedRoot, relativePath))) {
       throw new Error("overlay target already exists: " + relativePath);
@@ -288,6 +300,12 @@ export async function planCodexPatch(
       before: null,
       after: i18nTestsSource,
       created: true
+    },
+    {
+      relativePath: SNAPSHOT_PATH,
+      before: null,
+      after: snapshotSource,
+      created: true
     }
   ].map((file) => ({
     ...file,
@@ -313,27 +331,51 @@ function assertStateInsideSource(sourceRoot, stateRoot) {
   }
 }
 
+function resolveAdapterFilePath(root, relativePath) {
+  if (
+    typeof relativePath !== "string" ||
+    relativePath.length === 0 ||
+    isAbsolute(relativePath)
+  ) {
+    throw new Error("unsafe adapter file path");
+  }
+  const resolvedRoot = resolve(root);
+  const resolvedPath = resolve(resolvedRoot, relativePath);
+  const pathRelative = relative(resolvedRoot, resolvedPath);
+  const firstSegment = pathRelative.split(/[\\/]/, 1)[0];
+  if (!pathRelative || isAbsolute(pathRelative) || firstSegment === "..") {
+    throw new Error("unsafe adapter file path");
+  }
+  return resolvedPath;
+}
+
 export async function applyCodexPatch(sourceRoot, options = {}) {
   const plan = await planCodexPatch(sourceRoot, options);
+  const writeFileImpl = options.writeFileImpl ?? writeFile;
   assertStateInsideSource(plan.sourceRoot, plan.stateRoot);
   const backupsRoot = join(plan.stateRoot, "backups");
-  await mkdir(backupsRoot, { recursive: true });
-
-  for (const file of plan.files) {
-    if (file.created) {
-      continue;
-    }
-    const backupPath = join(backupsRoot, file.relativePath);
-    await mkdir(dirname(backupPath), { recursive: true });
-    await writeFile(backupPath, file.before, "utf8");
-  }
-
   const written = [];
   try {
+    await mkdir(backupsRoot, { recursive: true });
     for (const file of plan.files) {
-      const targetPath = join(plan.sourceRoot, file.relativePath);
+      if (file.created) {
+        continue;
+      }
+      const backupPath = resolveAdapterFilePath(
+        backupsRoot,
+        file.relativePath
+      );
+      await mkdir(dirname(backupPath), { recursive: true });
+      await writeFileImpl(backupPath, file.before, "utf8");
+    }
+
+    for (const file of plan.files) {
+      const targetPath = resolveAdapterFilePath(
+        plan.sourceRoot,
+        file.relativePath
+      );
       await mkdir(dirname(targetPath), { recursive: true });
-      await writeFile(targetPath, file.after, "utf8");
+      await writeFileImpl(targetPath, file.after, "utf8");
       written.push(file);
     }
     const state = {
@@ -346,7 +388,7 @@ export async function applyCodexPatch(sourceRoot, options = {}) {
         afterHash: file.afterHash
       }))
     };
-    await writeFile(
+    await writeFileImpl(
       join(plan.stateRoot, "state.json"),
       JSON.stringify(state, null, 2) + "\n",
       "utf8"
@@ -354,7 +396,10 @@ export async function applyCodexPatch(sourceRoot, options = {}) {
     return state;
   } catch (error) {
     for (const file of written.reverse()) {
-      const targetPath = join(plan.sourceRoot, file.relativePath);
+      const targetPath = resolveAdapterFilePath(
+        plan.sourceRoot,
+        file.relativePath
+      );
       if (file.created) {
         await rm(targetPath, { force: true });
       } else {
@@ -373,10 +418,16 @@ export async function revertCodexPatch(sourceRoot) {
   const state = JSON.parse(
     await readFile(join(stateRoot, "state.json"), "utf8")
   );
+  if (!Array.isArray(state.files)) {
+    throw new Error("invalid adapter state");
+  }
   const backupsRoot = join(stateRoot, "backups");
 
   for (const file of state.files) {
-    const targetPath = join(resolvedRoot, file.relativePath);
+    const targetPath = resolveAdapterFilePath(
+      resolvedRoot,
+      file.relativePath
+    );
     const current = await readFile(targetPath, "utf8");
     if (sha256(current) !== file.afterHash) {
       throw new Error(
@@ -386,12 +437,15 @@ export async function revertCodexPatch(sourceRoot) {
   }
 
   for (const file of state.files) {
-    const targetPath = join(resolvedRoot, file.relativePath);
+    const targetPath = resolveAdapterFilePath(
+      resolvedRoot,
+      file.relativePath
+    );
     if (file.created) {
       await rm(targetPath, { force: true });
     } else {
       const backup = await readFile(
-        join(backupsRoot, file.relativePath),
+        resolveAdapterFilePath(backupsRoot, file.relativePath),
         "utf8"
       );
       await writeFile(targetPath, backup, "utf8");
