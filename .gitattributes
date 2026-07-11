@@ -1,0 +1,9 @@
+* text=auto
+.gitattributes text eol=lf
+.gitignore text eol=lf
+*.ftl text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.mjs text eol=lf
+*.md text eol=lf
+*.ps1 text eol=crlf

@@ -1,15 +1,18 @@
 import { pathToFileURL } from "node:url";
-import { resolve } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 import {
   extractCatalog,
   writeCatalogArtifacts
 } from "./catalog/extract.mjs";
 import { MESSAGE_SPECS } from "./catalog/message-specs.mjs";
+import { compileLanguagePack } from "./pack/compile.mjs";
 
 const USAGE = [
   "Usage:",
-  "  node src/cli.mjs catalog extract --source PATH"
+  "  node src/cli.mjs catalog extract --source PATH",
+  "  node src/cli.mjs pack compile --catalog PATH --pack PATH --output PATH"
 ].join("\n");
 
 function optionValue(args, name) {
@@ -39,6 +42,33 @@ export async function runCli(args, { cwd = process.cwd() } = {}) {
       )
     });
     return { command: "catalog extract", records: records.length };
+  }
+  if (group === "pack" && action === "compile") {
+    const catalog = optionValue(args, "--catalog");
+    const pack = optionValue(args, "--pack");
+    const output = optionValue(args, "--output");
+    if (!catalog || !pack || !output) {
+      throw new Error(
+        "pack compile requires --catalog PATH --pack PATH --output PATH"
+      );
+    }
+    const compiled = await compileLanguagePack({
+      catalogPath: resolve(cwd, catalog),
+      packDir: resolve(cwd, pack)
+    });
+    const outputPath = resolve(cwd, output);
+    await mkdir(dirname(outputPath), { recursive: true });
+    await writeFile(
+      outputPath,
+      JSON.stringify(compiled, null, 2) + "\n",
+      "utf8"
+    );
+    return {
+      command: "pack compile",
+      locale: compiled.locale,
+      messages: Object.keys(compiled.messages).length,
+      output: outputPath
+    };
   }
   throw new Error(USAGE);
 }
