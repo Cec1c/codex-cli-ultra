@@ -382,16 +382,41 @@ test("validateLanguagePack rejects messages.ftl bytes that are not valid UTF-8",
   );
 });
 
-test("validateLanguagePack requires the GPL-3.0-only manifest license", async () => {
+test("validateLanguagePack accepts a nonempty third-party SPDX license", async () => {
   const { packRoot, catalogPath } = await createPackFixture({
     mutateManifest(manifest) {
-      manifest.license = "Apache-2.0";
+      manifest.license = "MIT";
+    }
+  });
+
+  const result = await validateLanguagePack({ packRoot, catalogPath });
+
+  assert.equal(Object.keys(result.messages).length, 5);
+});
+
+test("validateLanguagePack rejects an empty manifest license", async () => {
+  const { packRoot, catalogPath } = await createPackFixture({
+    mutateManifest(manifest) {
+      manifest.license = "";
     }
   });
 
   await assert.rejects(
     validateLanguagePack({ packRoot, catalogPath }),
-    /manifest license must be GPL-3\.0-only/
+    /manifest license must be a non-empty string/
+  );
+});
+
+test("validateLanguagePack rejects a whitespace-only manifest license", async () => {
+  const { packRoot, catalogPath } = await createPackFixture({
+    mutateManifest(manifest) {
+      manifest.license = "   ";
+    }
+  });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /manifest license must be a non-empty string/
   );
 });
 

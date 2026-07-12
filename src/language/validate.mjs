@@ -53,8 +53,8 @@ function validateManifest(manifest) {
   ) {
     throw new Error("invalid language pack manifest");
   }
-  if (manifest.license !== "GPL-3.0-only") {
-    throw new Error("manifest license must be GPL-3.0-only");
+  if (typeof manifest.license !== "string" || !manifest.license.trim()) {
+    throw new Error("manifest license must be a non-empty string");
   }
 
   const locale = canonicalLocale(manifest.locale, "pack locale");
