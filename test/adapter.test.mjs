@@ -6,6 +6,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  rm,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -172,6 +173,23 @@ async function snapshotTree(root) {
   }
   await visit(root);
   return snapshot;
+}
+
+async function readAdapterState(sourceRoot) {
+  return JSON.parse(
+    await readFile(
+      join(sourceRoot, ".codex-ultra-mvp", "state.json"),
+      "utf8"
+    )
+  );
+}
+
+async function restoreModifiedSourceFromBackup(sourceRoot, relativePath) {
+  const pathSegments = relativePath.split("/");
+  const backup = await readFile(
+    join(sourceRoot, ".codex-ultra-mvp", "backups", ...pathSegments)
+  );
+  await writeFile(join(sourceRoot, ...pathSegments), backup);
 }
 
 test("planCodexPatch changes no files during preflight", async () => {
@@ -505,5 +523,96 @@ test("doctorCodexPatch reports whether the adapter state is applied", async () =
   assert.equal(
     (await doctorCodexPatch(fixture.sourceRoot, { verifyGit: false })).applied,
     true
+  );
+});
+
+test("doctorCodexPatch reports unapplied after all modified sources are restored", async () => {
+  const fixture = await createFixture();
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  const state = await readAdapterState(fixture.sourceRoot);
+
+  for (const file of state.files.filter((file) => !file.created)) {
+    await restoreModifiedSourceFromBackup(
+      fixture.sourceRoot,
+      file.relativePath
+    );
+  }
+
+  assert.equal(
+    (await doctorCodexPatch(fixture.sourceRoot, { verifyGit: false })).applied,
+    false
+  );
+});
+
+test("doctorCodexPatch reports unapplied when a created source is missing", async () => {
+  const fixture = await createFixture();
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  await rm(join(fixture.sourceRoot, "codex-rs", "tui", "src", "i18n.rs"));
+
+  assert.equal(
+    (await doctorCodexPatch(fixture.sourceRoot, { verifyGit: false })).applied,
+    false
+  );
+});
+
+test("doctorCodexPatch reports unapplied for a recoverable mixed source state", async () => {
+  const fixture = await createFixture();
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  await restoreModifiedSourceFromBackup(
+    fixture.sourceRoot,
+    "codex-rs/tui/src/lib.rs"
+  );
+
+  assert.equal(
+    (await doctorCodexPatch(fixture.sourceRoot, { verifyGit: false })).applied,
+    false
+  );
+});
+
+test("doctorCodexPatch rejects a current source outside before and after hashes", async () => {
+  const fixture = await createFixture();
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  await writeFile(fixture.libPath, "unrelated source bytes\n", "utf8");
+
+  await assert.rejects(
+    doctorCodexPatch(fixture.sourceRoot, { verifyGit: false }),
+    /patched file changed after apply/
+  );
+});
+
+test("doctorCodexPatch rejects a damaged backup even after source restoration", async () => {
+  const fixture = await createFixture();
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  const relativePath = "codex-rs/tui/src/lib.rs";
+  await restoreModifiedSourceFromBackup(fixture.sourceRoot, relativePath);
+  await writeFile(
+    join(
+      fixture.sourceRoot,
+      ".codex-ultra-mvp",
+      "backups",
+      ...relativePath.split("/")
+    ),
+    "damaged backup bytes\n",
+    "utf8"
+  );
+
+  await assert.rejects(
+    doctorCodexPatch(fixture.sourceRoot, { verifyGit: false }),
+    /adapter backup changed/
   );
 });

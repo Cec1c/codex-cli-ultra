@@ -18,6 +18,7 @@ import {
 } from "node:path";
 
 const DEFAULT_STATE_DIRECTORY = ".codex-ultra-mvp";
+const CLEANUP_PENDING_SUFFIX = ".cleanup-pending";
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 
 function resolveFsOps(options = {}) {
@@ -69,7 +70,37 @@ function normalizeJsonValue(value) {
     return value;
   }
   if (Array.isArray(value)) {
-    return value.map((item) => normalizeJsonValue(item));
+    const keys = Reflect.ownKeys(value);
+    if (
+      Object.getPrototypeOf(value) !== Array.prototype ||
+      keys.length !== value.length + 1 ||
+      !keys.includes("length") ||
+      keys.some((key) => {
+        if (key === "length") {
+          return false;
+        }
+        if (typeof key !== "string") {
+          return true;
+        }
+        const index = Number(key);
+        return (
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= value.length ||
+          String(index) !== key
+        );
+      })
+    ) {
+      throw new Error("state metadata must contain only plain JSON values");
+    }
+    const normalized = [];
+    for (let index = 0; index < value.length; index += 1) {
+      if (!Object.hasOwn(value, index)) {
+        throw new Error("state metadata must contain only plain JSON values");
+      }
+      normalized.push(normalizeJsonValue(value[index]));
+    }
+    return normalized;
   }
   if (
     value &&
@@ -372,6 +403,32 @@ function normalizeOperations(operations, platform = process.platform) {
   return groups;
 }
 
+function cleanupPendingDirectory(stateDirectory) {
+  return `${stateDirectory}${CLEANUP_PENDING_SUFFIX}`;
+}
+
+function relativePathsOverlap(leftIdentity, rightIdentity) {
+  return (
+    leftIdentity === rightIdentity ||
+    leftIdentity.startsWith(`${rightIdentity}/`) ||
+    rightIdentity.startsWith(`${leftIdentity}/`)
+  );
+}
+
+async function inspectStateDirectories(context, stateDirectory) {
+  const cleanupDirectory = cleanupPendingDirectory(stateDirectory);
+  const stateInfo = await inspectSafePath(context, stateDirectory);
+  const cleanupInfo = await inspectSafePath(context, cleanupDirectory);
+  if (stateInfo.exists && cleanupInfo.exists) {
+    throw new Error("ambiguous adapter state cleanup");
+  }
+  return {
+    stateInfo,
+    cleanupDirectory,
+    cleanupInfo
+  };
+}
+
 export async function planOperations(
   sourceRoot,
   operations,
@@ -385,7 +442,11 @@ export async function planOperations(
     lstatImpl: fsOps.lstatImpl,
     realpathImpl: fsOps.realpathImpl
   });
-  const stateInfo = await inspectSafePath(context, stateDirectory);
+  const {
+    stateInfo,
+    cleanupDirectory,
+    cleanupInfo
+  } = await inspectStateDirectories(context, stateDirectory);
   const stateRoot = stateInfo.path;
   const groups = normalizeOperations(operations, platform);
   for (const group of groups.values()) {
@@ -394,12 +455,14 @@ export async function planOperations(
       platform
     );
     if (
-      operationIdentity === stateInfo.identity ||
-      operationIdentity.startsWith(`${stateInfo.identity}/`) ||
-      stateInfo.identity.startsWith(`${operationIdentity}/`)
+      relativePathsOverlap(operationIdentity, stateInfo.identity) ||
+      relativePathsOverlap(operationIdentity, cleanupInfo.identity)
     ) {
       throw new Error("adapter state path overlaps an operation path");
     }
+  }
+  if (cleanupInfo.exists) {
+    throw new Error("adapter cleanup pending");
   }
   if (stateInfo.exists) {
     throw new Error("adapter state already exists");
@@ -445,6 +508,7 @@ export async function planOperations(
     sourceRoot: context.sourceRoot,
     stateRoot,
     stateDirectory,
+    cleanupDirectory,
     files,
     pathContext: context
   };
@@ -471,6 +535,32 @@ async function ensureParentDirectory(context, relativePath, fsOps) {
     throw new Error(`adapter parent is not a directory: ${parentRelative}`);
   }
   return after.path;
+}
+
+async function claimStateDirectory(
+  context,
+  stateDirectory,
+  cleanupDirectory,
+  fsOps,
+  onClaimed
+) {
+  await ensureParentDirectory(context, stateDirectory, fsOps);
+  const before = await inspectStateDirectories(context, stateDirectory);
+  if (before.cleanupDirectory !== cleanupDirectory) {
+    throw new Error("invalid adapter cleanup path");
+  }
+  if (before.cleanupInfo.exists) {
+    throw new Error("adapter cleanup pending");
+  }
+  if (before.stateInfo.exists) {
+    throw createTargetExistsError(stateDirectory);
+  }
+  await fsOps.mkdirImpl(before.stateInfo.path, { recursive: false });
+  onClaimed();
+  const after = await inspectSafePath(context, stateDirectory);
+  if (!after.exists || !after.stats.isDirectory()) {
+    throw new Error("adapter state claim is not a directory");
+  }
 }
 
 async function assertSafeTree(context, relativePath, fsOps) {
@@ -503,7 +593,47 @@ async function safeRemove(context, relativePath, options, fsOps) {
   await fsOps.rmImpl(targetInfo.path, options);
 }
 
-async function atomicWrite(context, relativePath, content, fsOps) {
+async function cleanupActiveState(
+  context,
+  stateDirectory,
+  cleanupDirectory,
+  fsOps
+) {
+  const before = await inspectStateDirectories(context, stateDirectory);
+  if (before.cleanupDirectory !== cleanupDirectory) {
+    throw new Error("invalid adapter cleanup path");
+  }
+  if (before.cleanupInfo.exists) {
+    throw new Error("adapter cleanup pending");
+  }
+  if (!before.stateInfo.exists) {
+    throw new Error("invalid adapter state");
+  }
+  await fsOps.renameImpl(before.stateInfo.path, before.cleanupInfo.path);
+  const activeAfter = await inspectSafePath(context, stateDirectory);
+  const cleanupAfter = await inspectSafePath(context, cleanupDirectory);
+  if (
+    activeAfter.exists ||
+    !cleanupAfter.exists ||
+    !cleanupAfter.stats.isDirectory()
+  ) {
+    throw new Error("adapter cleanup transition failed");
+  }
+  await safeRemove(
+    context,
+    cleanupDirectory,
+    { recursive: true, force: true },
+    fsOps
+  );
+}
+
+async function atomicWrite(
+  context,
+  relativePath,
+  content,
+  fsOps,
+  { onCommitted = () => {} } = {}
+) {
   const targetInfo = await inspectSafePath(context, relativePath);
   await ensureParentDirectory(context, relativePath, fsOps);
   const temporaryRelativePath =
@@ -516,29 +646,34 @@ async function atomicWrite(context, relativePath, content, fsOps) {
     throw createTargetExistsError(temporaryRelativePath);
   }
   let failure = null;
+  let committed = false;
   try {
     await fsOps.writeFileImpl(temporaryInfo.path, content, { flag: "wx" });
     await inspectSafePath(context, temporaryRelativePath);
     await inspectSafePath(context, relativePath);
     await fsOps.renameImpl(temporaryInfo.path, targetInfo.path);
+    committed = true;
+    onCommitted();
   } catch (error) {
     failure = error;
   }
-  try {
-    await safeRemove(
-      context,
-      temporaryRelativePath,
-      { force: true },
-      fsOps
-    );
-  } catch (cleanupError) {
-    if (failure) {
-      throw new AggregateError(
-        [failure, cleanupError],
-        "adapter write failed and temporary cleanup failed"
+  if (!committed) {
+    try {
+      await safeRemove(
+        context,
+        temporaryRelativePath,
+        { force: true },
+        fsOps
       );
+    } catch (cleanupError) {
+      if (failure) {
+        throw new AggregateError(
+          [failure, cleanupError],
+          "adapter write failed and temporary cleanup failed"
+        );
+      }
+      throw cleanupError;
     }
-    throw cleanupError;
   }
   if (failure) {
     throw failure;
@@ -676,8 +811,18 @@ export async function applyOperations(sourceRoot, operations, options = {}) {
   const stateRelativePath = `${plan.stateDirectory}/state.json`;
   const state = stateForPlan(plan, stateMetadata);
   const written = [];
+  let stateClaimed = false;
 
   try {
+    await claimStateDirectory(
+      plan.pathContext,
+      plan.stateDirectory,
+      plan.cleanupDirectory,
+      fsOps,
+      () => {
+        stateClaimed = true;
+      }
+    );
     for (const file of plan.files) {
       if (file.created) {
         continue;
@@ -721,20 +866,23 @@ export async function applyOperations(sourceRoot, operations, options = {}) {
           plan.pathContext,
           file.relativePath,
           file.after,
-          fsOps
+          fsOps,
+          { onCommitted: () => written.push(file) }
         );
-        written.push(file);
       }
     }
     return state;
   } catch (error) {
+    if (!stateClaimed) {
+      throw error;
+    }
     const rollbackErrors = await rollbackAppliedFiles(plan, written, fsOps);
     if (rollbackErrors.length === 0) {
       try {
-        await safeRemove(
+        await cleanupActiveState(
           plan.pathContext,
           plan.stateDirectory,
-          { recursive: true, force: true },
+          plan.cleanupDirectory,
           fsOps
         );
       } catch (cleanupError) {
@@ -921,7 +1069,14 @@ export async function inspectOperationsState(sourceRoot, options = {}) {
     lstatImpl: fsOps.lstatImpl,
     realpathImpl: fsOps.realpathImpl
   });
-  return readValidatedState(
+  const stateLocations = await inspectStateDirectories(
+    context,
+    stateDirectory
+  );
+  if (stateLocations.cleanupInfo.exists) {
+    return null;
+  }
+  const revertPlan = await loadRevertPlan(
     context,
     stateDirectory,
     fsOps,
@@ -932,20 +1087,34 @@ export async function inspectOperationsState(sourceRoot, options = {}) {
     },
     { allowMissing: true }
   );
+  if (revertPlan === null) {
+    return null;
+  }
+  return {
+    state: revertPlan.state,
+    files: revertPlan.stateFiles,
+    stateRoot: revertPlan.stateRoot,
+    status: revertPlan.status
+  };
 }
 
 async function loadRevertPlan(
   context,
   stateDirectory,
   fsOps,
-  validationOptions
+  validationOptions,
+  { allowMissing = false } = {}
 ) {
   const validated = await readValidatedState(
     context,
     stateDirectory,
     fsOps,
-    validationOptions
+    validationOptions,
+    { allowMissing }
   );
+  if (validated === null) {
+    return null;
+  }
   const { state, stateRoot } = validated;
   const files = validated.files;
   const backupsRelativePath = `${stateDirectory}/backups`;
@@ -1002,7 +1171,18 @@ async function loadRevertPlan(
       backup
     });
   }
-  return { state, stateRoot, files: prepared };
+  const status = prepared.every(
+    (file) => file.action === (file.created ? "remove" : "restore")
+  )
+    ? "fully-applied"
+    : "recoverable-mixed";
+  return {
+    state,
+    stateRoot,
+    stateFiles: files,
+    files: prepared,
+    status
+  };
 }
 
 async function rollbackRevertedFiles(context, processed, fsOps) {
@@ -1043,11 +1223,25 @@ async function rollbackRevertedFiles(context, processed, fsOps) {
 export async function revertOperations(sourceRoot, options = {}) {
   const fsOps = resolveFsOps(options);
   const stateDirectory = options.stateDirectory ?? DEFAULT_STATE_DIRECTORY;
+  const cleanupDirectory = cleanupPendingDirectory(stateDirectory);
   const context = await createPathContext(sourceRoot, {
     platform: options.platform ?? process.platform,
     lstatImpl: fsOps.lstatImpl,
     realpathImpl: fsOps.realpathImpl
   });
+  const stateLocations = await inspectStateDirectories(
+    context,
+    stateDirectory
+  );
+  if (stateLocations.cleanupInfo.exists) {
+    await safeRemove(
+      context,
+      cleanupDirectory,
+      { recursive: true, force: true },
+      fsOps
+    );
+    return null;
+  }
   const revertPlan = await loadRevertPlan(
     context,
     stateDirectory,
@@ -1077,10 +1271,13 @@ export async function revertOperations(sourceRoot, options = {}) {
           context,
           file.relativePath,
           file.backup,
-          fsOps
+          fsOps,
+          { onCommitted: () => processed.push(file) }
         );
       }
-      processed.push(file);
+      if (file.action === "remove") {
+        processed.push(file);
+      }
     }
   } catch (error) {
     const rollbackErrors = await rollbackRevertedFiles(
@@ -1097,10 +1294,10 @@ export async function revertOperations(sourceRoot, options = {}) {
     throw error;
   }
 
-  await safeRemove(
+  await cleanupActiveState(
     context,
     stateDirectory,
-    { recursive: true, force: true },
+    cleanupDirectory,
     fsOps
   );
   return revertPlan.state;

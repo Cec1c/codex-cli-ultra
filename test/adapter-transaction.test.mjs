@@ -110,6 +110,24 @@ async function createDirectoryLink(target, path) {
   );
 }
 
+function createMkdirBarrier(targetPath) {
+  let arrivals = 0;
+  let release;
+  const barrier = new Promise((resolveBarrier) => {
+    release = resolveBarrier;
+  });
+  return async (path, options) => {
+    if (path === targetPath && arrivals < 2) {
+      arrivals += 1;
+      if (arrivals === 2) {
+        release();
+      }
+      await barrier;
+    }
+    return mkdir(path, options);
+  };
+}
+
 async function createCodexFixture() {
   const sourceRoot = await createTransactionFixture({
     "codex-rs/tui/src/lib.rs": LIB_SOURCE,
@@ -284,13 +302,127 @@ test("revertOperations accepts mixed before, after, and missing-created state", 
   assert.equal(await pathExists(join(sourceRoot, STATE_DIRECTORY)), false);
 });
 
-test("revertOperations retries cleanup after sources are already restored", async () => {
+test("revertOperations retries partial tombstone cleanup without rereading state", async () => {
+  const sourceRoot = await createTransactionFixture({
+    "src/file.txt": "alpha\n"
+  });
+  const targetPath = join(sourceRoot, "src", "file.txt");
+  const stateDirectory = "claims/active";
+  const stateRoot = join(sourceRoot, "claims", "active");
+  const tombstoneRoot = join(
+    sourceRoot,
+    "claims",
+    "active.cleanup-pending"
+  );
+  let cleanupAttempts = 0;
+  let stateRenames = 0;
+
+  await applyOperations(
+    sourceRoot,
+    [
+      {
+        type: "replace",
+        relativePath: "src/file.txt",
+        anchor: "alpha",
+        replacement: "omega"
+      }
+    ],
+    { stateDirectory }
+  );
+
+  const rmImpl = async (path, options) => {
+    if (path === tombstoneRoot && options?.recursive) {
+      cleanupAttempts += 1;
+      if (cleanupAttempts === 1) {
+        await rm(join(tombstoneRoot, "state.json"), { force: true });
+        await rm(
+          join(tombstoneRoot, "backups", "src", "file.txt"),
+          { force: true }
+        );
+        throw Object.assign(new Error("simulated tombstone lock"), {
+          code: "EBUSY"
+        });
+      }
+    }
+    return rm(path, options);
+  };
+  const renameImpl = async (oldPath, newPath) => {
+    if (oldPath === stateRoot && newPath === tombstoneRoot) {
+      stateRenames += 1;
+    }
+    return rename(oldPath, newPath);
+  };
+
+  await assert.rejects(
+    revertOperations(sourceRoot, { stateDirectory, renameImpl, rmImpl }),
+    /simulated tombstone lock/
+  );
+  assert.equal(await readFile(targetPath, "utf8"), "alpha\n");
+  assert.equal(await pathExists(stateRoot), false);
+  assert.equal(await pathExists(tombstoneRoot), true);
+  assert.equal(await pathExists(join(tombstoneRoot, "state.json")), false);
+
+  const cleanupResult = await revertOperations(sourceRoot, {
+    stateDirectory,
+    renameImpl,
+    rmImpl
+  });
+
+  assert.equal(cleanupAttempts, 2);
+  assert.equal(stateRenames, 1);
+  assert.equal(cleanupResult, null);
+  assert.equal(await readFile(targetPath, "utf8"), "alpha\n");
+  assert.equal(await pathExists(stateRoot), false);
+  assert.equal(await pathExists(tombstoneRoot), false);
+});
+
+test("plan and apply reject an existing cleanup tombstone without overwriting it", async () => {
+  const sourceRoot = await createTransactionFixture({
+    "src/file.txt": "alpha\n"
+  });
+  const stateDirectory = "claims/active";
+  const tombstoneRoot = join(
+    sourceRoot,
+    "claims",
+    "active.cleanup-pending"
+  );
+  const markerPath = join(tombstoneRoot, "marker.txt");
+  const operations = [
+    {
+      type: "replace",
+      relativePath: "src/file.txt",
+      anchor: "alpha",
+      replacement: "omega"
+    }
+  ];
+  await mkdir(tombstoneRoot, { recursive: true });
+  await writeFile(markerPath, "pending cleanup\n", "utf8");
+  const before = await snapshotTree(sourceRoot);
+
+  await assert.rejects(
+    planOperations(sourceRoot, operations, { stateDirectory }),
+    /adapter cleanup pending/
+  );
+  await assert.rejects(
+    applyOperations(sourceRoot, operations, { stateDirectory }),
+    /adapter cleanup pending/
+  );
+
+  assert.deepEqual(await snapshotTree(sourceRoot), before);
+  assert.equal(await readFile(markerPath, "utf8"), "pending cleanup\n");
+  assert.equal(await pathExists(join(sourceRoot, "claims", "active")), false);
+});
+
+test("revertOperations rejects simultaneous active and tombstone state", async () => {
   const sourceRoot = await createTransactionFixture({
     "src/file.txt": "alpha\n"
   });
   const targetPath = join(sourceRoot, "src", "file.txt");
   const stateRoot = join(sourceRoot, STATE_DIRECTORY);
-  let cleanupAttempts = 0;
+  const tombstoneRoot = join(
+    sourceRoot,
+    `${STATE_DIRECTORY}.cleanup-pending`
+  );
 
   await applyOperations(sourceRoot, [
     {
@@ -300,31 +432,48 @@ test("revertOperations retries cleanup after sources are already restored", asyn
       replacement: "omega"
     }
   ]);
-
-  const rmImpl = async (path, options) => {
-    if (path === stateRoot && options?.recursive) {
-      cleanupAttempts += 1;
-      if (cleanupAttempts === 1) {
-        throw Object.assign(new Error("simulated state lock"), {
-          code: "EBUSY"
-        });
-      }
-    }
-    return rm(path, options);
-  };
+  await mkdir(tombstoneRoot);
+  await writeFile(join(tombstoneRoot, "marker.txt"), "ambiguous\n", "utf8");
 
   await assert.rejects(
-    revertOperations(sourceRoot, { rmImpl }),
-    /simulated state lock/
+    revertOperations(sourceRoot),
+    /ambiguous adapter state cleanup/
   );
-  assert.equal(await readFile(targetPath, "utf8"), "alpha\n");
-  assert.equal(await pathExists(stateRoot), true);
 
-  await revertOperations(sourceRoot, { rmImpl });
+  assert.equal(await readFile(targetPath, "utf8"), "omega\n");
+  assert.equal(await pathExists(join(stateRoot, "state.json")), true);
+  assert.equal(
+    await readFile(join(tombstoneRoot, "marker.txt"), "utf8"),
+    "ambiguous\n"
+  );
+});
 
-  assert.equal(cleanupAttempts, 2);
-  assert.equal(await readFile(targetPath, "utf8"), "alpha\n");
-  assert.equal(await pathExists(stateRoot), false);
+test("cleanup tombstone path rejects a symlink or junction", async () => {
+  const sourceRoot = await createTransactionFixture({
+    "src/file.txt": "alpha\n"
+  });
+  const outsideRoot = await mkdtemp(join(tmpdir(), "codex-ultra-outside-"));
+  const outsideMarker = join(outsideRoot, "marker.txt");
+  const tombstonePath = join(
+    sourceRoot,
+    `${STATE_DIRECTORY}.cleanup-pending`
+  );
+  await writeFile(outsideMarker, "outside\n", "utf8");
+  await createDirectoryLink(outsideRoot, tombstonePath);
+
+  await assert.rejects(
+    planOperations(sourceRoot, [
+      {
+        type: "replace",
+        relativePath: "src/file.txt",
+        anchor: "alpha",
+        replacement: "omega"
+      }
+    ]),
+    /unsafe adapter reparse point/
+  );
+
+  assert.equal(await readFile(outsideMarker, "utf8"), "outside\n");
 });
 
 test("revert rollback uses injected fs operations and restores call-time bytes", async () => {
@@ -377,6 +526,67 @@ test("revert rollback uses injected fs operations and restores call-time bytes",
   );
 
   assert.equal(injectedRollbackSeen, true);
+  assert.equal(await readFile(firstPath, "utf8"), "changed-alpha\n");
+  assert.equal(await readFile(secondPath, "utf8"), "changed-bravo\n");
+  assert.equal(
+    await pathExists(join(sourceRoot, STATE_DIRECTORY, "state.json")),
+    true
+  );
+});
+
+test("modified revert registers rename commit before temp cleanup can fail", async () => {
+  const sourceRoot = await createTransactionFixture({
+    "src/first.txt": "alpha\n",
+    "src/second.txt": "bravo\n"
+  });
+  const firstPath = join(sourceRoot, "src", "first.txt");
+  const secondPath = join(sourceRoot, "src", "second.txt");
+  let rebuiltTempPath = null;
+
+  await applyOperations(sourceRoot, [
+    {
+      type: "replace",
+      relativePath: "src/first.txt",
+      anchor: "alpha",
+      replacement: "changed-alpha"
+    },
+    {
+      type: "replace",
+      relativePath: "src/second.txt",
+      anchor: "bravo",
+      replacement: "changed-bravo"
+    }
+  ]);
+
+  await assert.rejects(
+    revertOperations(sourceRoot, {
+      renameImpl: async (oldPath, newPath) => {
+        await rename(oldPath, newPath);
+        if (newPath === firstPath && rebuiltTempPath === null) {
+          rebuiltTempPath = oldPath;
+          await writeFile(oldPath, "rebuilt-temp\n", "utf8");
+        }
+      },
+      writeFileImpl: async (path, data, ...args) => {
+        if (
+          path.replaceAll("\\", "/").includes("/src/second.txt.tmp-") &&
+          Buffer.from(data).equals(Buffer.from("bravo\n"))
+        ) {
+          throw new Error("simulated second revert failure");
+        }
+        return writeFile(path, data, ...args);
+      },
+      rmImpl: async (path, options) => {
+        if (path === rebuiltTempPath) {
+          throw Object.assign(new Error("simulated rebuilt temp lock"), {
+            code: "EBUSY"
+          });
+        }
+        return rm(path, options);
+      }
+    })
+  );
+
   assert.equal(await readFile(firstPath, "utf8"), "changed-alpha\n");
   assert.equal(await readFile(secondPath, "utf8"), "changed-bravo\n");
   assert.equal(
@@ -453,6 +663,68 @@ test("create never overwrites a target that appears after preflight", async () =
   assert.equal(raced, true);
   assert.equal(await readFile(targetPath, "utf8"), "competitor\n");
   assert.equal(await pathExists(join(sourceRoot, STATE_DIRECTORY)), false);
+});
+
+test("concurrent modified applies atomically claim the default state root", async () => {
+  const sourceRoot = await createTransactionFixture({
+    "src/file.txt": "alpha\n"
+  });
+  const stateRoot = join(sourceRoot, STATE_DIRECTORY);
+  const operations = [
+    {
+      type: "replace",
+      relativePath: "src/file.txt",
+      anchor: "alpha",
+      replacement: "omega"
+    }
+  ];
+  const mkdirImpl = createMkdirBarrier(stateRoot);
+
+  const results = await Promise.allSettled([
+    applyOperations(sourceRoot, operations, { mkdirImpl }),
+    applyOperations(sourceRoot, operations, { mkdirImpl })
+  ]);
+  const fulfilled = results.filter((result) => result.status === "fulfilled");
+  const rejected = results.filter((result) => result.status === "rejected");
+
+  assert.equal(fulfilled.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].reason?.code, "EEXIST");
+  assert.equal(
+    await readFile(join(sourceRoot, "src", "file.txt"), "utf8"),
+    "omega\n"
+  );
+  assert.equal(await pathExists(join(stateRoot, "state.json")), true);
+});
+
+test("concurrent nested-state create loser never deletes winner state", async () => {
+  const sourceRoot = await createTransactionFixture({});
+  const stateDirectory = "claims/active";
+  const stateRoot = join(sourceRoot, "claims", "active");
+  const operations = [
+    {
+      type: "create",
+      relativePath: "src/created.txt",
+      content: "winner\n"
+    }
+  ];
+  const mkdirImpl = createMkdirBarrier(stateRoot);
+
+  const results = await Promise.allSettled([
+    applyOperations(sourceRoot, operations, { stateDirectory, mkdirImpl }),
+    applyOperations(sourceRoot, operations, { stateDirectory, mkdirImpl })
+  ]);
+  const fulfilled = results.filter((result) => result.status === "fulfilled");
+  const rejected = results.filter((result) => result.status === "rejected");
+
+  assert.equal(fulfilled.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].reason?.code, "EEXIST");
+  assert.equal(
+    await readFile(join(sourceRoot, "src", "created.txt"), "utf8"),
+    "winner\n"
+  );
+  assert.equal(await pathExists(join(stateRoot, "state.json")), true);
 });
 
 test("backup failure cleans state and leaves source bytes untouched", async () => {
@@ -535,8 +807,13 @@ test("apply forward, rollback, and cleanup all use injected fs operations", asyn
     "src/second.txt": "bravo\n"
   });
   const stateRoot = join(sourceRoot, STATE_DIRECTORY);
+  const tombstoneRoot = join(
+    sourceRoot,
+    `${STATE_DIRECTORY}.cleanup-pending`
+  );
   let forwardFailed = false;
   let rollbackWriteSeen = false;
+  let stateTransitionSeen = false;
   let stateCleanupSeen = false;
 
   await assert.rejects(
@@ -580,10 +857,15 @@ test("apply forward, rollback, and cleanup all use injected fs operations", asyn
           }
           return writeFile(path, data, ...args);
         },
-        renameImpl: (...args) => rename(...args),
+        renameImpl: async (oldPath, newPath) => {
+          if (oldPath === stateRoot && newPath === tombstoneRoot) {
+            stateTransitionSeen = true;
+          }
+          return rename(oldPath, newPath);
+        },
         linkImpl: (...args) => link(...args),
         rmImpl: async (path, options) => {
-          if (path === stateRoot && options?.recursive) {
+          if (path === tombstoneRoot && options?.recursive) {
             stateCleanupSeen = true;
           }
           return rm(path, options);
@@ -594,6 +876,7 @@ test("apply forward, rollback, and cleanup all use injected fs operations", asyn
   );
 
   assert.equal(rollbackWriteSeen, true);
+  assert.equal(stateTransitionSeen, true);
   assert.equal(stateCleanupSeen, true);
   assert.equal(
     await readFile(join(sourceRoot, "src", "first.txt"), "utf8"),
@@ -604,6 +887,69 @@ test("apply forward, rollback, and cleanup all use injected fs operations", asyn
     "bravo\n"
   );
   assert.equal(await pathExists(stateRoot), false);
+});
+
+test("modified apply registers rename commit before temp cleanup can fail", async () => {
+  const sourceRoot = await createTransactionFixture({
+    "src/first.txt": "alpha\n",
+    "src/second.txt": "bravo\n"
+  });
+  const firstPath = join(sourceRoot, "src", "first.txt");
+  const secondPath = join(sourceRoot, "src", "second.txt");
+  let rebuiltTempPath = null;
+
+  await assert.rejects(
+    applyOperations(
+      sourceRoot,
+      [
+        {
+          type: "replace",
+          relativePath: "src/first.txt",
+          anchor: "alpha",
+          replacement: "changed-alpha"
+        },
+        {
+          type: "replace",
+          relativePath: "src/second.txt",
+          anchor: "bravo",
+          replacement: "changed-bravo"
+        }
+      ],
+      {
+        renameImpl: async (oldPath, newPath) => {
+          await rename(oldPath, newPath);
+          if (newPath === firstPath && rebuiltTempPath === null) {
+            rebuiltTempPath = oldPath;
+            await writeFile(oldPath, "rebuilt-temp\n", "utf8");
+          }
+        },
+        writeFileImpl: async (path, data, ...args) => {
+          if (
+            path.replaceAll("\\", "/").includes("/src/second.txt.tmp-") &&
+            Buffer.from(data).equals(Buffer.from("changed-bravo\n"))
+          ) {
+            throw new Error("simulated second forward failure");
+          }
+          return writeFile(path, data, ...args);
+        },
+        rmImpl: async (path, options) => {
+          if (path === rebuiltTempPath) {
+            throw Object.assign(new Error("simulated rebuilt temp lock"), {
+              code: "EBUSY"
+            });
+          }
+          return rm(path, options);
+        }
+      }
+    )
+  );
+
+  assert.equal(await readFile(firstPath, "utf8"), "alpha\n");
+  assert.equal(await readFile(secondPath, "utf8"), "bravo\n");
+  assert.equal(
+    await pathExists(join(sourceRoot, STATE_DIRECTORY, "state.json")),
+    false
+  );
 });
 
 test("incomplete apply rollback keeps state and backups for recovery", async () => {
@@ -1009,7 +1355,34 @@ for (const [label, stateMetadata] of [
   ["function", { value() {} }],
   ["BigInt", { value: 1n }],
   ["NaN", { value: Number.NaN }],
-  ["Infinity", { value: Number.POSITIVE_INFINITY }]
+  ["Infinity", { value: Number.POSITIVE_INFINITY }],
+  ["sparse array", { value: Array(1) }],
+  [
+    "array with an extra property",
+    {
+      value: Object.assign([], { extra: "not JSON" })
+    }
+  ],
+  [
+    "Array subclass",
+    {
+      value: new (class extends Array {})()
+    }
+  ],
+  [
+    "array with own toJSON",
+    {
+      value: (() => {
+        const array = [];
+        Object.defineProperty(array, "toJSON", {
+          value() {
+            return [];
+          }
+        });
+        return array;
+      })()
+    }
+  ]
 ]) {
   test(`state metadata rejects non-JSON ${label}`, async () => {
     const sourceRoot = await createTransactionFixture({

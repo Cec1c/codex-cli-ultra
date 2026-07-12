@@ -421,6 +421,6 @@ export async function doctorCodexPatch(
     targetCommit: manifest.upstreamCommit,
     sourceCommit,
     supported,
-    applied: inspected !== null
+    applied: inspected?.status === "fully-applied"
   };
 }
