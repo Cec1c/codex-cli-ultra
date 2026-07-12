@@ -1,8 +1,8 @@
 # Codex CLI Ultra i18n 构建与分发设计 / i18n Build and Distribution Design
 
-> **状态：已确认设计，待实施计划。** 本文固定首个可安装 i18n MVP 的构建、分发、启动、降级和升级边界。
+> **状态：已确认设计，实施计划已拆分定稿。** 本文固定首个可安装 i18n MVP 的构建、分发、启动、降级和升级边界。
 >
-> **Status: approved design, pending implementation plan.** This document fixes the build, distribution, launch, fallback, and upgrade boundaries for the first installable i18n MVP.
+> **Status: approved design with finalized implementation plans.** This document fixes the build, distribution, launch, fallback, and upgrade boundaries for the first installable i18n MVP.
 
 ## 1. 决策摘要 / Decision Summary
 
@@ -193,10 +193,19 @@ The Windows-first installation uses this user-level layout:
 ├── bin\
 │   ├── codex.cmd
 │   ├── codex.ps1
-│   └── launcher.mjs
+│   ├── launcher.mjs
+│   ├── codex-ultra.cmd
+│   ├── codex-ultra.ps1
+│   ├── codex-ultra.mjs
+│   ├── uninstall.ps1
+│   └── set-user-path.ps1
 ├── releases\
 │   └── 0.144.1-ultra.1\x86_64-pc-windows-msvc\
-│       ├── codex.exe
+│       ├── package\
+│       │   ├── codex-package.json
+│       │   ├── bin\codex.exe
+│       │   ├── codex-resources\
+│       │   └── codex-path\rg.exe
 │       ├── release-manifest.json
 │       └── LICENSES\
 ├── languages\
@@ -209,6 +218,10 @@ The Windows-first installation uses this user-level layout:
 ├── notices\
 └── state.json
 ~~~
+
+`package/` 保留上游 `scripts/build_codex_package.py` 生成的规范布局。启动器执行 `package/bin/codex.exe` 的绝对路径，不把入口二进制脱离其沙箱辅助程序、code-mode host、ripgrep 和其他伴随资源单独移动。
+
+`package/` preserves the canonical layout produced by upstream `scripts/build_codex_package.py`. The launcher executes the absolute `package/bin/codex.exe` path and does not move the entrypoint away from its sandbox helpers, code-mode host, ripgrep, or other companion resources.
 
 `state.json` 只保存启动所需的稳定事实：官方绝对路径与版本、活动 Ultra 构建、活动语言、文件大小与修改时间、文件哈希和最后已知可用版本。
 
@@ -255,9 +268,28 @@ An Ultra Release manifest contains at least:
   "i18nApiVersion": 1,
   "catalogVersion": 1,
   "platform": "x86_64-pc-windows-msvc",
-  "asset": "codex-ultra-0.144.1-u1-windows-x64.zip",
-  "sha256": "sha256:...",
-  "sourceArchive": "codex-ultra-0.144.1-u1-source.tar.gz"
+  "executor": {
+    "name": "codex-ultra-executor-0.1.0.mjs",
+    "size": 123456,
+    "sha256": "sha256:..."
+  },
+  "asset": {
+    "name": "codex-ultra-0.144.1-u1-windows-x64.zip",
+    "size": 123456789,
+    "sha256": "sha256:..."
+  },
+  "language": {
+    "locale": "zh-CN",
+    "asset": "codex-ultra-language-zh-CN-v1.zip",
+    "size": 1234,
+    "sha256": "sha256:..."
+  },
+  "sourceArchive": {
+    "name": "codex-ultra-0.144.1-u1-source.tar.gz",
+    "size": 12345678,
+    "sha256": "sha256:..."
+  },
+  "signature": null
 }
 ~~~
 
