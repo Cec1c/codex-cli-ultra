@@ -44,6 +44,10 @@ The initial stable target is fixed to:
 
   Four static status-line setup messages plus the parameterized `Worked for {duration}` message.
 
+机器可读研究目录可以继续保留已经定位但尚未接入的消息；首期运行时和参考语言包只把上述五条标记为 `wired`。额外目录记录不扩大 MVP 的用户界面翻译范围。
+
+The machine-readable research catalog may retain already located but unwired messages. The initial runtime and reference language pack mark only the five messages above as `wired`; extra catalog records do not expand the MVP translation surface.
+
 “加班了 {duration}”用于验证参数化消息。随机彩蛋短语列表不进入首个 MVP，避免快照不稳定和不可预测输出。
 
 `加班了 {duration}` validates parameterized messages. Random easter-egg phrase lists are excluded from the first MVP to avoid unstable snapshots and unpredictable output.
