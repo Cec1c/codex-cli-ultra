@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "type": "language",
+  "id": "codex-cli-ultra.zh-CN",
+  "locale": "zh-CN",
+  "fallbackLocales": [
+    "en-US"
+  ],
+  "codexVersionRange": "0.144.1",
+  "adapterVersion": "0.1.0",
+  "resources": [
+    {
+      "path": "messages.ftl",
+      "sha256": "b86d4366d93b83aaa68297b25b0ce964ebc440913e2baf809805b350df0accc3"
+    }
+  ]
+}
