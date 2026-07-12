@@ -3,15 +3,17 @@
   "type": "language",
   "id": "codex-cli-ultra.zh-CN",
   "locale": "zh-CN",
-  "fallbackLocales": [
-    "en-US"
-  ],
-  "codexVersionRange": "0.144.1",
-  "adapterVersion": "0.1.0",
+  "license": "Apache-2.0",
+  "i18nApi": {
+    "min": 1,
+    "max": 1
+  },
+  "catalogVersion": 1,
+  "fallbackLocales": [],
   "resources": [
     {
       "path": "messages.ftl",
-      "sha256": "b86d4366d93b83aaa68297b25b0ce964ebc440913e2baf809805b350df0accc3"
+      "sha256": "sha256:7ff65a10b6a37a528f75c67ac2be46ae983eea7d3f85424c1dd9853c424d1d24"
     }
   ]
 }

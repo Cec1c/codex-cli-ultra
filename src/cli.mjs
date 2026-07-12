@@ -1,13 +1,12 @@
 import { pathToFileURL } from "node:url";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 
 import {
   extractCatalog,
   writeCatalogArtifacts
 } from "./catalog/extract.mjs";
 import { MESSAGE_SPECS } from "./catalog/message-specs.mjs";
-import { compileLanguagePack } from "./pack/compile.mjs";
+import { validateLanguagePack } from "./language/validate.mjs";
 import {
   applyCodexPatch,
   doctorCodexPatch,
@@ -17,10 +16,10 @@ import {
 const USAGE = [
   "Usage:",
   "  node src/cli.mjs catalog extract --source PATH",
-  "  node src/cli.mjs pack compile --catalog PATH --pack PATH --output PATH",
+  "  node src/cli.mjs language validate --pack PATH --catalog PATH",
   "  node src/cli.mjs adapter apply --source PATH",
   "  node src/cli.mjs adapter revert --source PATH",
-  "  node src/cli.mjs doctor --source PATH --catalog PATH"
+  "  node src/cli.mjs doctor --source PATH --pack PATH --catalog PATH"
 ].join("\n");
 
 function optionValue(args, name) {
@@ -54,32 +53,24 @@ export async function runCli(
     });
     return { command: "catalog extract", records: records.length };
   }
-  if (group === "pack" && action === "compile") {
+  if (group === "language" && action === "validate") {
     const catalog = optionValue(args, "--catalog");
     const pack = optionValue(args, "--pack");
-    const output = optionValue(args, "--output");
-    if (!catalog || !pack || !output) {
-      throw new Error(
-        "pack compile requires --catalog PATH --pack PATH --output PATH"
-      );
+    if (!pack || !catalog) {
+      throw new Error("language validate requires --pack PATH --catalog PATH");
     }
-    const compiled = await compileLanguagePack({
+    const language = await validateLanguagePack({
       catalogPath: resolve(cwd, catalog),
-      packDir: resolve(cwd, pack)
+      packRoot: resolve(cwd, pack)
     });
-    const outputPath = resolve(cwd, output);
-    await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(
-      outputPath,
-      JSON.stringify(compiled, null, 2) + "\n",
-      "utf8"
-    );
-    return {
-      command: "pack compile",
-      locale: compiled.locale,
-      messages: Object.keys(compiled.messages).length,
-      output: outputPath
+    const report = {
+      command: "language validate",
+      locale: language.locale,
+      messages: Object.keys(language.messages).length,
+      sourceHash: language.sourceHash
     };
+    stdout.write(JSON.stringify(report, null, 2) + "\n");
+    return report;
   }
   if (group === "adapter" && (action === "apply" || action === "revert")) {
     const source = optionValue(args, "--source");
@@ -96,19 +87,25 @@ export async function runCli(
   }
   if (group === "doctor") {
     const source = optionValue(args, "--source");
+    const pack = optionValue(args, "--pack");
     const catalog = optionValue(args, "--catalog");
-    if (!source || !catalog) {
-      throw new Error("doctor requires --source PATH --catalog PATH");
+    if (!source || !pack || !catalog) {
+      throw new Error(
+        "doctor requires --source PATH --pack PATH --catalog PATH"
+      );
     }
-    const [adapter, compiledSource] = await Promise.all([
+    const [adapter, language] = await Promise.all([
       doctorCodexPatch(resolve(cwd, source)),
-      readFile(resolve(cwd, catalog), "utf8")
+      validateLanguagePack({
+        packRoot: resolve(cwd, pack),
+        catalogPath: resolve(cwd, catalog)
+      })
     ]);
-    const compiled = JSON.parse(compiledSource);
     const report = {
       ...adapter,
-      locale: compiled.locale,
-      compiledMessages: Object.keys(compiled.messages ?? {}).length
+      locale: language.locale,
+      messages: Object.keys(language.messages).length,
+      sourceHash: language.sourceHash
     };
     stdout.write(JSON.stringify(report, null, 2) + "\n");
     return report;
