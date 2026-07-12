@@ -1,15 +1,14 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-import {
-  access,
-  mkdir,
-  readFile,
-  rm,
-  writeFile
-} from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { access, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+
+import {
+  applyOperations,
+  planOperations,
+  revertOperations
+} from "./transaction.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -26,9 +25,8 @@ const SNAPSHOT_FILE_NAME =
 const SNAPSHOT_PATH =
   "codex-rs/tui/src/bottom_pane/snapshots/" + SNAPSHOT_FILE_NAME;
 const STATE_DIRECTORY = ".codex-ultra-mvp";
-const DEFAULT_OVERLAY_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "overlay"
+const DEFAULT_OVERLAY_DIR = fileURLToPath(
+  new URL("../../adapters/codex/0.144.1/overlay/", import.meta.url)
 );
 
 const NEW_FUNCTION_ANCHOR = [
@@ -119,10 +117,6 @@ const SNAPSHOT_TEST = [
   SNAPSHOT_ANCHOR
 ].join("\n");
 
-function sha256(content) {
-  return createHash("sha256").update(content).digest("hex");
-}
-
 async function pathExists(path) {
   try {
     await access(path);
@@ -132,51 +126,45 @@ async function pathExists(path) {
   }
 }
 
-function replaceExact(source, anchor, replacement, label) {
-  const first = source.indexOf(anchor);
-  const second = first === -1 ? -1 : source.indexOf(anchor, first + anchor.length);
-  if (first === -1 || second !== -1) {
-    const count = first === -1 ? 0 : 2;
-    throw new Error(
-      "anchor drift for " + label + ": expected 1 match, found " + count
-    );
-  }
-  return source.slice(0, first) + replacement + source.slice(first + anchor.length);
+function replace(relativePath, anchor, replacement, label) {
+  return {
+    type: "replace",
+    relativePath,
+    anchor,
+    replacement,
+    label,
+    preserveLineEndings: true
+  };
 }
 
-function transformWithOriginalLineEndings(source, transform) {
-  const newline = source.includes("\r\n") ? "\r\n" : "\n";
-  const normalized = source.replaceAll("\r\n", "\n");
-  return transform(normalized).replaceAll("\n", newline);
-}
+async function loadCodexOperations(overlayDir) {
+  const [i18nSource, i18nTestsSource, snapshotSource] = await Promise.all([
+    readFile(join(overlayDir, "i18n.rs")),
+    readFile(join(overlayDir, "i18n_tests.rs")),
+    readFile(join(overlayDir, SNAPSHOT_FILE_NAME))
+  ]);
 
-function transformLib(source) {
-  return transformWithOriginalLineEndings(source, (normalized) =>
-    replaceExact(
-      normalized,
+  return [
+    replace(
+      MODULE_PATH,
       "mod hooks_rpc;",
       ["mod hooks_rpc;", "mod i18n;"].join("\n"),
       "tui lib module declaration"
-    )
-  );
-}
-
-function transformStatusLine(source) {
-  return transformWithOriginalLineEndings(source, (normalized) => {
-    let result = replaceExact(
-      normalized,
+    ),
+    replace(
+      STATUS_LINE_PATH,
       NEW_FUNCTION_ANCHOR,
       NEW_FUNCTION_REPLACEMENT,
       "StatusLineSetupView::new"
-    );
-    result = replaceExact(
-      result,
+    ),
+    replace(
+      STATUS_LINE_PATH,
       'name: "Use theme colors".to_string(),',
       'name: translator.text("tui.status-line.setup.use-theme-colors", "Use theme colors"),',
       "use theme colors"
-    );
-    result = replaceExact(
-      result,
+    ),
+    replace(
+      STATUS_LINE_PATH,
       'description: Some("Apply colors from the active /theme".to_string()),',
       [
         "description: Some(translator.text(",
@@ -185,9 +173,9 @@ function transformStatusLine(source) {
         "            )),"
       ].join("\n"),
       "apply theme colors"
-    );
-    result = replaceExact(
-      result,
+    ),
+    replace(
+      STATUS_LINE_PATH,
       '"Configure Status Line".to_string(),',
       [
         "translator.text(",
@@ -196,9 +184,9 @@ function transformStatusLine(source) {
         "                ),"
       ].join("\n"),
       "configure status line title"
-    );
-    result = replaceExact(
-      result,
+    ),
+    replace(
+      STATUS_LINE_PATH,
       'Some("Select which items to display in the status line.".to_string()),',
       [
         "Some(translator.text(",
@@ -207,14 +195,29 @@ function transformStatusLine(source) {
         "                )),"
       ].join("\n"),
       "configure status line description"
-    );
-    return replaceExact(
-      result,
+    ),
+    replace(
+      STATUS_LINE_PATH,
       SNAPSHOT_ANCHOR,
       SNAPSHOT_TEST,
       "zh-CN status line snapshot insertion"
-    );
-  });
+    ),
+    {
+      type: "create",
+      relativePath: I18N_PATH,
+      content: i18nSource
+    },
+    {
+      type: "create",
+      relativePath: I18N_TESTS_PATH,
+      content: i18nTestsSource
+    },
+    {
+      type: "create",
+      relativePath: SNAPSHOT_PATH,
+      content: snapshotSource
+    }
+  ];
 }
 
 async function verifyRelease(sourceRoot) {
@@ -241,217 +244,40 @@ async function verifyRelease(sourceRoot) {
 
 export async function planCodexPatch(
   sourceRoot,
-  { verifyGit = true, overlayDir = DEFAULT_OVERLAY_DIR } = {}
+  { verifyGit = true, overlayDir = DEFAULT_OVERLAY_DIR, ...options } = {}
 ) {
   const resolvedRoot = resolve(sourceRoot);
   if (verifyGit) {
     await verifyRelease(resolvedRoot);
   }
-  const stateRoot = join(resolvedRoot, STATE_DIRECTORY);
-  if (await pathExists(stateRoot)) {
-    throw new Error("Codex Ultra MVP state already exists");
-  }
-
-  const libPath = join(resolvedRoot, MODULE_PATH);
-  const statusPath = join(resolvedRoot, STATUS_LINE_PATH);
-  const [
-    libSource,
-    statusSource,
-    i18nSource,
-    i18nTestsSource,
-    snapshotSource
-  ] =
-    await Promise.all([
-      readFile(libPath, "utf8"),
-      readFile(statusPath, "utf8"),
-      readFile(join(overlayDir, "i18n.rs"), "utf8"),
-      readFile(join(overlayDir, "i18n_tests.rs"), "utf8"),
-      readFile(join(overlayDir, SNAPSHOT_FILE_NAME), "utf8")
-    ]);
-
-  const overlayTargets = [I18N_PATH, I18N_TESTS_PATH, SNAPSHOT_PATH];
-  for (const relativePath of overlayTargets) {
-    if (await pathExists(join(resolvedRoot, relativePath))) {
-      throw new Error("overlay target already exists: " + relativePath);
-    }
-  }
-
-  const files = [
-    {
-      relativePath: MODULE_PATH,
-      before: libSource,
-      after: transformLib(libSource),
-      created: false
-    },
-    {
-      relativePath: STATUS_LINE_PATH,
-      before: statusSource,
-      after: transformStatusLine(statusSource),
-      created: false
-    },
-    {
-      relativePath: I18N_PATH,
-      before: null,
-      after: i18nSource,
-      created: true
-    },
-    {
-      relativePath: I18N_TESTS_PATH,
-      before: null,
-      after: i18nTestsSource,
-      created: true
-    },
-    {
-      relativePath: SNAPSHOT_PATH,
-      before: null,
-      after: snapshotSource,
-      created: true
-    }
-  ].map((file) => ({
-    ...file,
-    beforeHash: file.before === null ? null : sha256(file.before),
-    afterHash: sha256(file.after)
-  }));
-
-  return {
-    sourceRoot: resolvedRoot,
-    stateRoot,
-    files
-  };
+  const operations = await loadCodexOperations(overlayDir);
+  return planOperations(resolvedRoot, operations, {
+    ...options,
+    stateDirectory: STATE_DIRECTORY
+  });
 }
 
-function assertStateInsideSource(sourceRoot, stateRoot) {
-  const stateRelative = relative(resolve(sourceRoot), resolve(stateRoot));
-  if (
-    !stateRelative ||
-    stateRelative.startsWith("..") ||
-    isAbsolute(stateRelative)
-  ) {
-    throw new Error("unsafe adapter state path");
-  }
-}
-
-function resolveAdapterFilePath(root, relativePath) {
-  if (
-    typeof relativePath !== "string" ||
-    relativePath.length === 0 ||
-    isAbsolute(relativePath)
-  ) {
-    throw new Error("unsafe adapter file path");
-  }
-  const resolvedRoot = resolve(root);
-  const resolvedPath = resolve(resolvedRoot, relativePath);
-  const pathRelative = relative(resolvedRoot, resolvedPath);
-  const firstSegment = pathRelative.split(/[\\/]/, 1)[0];
-  if (!pathRelative || isAbsolute(pathRelative) || firstSegment === "..") {
-    throw new Error("unsafe adapter file path");
-  }
-  return resolvedPath;
-}
-
-export async function applyCodexPatch(sourceRoot, options = {}) {
-  const plan = await planCodexPatch(sourceRoot, options);
-  const writeFileImpl = options.writeFileImpl ?? writeFile;
-  assertStateInsideSource(plan.sourceRoot, plan.stateRoot);
-  const backupsRoot = join(plan.stateRoot, "backups");
-  const written = [];
-  try {
-    await mkdir(backupsRoot, { recursive: true });
-    for (const file of plan.files) {
-      if (file.created) {
-        continue;
-      }
-      const backupPath = resolveAdapterFilePath(
-        backupsRoot,
-        file.relativePath
-      );
-      await mkdir(dirname(backupPath), { recursive: true });
-      await writeFileImpl(backupPath, file.before, "utf8");
-    }
-
-    for (const file of plan.files) {
-      const targetPath = resolveAdapterFilePath(
-        plan.sourceRoot,
-        file.relativePath
-      );
-      await mkdir(dirname(targetPath), { recursive: true });
-      await writeFileImpl(targetPath, file.after, "utf8");
-      written.push(file);
-    }
-    const state = {
-      schemaVersion: 1,
-      targetCommit: TARGET_COMMIT,
-      files: plan.files.map((file) => ({
-        relativePath: file.relativePath,
-        created: file.created,
-        beforeHash: file.beforeHash,
-        afterHash: file.afterHash
-      }))
-    };
-    await writeFileImpl(
-      join(plan.stateRoot, "state.json"),
-      JSON.stringify(state, null, 2) + "\n",
-      "utf8"
-    );
-    return state;
-  } catch (error) {
-    for (const file of written.reverse()) {
-      const targetPath = resolveAdapterFilePath(
-        plan.sourceRoot,
-        file.relativePath
-      );
-      if (file.created) {
-        await rm(targetPath, { force: true });
-      } else {
-        await writeFile(targetPath, file.before, "utf8");
-      }
-    }
-    await rm(plan.stateRoot, { recursive: true, force: true });
-    throw error;
-  }
-}
-
-export async function revertCodexPatch(sourceRoot) {
+export async function applyCodexPatch(
+  sourceRoot,
+  { verifyGit = true, overlayDir = DEFAULT_OVERLAY_DIR, ...options } = {}
+) {
   const resolvedRoot = resolve(sourceRoot);
-  const stateRoot = join(resolvedRoot, STATE_DIRECTORY);
-  assertStateInsideSource(resolvedRoot, stateRoot);
-  const state = JSON.parse(
-    await readFile(join(stateRoot, "state.json"), "utf8")
-  );
-  if (!Array.isArray(state.files)) {
-    throw new Error("invalid adapter state");
+  if (verifyGit) {
+    await verifyRelease(resolvedRoot);
   }
-  const backupsRoot = join(stateRoot, "backups");
+  const operations = await loadCodexOperations(overlayDir);
+  return applyOperations(resolvedRoot, operations, {
+    ...options,
+    stateDirectory: STATE_DIRECTORY,
+    stateMetadata: { targetCommit: TARGET_COMMIT }
+  });
+}
 
-  for (const file of state.files) {
-    const targetPath = resolveAdapterFilePath(
-      resolvedRoot,
-      file.relativePath
-    );
-    const current = await readFile(targetPath, "utf8");
-    if (sha256(current) !== file.afterHash) {
-      throw new Error(
-        "patched file changed after apply: " + file.relativePath
-      );
-    }
-  }
-
-  for (const file of state.files) {
-    const targetPath = resolveAdapterFilePath(
-      resolvedRoot,
-      file.relativePath
-    );
-    if (file.created) {
-      await rm(targetPath, { force: true });
-    } else {
-      const backup = await readFile(
-        resolveAdapterFilePath(backupsRoot, file.relativePath),
-        "utf8"
-      );
-      await writeFile(targetPath, backup, "utf8");
-    }
-  }
-  await rm(stateRoot, { recursive: true, force: true });
+export async function revertCodexPatch(sourceRoot, options = {}) {
+  return revertOperations(resolve(sourceRoot), {
+    ...options,
+    stateDirectory: STATE_DIRECTORY
+  });
 }
 
 export async function doctorCodexPatch(
@@ -475,7 +301,7 @@ export async function doctorCodexPatch(
     sourceCommit,
     supported,
     applied: await pathExists(
-      join(resolvedRoot, STATE_DIRECTORY, "state.json")
+      resolve(resolvedRoot, STATE_DIRECTORY, "state.json")
     )
   };
 }

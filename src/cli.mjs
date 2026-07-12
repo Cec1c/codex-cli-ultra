@@ -10,6 +10,7 @@ import { validateLanguagePack } from "./language/validate.mjs";
 import {
   applyCodexPatch,
   doctorCodexPatch,
+  planCodexPatch,
   revertCodexPatch
 } from "./adapter/codex-0.144.1.mjs";
 
@@ -17,6 +18,7 @@ const USAGE = [
   "Usage:",
   "  node src/cli.mjs catalog extract --source PATH",
   "  node src/cli.mjs language validate --pack PATH --catalog PATH",
+  "  node src/cli.mjs adapter plan --source PATH",
   "  node src/cli.mjs adapter apply --source PATH",
   "  node src/cli.mjs adapter revert --source PATH",
   "  node src/cli.mjs doctor --source PATH --pack PATH --catalog PATH"
@@ -32,7 +34,11 @@ function optionValue(args, name) {
 
 export async function runCli(
   args,
-  { cwd = process.cwd(), stdout = process.stdout } = {}
+  {
+    cwd = process.cwd(),
+    stdout = process.stdout,
+    adapterOptions = {}
+  } = {}
 ) {
   const [group, action] = args;
   if (group === "catalog" && action === "extract") {
@@ -72,16 +78,33 @@ export async function runCli(
     stdout.write(JSON.stringify(report, null, 2) + "\n");
     return report;
   }
-  if (group === "adapter" && (action === "apply" || action === "revert")) {
+  if (
+    group === "adapter" &&
+    (action === "plan" || action === "apply" || action === "revert")
+  ) {
     const source = optionValue(args, "--source");
     if (!source) {
       throw new Error(`adapter ${action} requires --source PATH`);
     }
     const sourceRoot = resolve(cwd, source);
+    if (action === "plan") {
+      const plan = await planCodexPatch(sourceRoot, adapterOptions);
+      const report = {
+        command: "adapter plan",
+        files: plan.files.map((file) => ({
+          relativePath: file.relativePath,
+          created: file.created,
+          beforeHash: file.beforeHash,
+          afterHash: file.afterHash
+        }))
+      };
+      stdout.write(JSON.stringify(report, null, 2) + "\n");
+      return report;
+    }
     if (action === "apply") {
-      await applyCodexPatch(sourceRoot);
+      await applyCodexPatch(sourceRoot, adapterOptions);
     } else {
-      await revertCodexPatch(sourceRoot);
+      await revertCodexPatch(sourceRoot, adapterOptions);
     }
     return { command: `adapter ${action}`, source: sourceRoot };
   }
