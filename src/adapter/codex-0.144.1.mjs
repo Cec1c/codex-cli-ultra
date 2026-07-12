@@ -1,19 +1,18 @@
 import { execFile } from "node:child_process";
-import { access, readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
   applyOperations,
+  inspectOperationsState,
   planOperations,
   revertOperations
 } from "./transaction.mjs";
 
 const execFileAsync = promisify(execFile);
-
-export const TARGET_COMMIT =
-  "44918ea10c0f99151c6710411b4322c2f5c96bea";
 
 const MODULE_PATH = "codex-rs/tui/src/lib.rs";
 const STATUS_LINE_PATH =
@@ -25,9 +24,89 @@ const SNAPSHOT_FILE_NAME =
 const SNAPSHOT_PATH =
   "codex-rs/tui/src/bottom_pane/snapshots/" + SNAPSHOT_FILE_NAME;
 const STATE_DIRECTORY = ".codex-ultra-mvp";
-const DEFAULT_OVERLAY_DIR = fileURLToPath(
-  new URL("../../adapters/codex/0.144.1/overlay/", import.meta.url)
+const ADAPTER_DIRECTORY_URL = new URL(
+  "../../adapters/codex/0.144.1/",
+  import.meta.url
 );
+const DEFAULT_MANIFEST_PATH = fileURLToPath(
+  new URL("manifest.json", ADAPTER_DIRECTORY_URL)
+);
+const DEFAULT_OVERLAY_DIR = fileURLToPath(
+  new URL("overlay/", ADAPTER_DIRECTORY_URL)
+);
+const MANIFEST_KEYS = [
+  "catalogVersion",
+  "i18nApiVersion",
+  "schemaVersion",
+  "ultraRevision",
+  "upstreamCommit",
+  "upstreamTag",
+  "upstreamVersion"
+];
+
+function validateCodexManifest(manifest, expectedCommit) {
+  const valid =
+    manifest &&
+    typeof manifest === "object" &&
+    !Array.isArray(manifest) &&
+    JSON.stringify(Object.keys(manifest).sort()) ===
+      JSON.stringify(MANIFEST_KEYS) &&
+    manifest.schemaVersion === 1 &&
+    manifest.upstreamVersion === "0.144.1" &&
+    manifest.upstreamTag === "rust-v0.144.1" &&
+    /^[a-f0-9]{40}$/.test(manifest.upstreamCommit) &&
+    manifest.ultraRevision === 1 &&
+    manifest.i18nApiVersion === 1 &&
+    manifest.catalogVersion === 1 &&
+    (expectedCommit === undefined ||
+      manifest.upstreamCommit === expectedCommit);
+  if (!valid) {
+    throw new Error("invalid Codex adapter manifest");
+  }
+  return manifest;
+}
+
+function parseCodexManifest(content, expectedCommit) {
+  try {
+    return validateCodexManifest(JSON.parse(content), expectedCommit);
+  } catch (error) {
+    if (error.message === "invalid Codex adapter manifest") {
+      throw error;
+    }
+    throw new Error("invalid Codex adapter manifest", { cause: error });
+  }
+}
+
+const DEFAULT_MANIFEST = parseCodexManifest(
+  readFileSync(DEFAULT_MANIFEST_PATH, "utf8")
+);
+
+export const TARGET_COMMIT = DEFAULT_MANIFEST.upstreamCommit;
+
+async function loadCodexManifest(manifestPath = DEFAULT_MANIFEST_PATH) {
+  return parseCodexManifest(
+    await readFile(manifestPath, "utf8"),
+    TARGET_COMMIT
+  );
+}
+
+function codexStateMetadata(manifest) {
+  return {
+    adapterId: "codex",
+    targetCommit: manifest.upstreamCommit,
+    ultraRevision: manifest.ultraRevision,
+    i18nApiVersion: manifest.i18nApiVersion,
+    catalogVersion: manifest.catalogVersion
+  };
+}
+
+const CODEX_STATE_FILES = [
+  { relativePath: MODULE_PATH, created: false },
+  { relativePath: STATUS_LINE_PATH, created: false },
+  { relativePath: I18N_PATH, created: true },
+  { relativePath: I18N_TESTS_PATH, created: true },
+  { relativePath: SNAPSHOT_PATH, created: true }
+];
 
 const NEW_FUNCTION_ANCHOR = [
   "    pub(crate) fn new(",
@@ -116,15 +195,6 @@ const SNAPSHOT_TEST = [
   "",
   SNAPSHOT_ANCHOR
 ].join("\n");
-
-async function pathExists(path) {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function replace(relativePath, anchor, replacement, label) {
   return {
@@ -220,22 +290,33 @@ async function loadCodexOperations(overlayDir) {
   ];
 }
 
-async function verifyRelease(sourceRoot) {
-  const { stdout: headOutput } = await execFileAsync(
+function gitReadOptions() {
+  return {
+    encoding: "utf8",
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" }
+  };
+}
+
+async function verifyRelease(
+  sourceRoot,
+  targetCommit,
+  execFileImpl = execFileAsync
+) {
+  const { stdout: headOutput } = await execFileImpl(
     "git",
     ["-C", sourceRoot, "rev-parse", "HEAD"],
-    { encoding: "utf8" }
+    gitReadOptions()
   );
   const head = headOutput.trim();
-  if (head !== TARGET_COMMIT) {
+  if (head !== targetCommit) {
     throw new Error(
-      "unsupported Codex source commit " + head + "; expected " + TARGET_COMMIT
+      "unsupported Codex source commit " + head + "; expected " + targetCommit
     );
   }
-  const { stdout: statusOutput } = await execFileAsync(
+  const { stdout: statusOutput } = await execFileImpl(
     "git",
     ["-C", sourceRoot, "status", "--porcelain"],
-    { encoding: "utf8" }
+    gitReadOptions()
   );
   if (statusOutput.trim()) {
     throw new Error("Codex source worktree must be clean before apply");
@@ -244,11 +325,22 @@ async function verifyRelease(sourceRoot) {
 
 export async function planCodexPatch(
   sourceRoot,
-  { verifyGit = true, overlayDir = DEFAULT_OVERLAY_DIR, ...options } = {}
+  {
+    verifyGit = true,
+    overlayDir = DEFAULT_OVERLAY_DIR,
+    manifestPath = DEFAULT_MANIFEST_PATH,
+    execFileImpl = execFileAsync,
+    ...options
+  } = {}
 ) {
   const resolvedRoot = resolve(sourceRoot);
+  const manifest = await loadCodexManifest(manifestPath);
   if (verifyGit) {
-    await verifyRelease(resolvedRoot);
+    await verifyRelease(
+      resolvedRoot,
+      manifest.upstreamCommit,
+      execFileImpl
+    );
   }
   const operations = await loadCodexOperations(overlayDir);
   return planOperations(resolvedRoot, operations, {
@@ -259,49 +351,76 @@ export async function planCodexPatch(
 
 export async function applyCodexPatch(
   sourceRoot,
-  { verifyGit = true, overlayDir = DEFAULT_OVERLAY_DIR, ...options } = {}
+  {
+    verifyGit = true,
+    overlayDir = DEFAULT_OVERLAY_DIR,
+    manifestPath = DEFAULT_MANIFEST_PATH,
+    execFileImpl = execFileAsync,
+    ...options
+  } = {}
 ) {
   const resolvedRoot = resolve(sourceRoot);
+  const manifest = await loadCodexManifest(manifestPath);
   if (verifyGit) {
-    await verifyRelease(resolvedRoot);
+    await verifyRelease(
+      resolvedRoot,
+      manifest.upstreamCommit,
+      execFileImpl
+    );
   }
   const operations = await loadCodexOperations(overlayDir);
   return applyOperations(resolvedRoot, operations, {
     ...options,
     stateDirectory: STATE_DIRECTORY,
-    stateMetadata: { targetCommit: TARGET_COMMIT }
+    stateMetadata: codexStateMetadata(manifest)
   });
 }
 
-export async function revertCodexPatch(sourceRoot, options = {}) {
+export async function revertCodexPatch(
+  sourceRoot,
+  { manifestPath = DEFAULT_MANIFEST_PATH, ...options } = {}
+) {
+  const manifest = await loadCodexManifest(manifestPath);
   return revertOperations(resolve(sourceRoot), {
     ...options,
-    stateDirectory: STATE_DIRECTORY
+    stateDirectory: STATE_DIRECTORY,
+    expectedStateMetadata: codexStateMetadata(manifest),
+    expectedFiles: CODEX_STATE_FILES
   });
 }
 
 export async function doctorCodexPatch(
   sourceRoot,
-  { verifyGit = true } = {}
+  {
+    verifyGit = true,
+    manifestPath = DEFAULT_MANIFEST_PATH,
+    execFileImpl = execFileAsync,
+    ...options
+  } = {}
 ) {
   const resolvedRoot = resolve(sourceRoot);
+  const manifest = await loadCodexManifest(manifestPath);
   let sourceCommit = null;
   let supported = null;
   if (verifyGit) {
-    const { stdout } = await execFileAsync(
+    const { stdout } = await execFileImpl(
       "git",
       ["-C", resolvedRoot, "rev-parse", "HEAD"],
-      { encoding: "utf8" }
+      gitReadOptions()
     );
     sourceCommit = stdout.trim();
-    supported = sourceCommit === TARGET_COMMIT;
+    supported = sourceCommit === manifest.upstreamCommit;
   }
+  const inspected = await inspectOperationsState(resolvedRoot, {
+    ...options,
+    stateDirectory: STATE_DIRECTORY,
+    expectedStateMetadata: codexStateMetadata(manifest),
+    expectedFiles: CODEX_STATE_FILES
+  });
   return {
-    targetCommit: TARGET_COMMIT,
+    targetCommit: manifest.upstreamCommit,
     sourceCommit,
     supported,
-    applied: await pathExists(
-      resolve(resolvedRoot, STATE_DIRECTORY, "state.json")
-    )
+    applied: inspected !== null
   };
 }

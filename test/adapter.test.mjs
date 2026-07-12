@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   access,
   mkdtemp,
@@ -15,7 +16,8 @@ import {
   applyCodexPatch,
   doctorCodexPatch,
   planCodexPatch,
-  revertCodexPatch
+  revertCodexPatch,
+  TARGET_COMMIT
 } from "../src/adapter/codex-0.144.1.mjs";
 
 const LIB_SOURCE = [
@@ -65,6 +67,29 @@ const STATUS_SOURCE = [
 
 const SNAPSHOT_FILE_NAME =
   "codex_tui__bottom_pane__status_line_setup__tests__setup_view_snapshot_uses_zh_cn_catalog.snap";
+const CODEX_MANIFEST = {
+  schemaVersion: 1,
+  upstreamVersion: "0.144.1",
+  upstreamTag: "rust-v0.144.1",
+  upstreamCommit: "44918ea10c0f99151c6710411b4322c2f5c96bea",
+  ultraRevision: 1,
+  i18nApiVersion: 1,
+  catalogVersion: 1
+};
+const EXPECTED_STATE_FILES = [
+  { relativePath: "codex-rs/tui/src/lib.rs", created: false },
+  {
+    relativePath: "codex-rs/tui/src/bottom_pane/status_line_setup.rs",
+    created: false
+  },
+  { relativePath: "codex-rs/tui/src/i18n.rs", created: true },
+  { relativePath: "codex-rs/tui/src/i18n_tests.rs", created: true },
+  {
+    relativePath:
+      "codex-rs/tui/src/bottom_pane/snapshots/" + SNAPSHOT_FILE_NAME,
+    created: true
+  }
+];
 
 async function pathExists(path) {
   try {
@@ -73,6 +98,32 @@ async function pathExists(path) {
   } catch {
     return false;
   }
+}
+
+function canonicalJson(value) {
+  if (value === null || typeof value === "boolean" || typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "number") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  }
+  const keys = Object.keys(value).sort();
+  return `{${keys
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+    .join(",")}}`;
+}
+
+function rehashState(state) {
+  const { stateHash: _oldHash, ...unsignedState } = state;
+  return {
+    ...unsignedState,
+    stateHash: createHash("sha256")
+      .update(Buffer.from(canonicalJson(unsignedState)))
+      .digest("hex")
+  };
 }
 
 async function createFixture() {
@@ -102,7 +153,7 @@ async function createFixture() {
     "配置状态栏\n",
     "utf8"
   );
-  return { sourceRoot, overlayDir, statusPath };
+  return { sourceRoot, overlayDir, libPath, statusPath };
 }
 
 async function snapshotTree(root) {
@@ -134,6 +185,28 @@ test("planCodexPatch changes no files during preflight", async () => {
 
   assert.equal(plan.files.length, 5);
   assert.deepEqual(await snapshotTree(fixture.sourceRoot), before);
+});
+
+test("planCodexPatch disables optional Git locks", async () => {
+  const fixture = await createFixture();
+  const calls = [];
+
+  await planCodexPatch(fixture.sourceRoot, {
+    overlayDir: fixture.overlayDir,
+    execFileImpl: async (file, args, options) => {
+      calls.push({ file, args, options });
+      if (args.includes("rev-parse")) {
+        return { stdout: TARGET_COMMIT + "\n" };
+      }
+      return { stdout: "" };
+    }
+  });
+
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(call.file, "git");
+    assert.equal(call.options.env.GIT_OPTIONAL_LOCKS, "0");
+  }
 });
 
 test("applyCodexPatch installs overlays and localized call sites", async () => {
@@ -168,6 +241,159 @@ test("applyCodexPatch installs overlays and localized call sites", async () => {
       "utf8"
     ),
     /配置状态栏/
+  );
+});
+
+test("Codex state binds manifest identity and exact file roles", async () => {
+  const fixture = await createFixture();
+
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+
+  const state = JSON.parse(
+    await readFile(
+      join(fixture.sourceRoot, ".codex-ultra-mvp", "state.json"),
+      "utf8"
+    )
+  );
+  assert.deepEqual(
+    {
+      adapterId: state.adapterId,
+      targetCommit: state.targetCommit,
+      ultraRevision: state.ultraRevision,
+      i18nApiVersion: state.i18nApiVersion,
+      catalogVersion: state.catalogVersion
+    },
+    {
+      adapterId: "codex",
+      targetCommit: CODEX_MANIFEST.upstreamCommit,
+      ultraRevision: CODEX_MANIFEST.ultraRevision,
+      i18nApiVersion: CODEX_MANIFEST.i18nApiVersion,
+      catalogVersion: CODEX_MANIFEST.catalogVersion
+    }
+  );
+  assert.deepEqual(
+    state.files.map(({ relativePath, created }) => ({
+      relativePath,
+      created
+    })),
+    EXPECTED_STATE_FILES
+  );
+});
+
+test("revertCodexPatch rejects a validly hashed wrong adapter identity", async () => {
+  const fixture = await createFixture();
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  const statePath = join(
+    fixture.sourceRoot,
+    ".codex-ultra-mvp",
+    "state.json"
+  );
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.adapterId = "other-adapter";
+  await writeFile(
+    statePath,
+    JSON.stringify(rehashState(state), null, 2) + "\n",
+    "utf8"
+  );
+
+  await assert.rejects(
+    revertCodexPatch(fixture.sourceRoot),
+    /adapter state metadata mismatch/
+  );
+});
+
+for (const [label, mutate] of [
+  [
+    "wrong path",
+    (state) => {
+      state.files[0].relativePath = "codex-rs/tui/src/other.rs";
+    }
+  ],
+  [
+    "wrong created role",
+    (state) => {
+      state.files[0].created = true;
+      state.files[0].beforeHash = null;
+    }
+  ]
+]) {
+  test(`revertCodexPatch rejects a validly hashed ${label}`, async () => {
+    const fixture = await createFixture();
+    await applyCodexPatch(fixture.sourceRoot, {
+      verifyGit: false,
+      overlayDir: fixture.overlayDir
+    });
+    const statePath = join(
+      fixture.sourceRoot,
+      ".codex-ultra-mvp",
+      "state.json"
+    );
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    mutate(state);
+    await writeFile(
+      statePath,
+      JSON.stringify(rehashState(state), null, 2) + "\n",
+      "utf8"
+    );
+
+    await assert.rejects(
+      revertCodexPatch(fixture.sourceRoot),
+      /adapter state file allowlist mismatch/
+    );
+    assert.match(await readFile(fixture.libPath, "utf8"), /mod i18n;/);
+  });
+}
+
+test("doctorCodexPatch rejects damaged state instead of reporting applied", async () => {
+  const fixture = await createFixture();
+  await applyCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  const statePath = join(
+    fixture.sourceRoot,
+    ".codex-ultra-mvp",
+    "state.json"
+  );
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.targetCommit = "0000000000000000000000000000000000000000";
+  await writeFile(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
+
+  await assert.rejects(
+    doctorCodexPatch(fixture.sourceRoot, { verifyGit: false }),
+    /adapter state changed/
+  );
+});
+
+test("planCodexPatch reads and rejects a drifting version manifest", async () => {
+  const fixture = await createFixture();
+  const manifestPath = join(fixture.sourceRoot, "manifest.json");
+  await writeFile(
+    manifestPath,
+    JSON.stringify(
+      {
+        ...CODEX_MANIFEST,
+        upstreamCommit: "0000000000000000000000000000000000000000"
+      },
+      null,
+      2
+    ) + "\n",
+    "utf8"
+  );
+
+  await assert.rejects(
+    planCodexPatch(fixture.sourceRoot, {
+      verifyGit: false,
+      overlayDir: fixture.overlayDir,
+      manifestPath
+    }),
+    /invalid Codex adapter manifest/
   );
 });
 
