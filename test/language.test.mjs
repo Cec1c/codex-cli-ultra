@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -78,7 +78,7 @@ function createManifest(ftl) {
     type: "language",
     id: "codex-cli-ultra.zh-CN",
     locale: "zh-CN",
-    license: "Apache-2.0",
+    license: "GPL-3.0-only",
     i18nApi: { min: 1, max: 1 },
     catalogVersion: 1,
     fallbackLocales: [],
@@ -90,6 +90,7 @@ function createManifest(ftl) {
 
 async function createPackFixture({
   ftl = VALID_FTL,
+  ftlBytes,
   records = ALL_RECORDS,
   mutateManifest
 } = {}) {
@@ -97,7 +98,8 @@ async function createPackFixture({
   const packRoot = join(root, "pack");
   const catalogPath = join(root, "catalog.jsonl");
   await mkdir(packRoot, { recursive: true });
-  const manifest = createManifest(ftl);
+  const ftlSource = ftlBytes ?? ftl;
+  const manifest = createManifest(ftlSource);
   mutateManifest?.(manifest);
   await writeFile(
     catalogPath,
@@ -109,7 +111,7 @@ async function createPackFixture({
     JSON.stringify(manifest, null, 2) + "\n",
     "utf8"
   );
-  await writeFile(join(packRoot, "messages.ftl"), ftl, "utf8");
+  await writeFile(join(packRoot, "messages.ftl"), ftlSource);
   return { packRoot, catalogPath };
 }
 
@@ -155,6 +157,23 @@ test("validateLanguagePack rejects malformed FTL", async () => {
   await assert.rejects(
     validateLanguagePack({ packRoot, catalogPath }),
     /FTL (?:parse|resource) error/
+  );
+});
+
+test("validateLanguagePack rejects syntax accepted only by the permissive runtime parser", async () => {
+  const records = structuredClone(ALL_RECORDS);
+  records[0].args[0].sample = 7.95;
+  const { packRoot, catalogPath } = await createPackFixture({
+    records,
+    ftl: VALID_FTL.replace(
+      "tui--history--worked-for = 加班了 { $duration }",
+      "tui--history--worked-for = { NUMBER($duration minimumFractionDigits: 2) }"
+    )
+  });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /FTL parse error/
   );
 });
 
@@ -252,6 +271,139 @@ test("validateLanguagePack rejects duplicate fallback locales", async () => {
     validateLanguagePack({ packRoot, catalogPath }),
     /duplicate fallback locale en-US/
   );
+});
+
+test("validateLanguagePack rejects a mismatched logical ID alias", async () => {
+  const records = structuredClone(ALL_RECORDS);
+  const record = records.find(
+    (item) => item.id === "tui.status-line.setup.configure-title"
+  );
+  record.ftlKey = "tui--status-line--setup--configure-heading";
+  const { packRoot, catalogPath } = await createPackFixture({
+    records,
+    ftl: VALID_FTL.replace(
+      "tui--status-line--setup--configure-title = 配置状态栏",
+      "tui--status-line--setup--configure-heading = 配置状态栏"
+    )
+  });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /ftlKey .* must equal tui--status-line--setup--configure-title/
+  );
+});
+
+test("validateLanguagePack rejects a noncanonical logical message ID", async () => {
+  const records = structuredClone(ALL_RECORDS);
+  records[5].id = "Tui.onboarding.auth.api-key-billing-intro";
+  records[5].ftlKey = records[5].id.replaceAll(".", "--");
+  const { packRoot, catalogPath } = await createPackFixture({ records });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /invalid logical message id/
+  );
+});
+
+test("validateLanguagePack rejects an unknown catalog MVP status", async () => {
+  const records = structuredClone(ALL_RECORDS);
+  records[5].mvpStatus = "wiredd";
+  const { packRoot, catalogPath } = await createPackFixture({ records });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /unknown mvpStatus wiredd/
+  );
+});
+
+test("validateLanguagePack rejects a catalog with only four wired records", async () => {
+  const records = structuredClone(ALL_RECORDS);
+  records[0].mvpStatus = "catalogued";
+  const { packRoot, catalogPath } = await createPackFixture({ records });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /catalog must contain exactly 11 records: 5 wired and 6 catalogued/
+  );
+});
+
+test("validateLanguagePack rejects an extra catalog record", async () => {
+  const records = structuredClone(ALL_RECORDS);
+  records.push({
+    catalogVersion: 1,
+    id: "tui.extra.message",
+    ftlKey: "tui--extra--message",
+    args: [],
+    mvpStatus: "catalogued"
+  });
+  const { packRoot, catalogPath } = await createPackFixture({ records });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /catalog must contain exactly 11 records: 5 wired and 6 catalogued/
+  );
+});
+
+test("validateLanguagePack rejects duplicate IDs across catalog statuses", async () => {
+  const records = structuredClone(ALL_RECORDS);
+  records[5].id = records[0].id;
+  records[5].ftlKey = records[0].ftlKey;
+  const { packRoot, catalogPath } = await createPackFixture({ records });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /duplicate catalog id tui\.history\.worked-for/
+  );
+});
+
+test("validateLanguagePack rejects a non-1 catalog version before filtering", async () => {
+  const records = structuredClone(ALL_RECORDS);
+  records[5].catalogVersion = 2;
+  const { packRoot, catalogPath } = await createPackFixture({ records });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /catalogVersion 1/
+  );
+});
+
+test("validateLanguagePack rejects messages.ftl bytes that are not valid UTF-8", async () => {
+  const invalidFtl = Buffer.from(VALID_FTL);
+  const invalidIndex = invalidFtl.indexOf(Buffer.from("使用"));
+  assert.notEqual(invalidIndex, -1);
+  invalidFtl[invalidIndex] = 0xff;
+  const { packRoot, catalogPath } = await createPackFixture({
+    ftlBytes: invalidFtl
+  });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /messages\.ftl must be valid UTF-8/
+  );
+});
+
+test("validateLanguagePack requires the GPL-3.0-only manifest license", async () => {
+  const { packRoot, catalogPath } = await createPackFixture({
+    mutateManifest(manifest) {
+      manifest.license = "Apache-2.0";
+    }
+  });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath }),
+    /manifest license must be GPL-3\.0-only/
+  );
+});
+
+test("the zh-CN language pack manifest declares GPL-3.0-only", async () => {
+  const manifest = JSON.parse(
+    await readFile(
+      new URL("../packages/languages/zh-CN/manifest.json", import.meta.url),
+      "utf8"
+    )
+  );
+
+  assert.equal(manifest.license, "GPL-3.0-only");
 });
 
 test("validateLanguagePack rejects malformed catalog JSONL as data", async () => {

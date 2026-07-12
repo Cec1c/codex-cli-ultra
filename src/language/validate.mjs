@@ -1,7 +1,13 @@
 import { FluentBundle, FluentResource } from "@fluent/bundle";
+import { parse } from "@fluent/syntax";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { TextDecoder } from "node:util";
+
+const LOGICAL_ID_PATTERN =
+  /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$/;
+const CATALOG_COUNTS = { records: 11, wired: 5, catalogued: 6 };
 
 function parseJson(source, message) {
   try {
@@ -38,8 +44,6 @@ function validateManifest(manifest) {
     manifest.type !== "language" ||
     typeof manifest.id !== "string" ||
     manifest.id.length === 0 ||
-    typeof manifest.license !== "string" ||
-    manifest.license.length === 0 ||
     manifest.i18nApi?.min !== 1 ||
     manifest.i18nApi?.max !== 1 ||
     manifest.catalogVersion !== 1 ||
@@ -48,6 +52,9 @@ function validateManifest(manifest) {
     manifest.resources.length !== 1
   ) {
     throw new Error("invalid language pack manifest");
+  }
+  if (manifest.license !== "GPL-3.0-only") {
+    throw new Error("manifest license must be GPL-3.0-only");
   }
 
   const locale = canonicalLocale(manifest.locale, "pack locale");
@@ -103,35 +110,81 @@ function parseCatalog(source) {
   return records;
 }
 
-function assertFtlParsed(source, resource) {
-  const declaredIds = [];
-  let hasEntry = false;
-  const lines = source.split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!line.trim() || line.trimStart().startsWith("#")) {
-      continue;
+function validateCatalog(records, manifest) {
+  const seenIds = new Set();
+  const seenKeys = new Set();
+  let wired = 0;
+  let catalogued = 0;
+
+  for (const record of records) {
+    if (record.catalogVersion !== 1 || record.catalogVersion !== manifest.catalogVersion) {
+      throw new Error(
+        `catalog record ${record.id ?? "<unknown>"} must use catalogVersion 1`
+      );
     }
-    if (/^[ \t]/.test(line)) {
-      if (!hasEntry) {
-        throw new Error(`FTL parse error on line ${index + 1}`);
-      }
-      continue;
+    if (record.mvpStatus !== "wired" && record.mvpStatus !== "catalogued") {
+      throw new Error(`unknown mvpStatus ${record.mvpStatus ?? "<missing>"}`);
     }
-    const match = /^(-?[a-zA-Z][\w-]*)\s*=/.exec(line);
-    if (!match) {
-      throw new Error(`FTL parse error on line ${index + 1}`);
+    if (typeof record.id !== "string" || !LOGICAL_ID_PATTERN.test(record.id)) {
+      throw new Error(`invalid logical message id ${record.id ?? "<missing>"}`);
     }
-    declaredIds.push(match[1]);
-    hasEntry = true;
+    const expectedKey = record.id.replaceAll(".", "--");
+    if (record.ftlKey !== expectedKey) {
+      throw new Error(
+        `catalog ftlKey ${record.ftlKey ?? "<missing>"} must equal ${expectedKey}`
+      );
+    }
+    if (seenIds.has(record.id)) {
+      throw new Error(`duplicate catalog id ${record.id}`);
+    }
+    if (seenKeys.has(record.ftlKey)) {
+      throw new Error(`duplicate catalog ftlKey ${record.ftlKey}`);
+    }
+    seenIds.add(record.id);
+    seenKeys.add(record.ftlKey);
+    if (record.mvpStatus === "wired") {
+      wired += 1;
+    } else {
+      catalogued += 1;
+    }
   }
 
-  const parsedIds = resource.body.map((entry) => entry.id);
   if (
-    declaredIds.length !== parsedIds.length ||
-    declaredIds.some((id, index) => id !== parsedIds[index])
+    records.length !== CATALOG_COUNTS.records ||
+    wired !== CATALOG_COUNTS.wired ||
+    catalogued !== CATALOG_COUNTS.catalogued
   ) {
-    throw new Error("FTL parse error: one or more entries are malformed");
+    throw new Error(
+      "catalog must contain exactly 11 records: 5 wired and 6 catalogued"
+    );
+  }
+
+  return records.filter((record) => record.mvpStatus === "wired");
+}
+
+function assertValidFtl(ftl) {
+  let ast;
+  try {
+    ast = parse(ftl);
+  } catch (error) {
+    throw new Error(`FTL parse error: ${error.message}`, { cause: error });
+  }
+  const junk = ast.body.filter((entry) => entry.type === "Junk");
+  if (junk.length === 0) {
+    return;
+  }
+  const details = junk
+    .flatMap((entry) => entry.annotations ?? [])
+    .map((annotation) => annotation.message)
+    .join("; ");
+  throw new Error(`FTL parse error: ${details || "invalid syntax"}`);
+}
+
+function decodeFtl(buffer) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch (error) {
+    throw new Error("messages.ftl must be valid UTF-8", { cause: error });
   }
 }
 
@@ -178,18 +231,6 @@ function sampleArguments(record) {
   return samples;
 }
 
-function validateWiredRecord(record, manifest) {
-  if (
-    record.catalogVersion !== manifest.catalogVersion ||
-    typeof record.id !== "string" ||
-    record.id.length === 0 ||
-    typeof record.ftlKey !== "string" ||
-    record.ftlKey.length === 0
-  ) {
-    throw new Error(`invalid wired catalog record ${record.id ?? "<unknown>"}`);
-  }
-}
-
 export async function validateLanguagePack({
   packRoot,
   catalogPath,
@@ -212,9 +253,11 @@ export async function validateLanguagePack({
     throw new Error("resource hash mismatch for messages.ftl");
   }
 
-  const ftl = ftlBuffer.toString("utf8");
+  const records = parseCatalog(catalogSource);
+  const wiredRecords = validateCatalog(records, manifest);
+  const ftl = decodeFtl(ftlBuffer);
+  assertValidFtl(ftl);
   const fluentResource = new FluentResource(ftl);
-  assertFtlParsed(ftl, fluentResource);
   const bundle = new FluentBundle(locale, { useIsolating: false });
   const resourceErrors = bundle.addResource(fluentResource);
   if (resourceErrors.length > 0) {
@@ -225,25 +268,11 @@ export async function validateLanguagePack({
     );
   }
 
-  const records = parseCatalog(catalogSource);
-  const wiredRecords = records.filter((record) => record.mvpStatus === "wired");
-  const seenIds = new Set();
-  const seenKeys = new Set();
   const resourceEntries = new Map(
     fluentResource.body.map((entry) => [entry.id, entry])
   );
   const messages = {};
   for (const record of wiredRecords) {
-    validateWiredRecord(record, manifest);
-    if (seenIds.has(record.id)) {
-      throw new Error(`duplicate wired catalog id ${record.id}`);
-    }
-    if (seenKeys.has(record.ftlKey)) {
-      throw new Error(`duplicate wired Fluent key ${record.ftlKey}`);
-    }
-    seenIds.add(record.id);
-    seenKeys.add(record.ftlKey);
-
     const message = bundle.getMessage(record.ftlKey);
     if (message?.value == null) {
       throw new Error(`missing required key ${record.ftlKey}`);
