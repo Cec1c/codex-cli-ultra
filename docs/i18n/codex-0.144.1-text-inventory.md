@@ -3,13 +3,14 @@
 > 本文件由机器目录生成，请勿手工维护重复字段。
 > This file is generated from the machine catalog; do not maintain duplicate fields manually.
 
-共整理 10 条真实源码消息。
-Catalogued 10 messages from real source locations.
+共整理 11 条真实源码消息。
+Catalogued 11 messages from real source locations.
 
 ## 已接入 MVP / Wired in MVP
 
 | 消息 ID / Message ID | 英文原文 / English | 分类 / Kind | 源码 / Source |
 | --- | --- | --- | --- |
+| tui.history.worked-for | Worked for {duration} | parameterized | codex-rs/tui/src/history_cell/separators.rs:35 |
 | tui.status-line.setup.apply-theme-colors | Apply colors from the active /theme | plain | codex-rs/tui/src/bottom_pane/status_line_setup.rs:268 |
 | tui.status-line.setup.configure-title | Configure Status Line | plain | codex-rs/tui/src/bottom_pane/status_line_setup.rs:305 |
 | tui.status-line.setup.select-items-description | Select which items to display in the status line. | plain | codex-rs/tui/src/bottom_pane/status_line_setup.rs:306 |

@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+const UPSTREAM_COMMIT = "44918ea10c0f99151c6710411b4322c2f5c96bea";
+
 function findAllIndexes(source, anchor) {
   const indexes = [];
   let offset = 0;
@@ -31,13 +33,18 @@ export async function extractCatalog(sourceRoot, specs) {
   for (const spec of specs) {
     const source = await readFile(join(sourceRoot, spec.path), "utf8");
     const indexes = findAllIndexes(source, spec.anchor);
-    if (indexes.length !== 1) {
+    const expectedOccurrences = spec.expectedOccurrences ?? 1;
+    if (indexes.length !== expectedOccurrences) {
+      const expectedLabel =
+        expectedOccurrences === 1 ? "one" : expectedOccurrences;
       throw new Error(
-        `${spec.id}: expected exactly one source anchor, found ${indexes.length}`
+        `${spec.id}: expected exactly ${expectedLabel} source anchor, found ${indexes.length}`
       );
     }
 
-    const line = source.slice(0, indexes[0]).split(/\r?\n/).length;
+    const lines = indexes.map(
+      (index) => source.slice(0, index).split(/\r?\n/).length
+    );
     const fingerprintPayload = `${spec.path}|${spec.symbol}|${spec.english}`;
     const fingerprint = createHash("sha256")
       .update(fingerprintPayload)
@@ -45,11 +52,14 @@ export async function extractCatalog(sourceRoot, specs) {
 
     records.push({
       schemaVersion: 1,
+      catalogVersion: 1,
       id: spec.id,
       ftlKey: spec.ftlKey,
       surface: spec.surface,
       english: spec.english,
       kind: spec.kind,
+      args: spec.args ?? [],
+      expectedOccurrences,
       placeholders: spec.placeholders ?? [],
       richSlots: spec.richSlots ?? [],
       translation: spec.translation,
@@ -57,9 +67,11 @@ export async function extractCatalog(sourceRoot, specs) {
       source: {
         repository: "openai/codex",
         release: "rust-v0.144.1",
+        commit: UPSTREAM_COMMIT,
         path: spec.path,
         symbol: spec.symbol,
-        line,
+        line: lines[0],
+        lines,
         fingerprint: `sha256:${fingerprint}`
       },
       firstSeen: "0.144.1",
