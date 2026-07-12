@@ -23,6 +23,7 @@ import {
   planOperations,
   revertOperations
 } from "../src/adapter/transaction.mjs";
+import { LOCK_WORKSPACE_PACKAGE_NAMES } from "../src/adapter/codex-0.144.1.mjs";
 import { runCli } from "../src/cli.mjs";
 
 const STATE_DIRECTORY = ".codex-ultra-mvp";
@@ -34,8 +35,53 @@ const LIB_SOURCE = [
   "mod hooks_rpc;",
   "mod ide_context;",
   "mod keymap;",
+  "pub use markdown_render::render_markdown_text;",
   ""
 ].join("\n");
+
+const WORKSPACE_CARGO_SOURCE = [
+  "[workspace.dependencies]",
+  'flate2 = "1.1.8"',
+  'futures = { version = "0.3", default-features = false }',
+  'uds_windows = "1.1.0"',
+  'unicode-segmentation = "1.12.0"',
+  ""
+].join("\n");
+
+const TUI_CARGO_SOURCE = [
+  "[dependencies]",
+  "dunce = { workspace = true }",
+  'image = { workspace = true, features = ["jpeg", "png", "gif", "webp"] }',
+  'two-face = { version = "0.5", default-features = false, features = ["syntect-default-onig"] }',
+  "unicode-segmentation = { workspace = true }",
+  ""
+].join("\n");
+
+const CLI_MAIN_SOURCE = [
+  "fn main() -> anyhow::Result<()> {",
+  "    let remote_control_disabled = codex_app_server::take_remote_control_disabled_env();",
+  "}",
+  ""
+].join("\n");
+
+const CARGO_LOCK_SOURCE = LOCK_WORKSPACE_PACKAGE_NAMES.map((packageName) => {
+  const lines = [
+    "[[package]]",
+    `name = "${packageName}"`,
+    'version = "0.0.0"'
+  ];
+  if (packageName === "codex-tui") {
+    lines.push(
+      "dependencies = [",
+      ' "dunce",',
+      ' "image",',
+      ' "two-face",',
+      ' "unicode-segmentation",',
+      "]"
+    );
+  }
+  return lines.join("\n") + "\n";
+}).join("\n");
 
 const STATUS_SOURCE = [
   "impl StatusLineSetupView {",
@@ -130,6 +176,10 @@ function createMkdirBarrier(targetPath) {
 
 async function createCodexFixture() {
   const sourceRoot = await createTransactionFixture({
+    "codex-rs/Cargo.toml": WORKSPACE_CARGO_SOURCE,
+    "codex-rs/Cargo.lock": CARGO_LOCK_SOURCE,
+    "codex-rs/cli/src/main.rs": CLI_MAIN_SOURCE,
+    "codex-rs/tui/Cargo.toml": TUI_CARGO_SOURCE,
     "codex-rs/tui/src/lib.rs": LIB_SOURCE,
     "codex-rs/tui/src/bottom_pane/status_line_setup.rs": STATUS_SOURCE
   });
@@ -189,7 +239,7 @@ test("adapter plan is read-only and prints relative paths with hashes", async ()
   );
 
   assert.equal(result.command, "adapter plan");
-  assert.equal(result.files.length, 5);
+  assert.equal(result.files.length, 9);
   assert.deepEqual(JSON.parse(output), result);
   for (const file of result.files) {
     assert.match(file.relativePath, /^[^\\/]+(?:\/[^\\/]+)*$/);

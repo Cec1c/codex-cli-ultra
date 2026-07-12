@@ -16,6 +16,7 @@ import test from "node:test";
 import {
   applyCodexPatch,
   doctorCodexPatch,
+  LOCK_WORKSPACE_PACKAGE_NAMES,
   planCodexPatch,
   revertCodexPatch,
   TARGET_COMMIT
@@ -26,8 +27,53 @@ const LIB_SOURCE = [
   "mod hooks_rpc;",
   "mod ide_context;",
   "mod keymap;",
+  "pub use markdown_render::render_markdown_text;",
   ""
 ].join("\n");
+
+const WORKSPACE_CARGO_SOURCE = [
+  "[workspace.dependencies]",
+  'flate2 = "1.1.8"',
+  'futures = { version = "0.3", default-features = false }',
+  'uds_windows = "1.1.0"',
+  'unicode-segmentation = "1.12.0"',
+  ""
+].join("\n");
+
+const TUI_CARGO_SOURCE = [
+  "[dependencies]",
+  "dunce = { workspace = true }",
+  'image = { workspace = true, features = ["jpeg", "png", "gif", "webp"] }',
+  'two-face = { version = "0.5", default-features = false, features = ["syntect-default-onig"] }',
+  "unicode-segmentation = { workspace = true }",
+  ""
+].join("\n");
+
+const CLI_MAIN_SOURCE = [
+  "fn main() -> anyhow::Result<()> {",
+  "    let remote_control_disabled = codex_app_server::take_remote_control_disabled_env();",
+  "}",
+  ""
+].join("\n");
+
+const CARGO_LOCK_SOURCE = LOCK_WORKSPACE_PACKAGE_NAMES.map((packageName) => {
+  const lines = [
+    "[[package]]",
+    `name = "${packageName}"`,
+    'version = "0.0.0"'
+  ];
+  if (packageName === "codex-tui") {
+    lines.push(
+      "dependencies = [",
+      ' "dunce",',
+      ' "image",',
+      ' "two-face",',
+      ' "unicode-segmentation",',
+      "]"
+    );
+  }
+  return lines.join("\n") + "\n";
+}).join("\n");
 
 const STATUS_SOURCE = [
   "impl StatusLineSetupView {",
@@ -83,6 +129,10 @@ const EXPECTED_STATE_FILES = [
     relativePath: "codex-rs/tui/src/bottom_pane/status_line_setup.rs",
     created: false
   },
+  { relativePath: "codex-rs/Cargo.toml", created: false },
+  { relativePath: "codex-rs/tui/Cargo.toml", created: false },
+  { relativePath: "codex-rs/Cargo.lock", created: false },
+  { relativePath: "codex-rs/cli/src/main.rs", created: false },
   { relativePath: "codex-rs/tui/src/i18n.rs", created: true },
   { relativePath: "codex-rs/tui/src/i18n_tests.rs", created: true },
   {
@@ -130,6 +180,16 @@ function rehashState(state) {
 async function createFixture() {
   const sourceRoot = await mkdtemp(join(tmpdir(), "codex-ultra-adapter-"));
   const overlayDir = join(sourceRoot, "overlay");
+  const workspaceCargoPath = join(sourceRoot, "codex-rs", "Cargo.toml");
+  const cargoLockPath = join(sourceRoot, "codex-rs", "Cargo.lock");
+  const tuiCargoPath = join(sourceRoot, "codex-rs", "tui", "Cargo.toml");
+  const cliMainPath = join(
+    sourceRoot,
+    "codex-rs",
+    "cli",
+    "src",
+    "main.rs"
+  );
   const libPath = join(sourceRoot, "codex-rs", "tui", "src", "lib.rs");
   const statusPath = join(
     sourceRoot,
@@ -140,7 +200,12 @@ async function createFixture() {
     "status_line_setup.rs"
   );
   await mkdir(dirname(statusPath), { recursive: true });
+  await mkdir(dirname(cliMainPath), { recursive: true });
   await mkdir(overlayDir, { recursive: true });
+  await writeFile(workspaceCargoPath, WORKSPACE_CARGO_SOURCE, "utf8");
+  await writeFile(cargoLockPath, CARGO_LOCK_SOURCE, "utf8");
+  await writeFile(tuiCargoPath, TUI_CARGO_SOURCE, "utf8");
+  await writeFile(cliMainPath, CLI_MAIN_SOURCE, "utf8");
   await writeFile(libPath, LIB_SOURCE, "utf8");
   await writeFile(statusPath, STATUS_SOURCE, "utf8");
   await writeFile(join(overlayDir, "i18n.rs"), "pub(crate) fn marker() {}\n", "utf8");
@@ -154,7 +219,16 @@ async function createFixture() {
     "配置状态栏\n",
     "utf8"
   );
-  return { sourceRoot, overlayDir, libPath, statusPath };
+  return {
+    sourceRoot,
+    overlayDir,
+    workspaceCargoPath,
+    cargoLockPath,
+    tuiCargoPath,
+    cliMainPath,
+    libPath,
+    statusPath
+  };
 }
 
 async function snapshotTree(root) {
@@ -201,7 +275,7 @@ test("planCodexPatch changes no files during preflight", async () => {
     overlayDir: fixture.overlayDir
   });
 
-  assert.equal(plan.files.length, 5);
+  assert.equal(plan.files.length, 9);
   assert.deepEqual(await snapshotTree(fixture.sourceRoot), before);
 });
 
@@ -211,6 +285,7 @@ test("planCodexPatch disables optional Git locks", async () => {
 
   await planCodexPatch(fixture.sourceRoot, {
     overlayDir: fixture.overlayDir,
+    verifyLockFingerprint: false,
     execFileImpl: async (file, args, options) => {
       calls.push({ file, args, options });
       if (args.includes("rev-parse")) {
@@ -237,7 +312,28 @@ test("applyCodexPatch installs overlays and localized call sites", async () => {
 
   const status = await readFile(fixture.statusPath, "utf8");
   assert.match(status, /crate::i18n::global\(\)/);
-  assert.match(status, /translator\.text\(/);
+  assert.match(status, /crate::i18n::Localizer/);
+  assert.match(status, /translator\.text\([^)]*None/s);
+  assert.match(
+    await readFile(fixture.libPath, "utf8"),
+    /pub fn ultra_i18n_self_check_json/
+  );
+  assert.match(
+    await readFile(fixture.workspaceCargoPath, "utf8"),
+    /fluent-bundle = "0\.15\.3"/
+  );
+  assert.match(
+    await readFile(fixture.tuiCargoPath, "utf8"),
+    /unic-langid = \{ workspace = true \}/
+  );
+  assert.match(
+    await readFile(fixture.cargoLockPath, "utf8"),
+    /name = "codex-tui"\nversion = "0\.144\.1"/
+  );
+  assert.match(
+    await readFile(fixture.cliMainPath, "utf8"),
+    /--ultra-i18n-self-check/
+  );
   assert.equal(
     await readFile(
       join(fixture.sourceRoot, "codex-rs", "tui", "src", "i18n.rs"),
@@ -259,6 +355,19 @@ test("applyCodexPatch installs overlays and localized call sites", async () => {
       "utf8"
     ),
     /配置状态栏/
+  );
+});
+
+test("planCodexPatch hard-fails a drifting codex-tui lock block", async () => {
+  const fixture = await createFixture();
+
+  await assert.rejects(
+    planCodexPatch(fixture.sourceRoot, {
+      verifyGit: false,
+      verifyLockFingerprint: true,
+      overlayDir: fixture.overlayDir
+    }),
+    /unexpected codex-tui Cargo\.lock package block sha256/
   );
 });
 
