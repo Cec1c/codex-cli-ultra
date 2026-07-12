@@ -1,12 +1,26 @@
 # Codex CLI Ultra
 
-> **早期状态：** 这是一个非官方、非常早期的实验仓库，目前仍处于“新建文件夹阶段”：方向已经提出，但接口、包规范和实现都尚未稳定。
+> **早期状态：** 这是一个非官方、非常早期的实验仓库。首个锁定版本的 i18n MVP 已经完成，但接口、包规范和安装方式仍不稳定，不适合替代官方发行版。
 >
-> **Early status:** This is an unofficial, very early experimental repository. It is still at the “new folder” stage: the direction exists, but the interfaces, package specifications, and implementation are not stable yet.
+> **Early status:** This is an unofficial, very early experimental repository. The first version-locked i18n MVP now works, but its interfaces, package specifications, and installation path remain unstable and are not a replacement for the official distribution.
 
 Codex CLI Ultra 希望在不把项目绑定为长期源码分叉的前提下，为 Codex CLI 探索可持续维护的本地化与界面扩展能力。
 
 Codex CLI Ultra explores maintainable localization and interface extension capabilities for Codex CLI without defining the project as a permanent source fork.
+
+## 当前 MVP / Current MVP
+
+当前原型锁定 Codex CLI 0.144.1：从真实源码整理 10 条 TUI 文本，其中 4 条状态栏设置文本已接入简体中文。Fluent/FTL 语言资源由 JavaScript 编译，Rust 薄桥接层在语言目录缺失、损坏、缺键或空翻译时继续使用原有英文。
+
+The current prototype is pinned to Codex CLI 0.144.1. It catalogs 10 real TUI messages and wires four status-line setup messages to Simplified Chinese. JavaScript compiles Fluent/FTL resources, while a thin Rust bridge preserves the original English when the catalog is missing, damaged, incomplete, or empty.
+
+适配器会校验精确上游提交和源码锚点，以事务方式应用并支持回滚。PowerShell 7 是首个操作入口；当前仍需要从源码构建测试版本，不会修改未知 Codex 版本。
+
+The adapter verifies the exact upstream commit and source anchors, applies changes transactionally, and supports rollback. PowerShell 7 is the first operator entry point. The MVP still requires a source build and never modifies an unknown Codex version.
+
+复现步骤见 [i18n MVP 使用说明](docs/i18n/mvp-usage.md)，已整理文本见 [Codex CLI 0.144.1 TUI 文本目录](docs/i18n/codex-0.144.1-text-inventory.md)。`Worked for 7m 57s` 彩蛋的后续设计见 [Worked for 短语包创意](docs/ideas/worked-for-phrases.md)。
+
+See the [i18n MVP usage guide](docs/i18n/mvp-usage.md) for reproduction steps and the [Codex CLI 0.144.1 TUI text inventory](docs/i18n/codex-0.144.1-text-inventory.md) for catalogued messages. The future `Worked for 7m 57s` easter egg is recorded in the [Worked for phrase-pack idea](docs/ideas/worked-for-phrases.md).
 
 ## 两个长期方向 / Two Long-Term Directions
 
@@ -16,9 +30,9 @@ Codex CLI Ultra explores maintainable localization and interface extension capab
 
 The first priority is to validate and establish an i18n framework that decouples interface text from the implementation. Language packs should be independently installable, updatable, verifiable, and removable, so contributors around the world can maintain locales separately.
 
-执行器与安装编排计划采用 JavaScript。语言包本身会优先采用声明式资源格式，而不是要求每个翻译包执行任意代码。
+MVP 执行器与安装编排使用 JavaScript。语言包本身采用声明式资源格式，而不是要求每个翻译包执行任意代码。
 
-The executor and installation orchestration are planned in JavaScript. Language packs themselves will favor declarative resource formats instead of requiring every translation pack to execute arbitrary code.
+The MVP executor and installation orchestration use JavaScript. Language packs use declarative resources instead of requiring every translation pack to execute arbitrary code.
 
 ### 2. 高度可定制的主题包框架 / Highly Customizable Theme Packs
 
@@ -68,9 +82,9 @@ Some adapter design will reference the [open-source Codex codebase](https://gith
 
 At this stage, the most valuable contributions are locating user-visible strings across Codex versions, recording reproducible compatibility evidence, and discussing the smallest stable specifications for language and theme packs.
 
-在首个规范发布前，任何目录结构和接口都可能调整。初期设计见 [docs/initial-design.md](docs/initial-design.md)。
+在首个规范发布前，任何目录结构和接口都可能调整。初期设计见 [docs/initial-design.md](docs/initial-design.md)，i18n 基础规范见 [docs/i18n/foundation-design.md](docs/i18n/foundation-design.md)。
 
-Until the first specification is released, any directory structure or interface may change. See [docs/initial-design.md](docs/initial-design.md) for the initial design.
+Until the first specification is released, any directory structure or interface may change. See [docs/initial-design.md](docs/initial-design.md) for the initial design and [docs/i18n/foundation-design.md](docs/i18n/foundation-design.md) for the i18n foundation.
 
 ## 许可证 / License
 

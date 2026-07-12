@@ -1,0 +1,21 @@
+{
+  "name": "codex-cli-ultra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "catalog:extract": "node src/cli.mjs catalog extract",
+    "pack:compile": "node src/cli.mjs pack compile",
+    "adapter:apply": "node src/cli.mjs adapter apply",
+    "adapter:revert": "node src/cli.mjs adapter revert",
+    "doctor": "node src/cli.mjs doctor"
+  },
+  "dependencies": {
+    "@fluent/bundle": "0.19.1",
+    "@fluent/syntax": "0.19.0"
+  }
+}
