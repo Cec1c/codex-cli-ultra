@@ -16,6 +16,27 @@ export function isAbsoluteLocalWindowsPath(value) {
   );
 }
 
+export function windowsPathIdentity(value) {
+  return win32.resolve(value).toLowerCase();
+}
+
+export function windowsPathsEqual(left, right) {
+  return windowsPathIdentity(left) === windowsPathIdentity(right);
+}
+
+export function isWindowsPathInside(root, candidate) {
+  const relation = win32.relative(
+    win32.resolve(root),
+    win32.resolve(candidate)
+  );
+  return (
+    relation === "" ||
+    (relation !== ".." &&
+      !relation.startsWith("..\\") &&
+      !win32.isAbsolute(relation))
+  );
+}
+
 export function resolveInstallRoot(env = process.env) {
   let root;
   if (env.CODEX_ULTRA_HOME) {

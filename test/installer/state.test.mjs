@@ -51,7 +51,7 @@ const validState = {
     platformPackageJsonPath:
       "C:\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\package.json",
     binaryPath:
-      "C:\\npm\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
+      "C:\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
   },
   active: validBuild,
   locale: validLocale,
@@ -236,6 +236,32 @@ test("every recorded file path must be on a local Windows drive", () => {
   }
 });
 
+test("official paths must preserve the deterministic npm package layout", () => {
+  assert.throws(
+    () =>
+      validateState({
+        ...cloneState(),
+        official: {
+          ...validState.official,
+          platformPackageJsonPath:
+            "C:\\npm\\node_modules\\@openai\\other\\package.json"
+        }
+      }),
+    /official.platformPackageJsonPath must match the official package layout/
+  );
+  assert.throws(
+    () =>
+      validateState({
+        ...cloneState(),
+        official: {
+          ...validState.official,
+          binaryPath: "C:\\evil\\codex.exe"
+        }
+      }),
+    /official.binaryPath must match the official package layout/
+  );
+});
+
 test("build and locale metadata reject unsafe values", () => {
   for (const size of [0, -1, 1.5, Number.POSITIVE_INFINITY]) {
     assert.throws(
@@ -278,6 +304,14 @@ test("build and locale metadata reject unsafe values", () => {
         active: { ...validBuild, ultraRevision: 0 }
       }),
     /active.ultraRevision must be a positive safe integer/
+  );
+  assert.throws(
+    () =>
+      validateState({
+        ...cloneState(),
+        active: { ...validBuild, releaseId: "..\\evil" }
+      }),
+    /active.releaseId must be a safe Windows path segment/
   );
   assert.throws(
     () =>

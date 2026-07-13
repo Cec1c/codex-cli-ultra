@@ -1,7 +1,10 @@
+import { win32 } from "node:path";
+
 import {
   isAbsoluteLocalWindowsPath,
   PLATFORM,
-  STATE_SCHEMA_VERSION
+  STATE_SCHEMA_VERSION,
+  windowsPathsEqual
 } from "../config/constants.mjs";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -34,6 +37,19 @@ function validateNonEmptyString(value, label) {
     throw new Error(`${label} must be a non-empty string`);
   }
   return value;
+}
+
+function validateWindowsPathSegment(value, label) {
+  const segment = validateNonEmptyString(value, label);
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment) ||
+    /[. ]$/.test(segment) ||
+    segment === "." ||
+    segment === ".."
+  ) {
+    throw new Error(`${label} must be a safe Windows path segment`);
+  }
+  return segment;
 }
 
 function validateAbsolutePath(value, label) {
@@ -94,7 +110,7 @@ function validateOfficial(value) {
     ],
     "official"
   );
-  return {
+  const official = {
     version: validateNonEmptyString(value.version, "official.version"),
     packageJsonPath: validateAbsolutePath(
       value.packageJsonPath,
@@ -113,6 +129,34 @@ function validateOfficial(value) {
       "official.binaryPath"
     )
   };
+  const expectedPlatformPackageJsonPath = win32.join(
+    win32.dirname(official.packageJsonPath),
+    "node_modules",
+    "@openai",
+    "codex-win32-x64",
+    "package.json"
+  );
+  if (
+    !windowsPathsEqual(
+      official.platformPackageJsonPath,
+      expectedPlatformPackageJsonPath
+    )
+  ) {
+    throw new Error(
+      "official.platformPackageJsonPath must match the official package layout"
+    );
+  }
+  const expectedBinaryPath = win32.join(
+    win32.dirname(official.platformPackageJsonPath),
+    "vendor",
+    PLATFORM,
+    "bin",
+    "codex.exe"
+  );
+  if (!windowsPathsEqual(official.binaryPath, expectedBinaryPath)) {
+    throw new Error("official.binaryPath must match the official package layout");
+  }
+  return official;
 }
 
 function validateBuild(value, label) {
@@ -135,7 +179,7 @@ function validateBuild(value, label) {
     throw new Error(`${label}.platform must equal ${PLATFORM}`);
   }
   return {
-    releaseId: validateNonEmptyString(
+    releaseId: validateWindowsPathSegment(
       value.releaseId,
       `${label}.releaseId`
     ),
