@@ -10,17 +10,17 @@ Codex CLI Ultra explores maintainable localization and interface extension capab
 
 ## 当前 MVP / Current MVP
 
-当前原型锁定 Codex CLI 0.144.1：从真实源码整理 10 条 TUI 文本，其中 4 条状态栏设置文本已接入简体中文。Fluent/FTL 语言资源由 JavaScript 编译，Rust 薄桥接层在语言目录缺失、损坏、缺键或空翻译时继续使用原有英文。
+当前原型锁定 Codex CLI 0.144.1：从真实源码整理 11 条 TUI 文本，其中 4 条状态栏设置文本和参数化的 `Worked for {duration}` 已接入简体中文。JavaScript 在安装或验证阶段严格检查声明式 Fluent/FTL 语言包，Rust 薄运行时直接加载外部 FTL；语言包缺失、损坏、缺键、参数错误或翻译为空时继续使用调用点原有英文。
 
-The current prototype is pinned to Codex CLI 0.144.1. It catalogs 10 real TUI messages and wires four status-line setup messages to Simplified Chinese. JavaScript compiles Fluent/FTL resources, while a thin Rust bridge preserves the original English when the catalog is missing, damaged, incomplete, or empty.
+The current prototype is pinned to Codex CLI 0.144.1. It catalogs 11 real TUI messages and wires four status-line setup messages plus parameterized `Worked for {duration}` text to Simplified Chinese. JavaScript strictly validates declarative Fluent/FTL language packs during installation or verification, while a thin Rust runtime loads external FTL directly and preserves call-site English when the pack is missing, damaged, incomplete, has invalid arguments, or produces empty output.
 
 适配器会校验精确上游提交和源码锚点，以事务方式应用并支持回滚。PowerShell 7 是首个操作入口；当前仍需要从源码构建测试版本，不会修改未知 Codex 版本。
 
 The adapter verifies the exact upstream commit and source anchors, applies changes transactionally, and supports rollback. PowerShell 7 is the first operator entry point. The MVP still requires a source build and never modifies an unknown Codex version.
 
-复现步骤见 [i18n MVP 使用说明](docs/i18n/mvp-usage.md)，已整理文本见 [Codex CLI 0.144.1 TUI 文本目录](docs/i18n/codex-0.144.1-text-inventory.md)。`Worked for 7m 57s` 彩蛋的后续设计见 [Worked for 短语包创意](docs/ideas/worked-for-phrases.md)。
+复现步骤见 [i18n MVP 使用说明](docs/i18n/mvp-usage.md)，运行时合同与验证证据见 [Rust i18n 运行时 MVP](docs/i18n/runtime-mvp.md)，已整理文本见 [Codex CLI 0.144.1 TUI 文本目录](docs/i18n/codex-0.144.1-text-inventory.md)。随机 `Worked for` 短语仍属于后续设计，见 [Worked for 短语包创意](docs/ideas/worked-for-phrases.md)。
 
-See the [i18n MVP usage guide](docs/i18n/mvp-usage.md) for reproduction steps and the [Codex CLI 0.144.1 TUI text inventory](docs/i18n/codex-0.144.1-text-inventory.md) for catalogued messages. The future `Worked for 7m 57s` easter egg is recorded in the [Worked for phrase-pack idea](docs/ideas/worked-for-phrases.md).
+See the [i18n MVP usage guide](docs/i18n/mvp-usage.md) for reproduction steps, the [Rust i18n runtime MVP](docs/i18n/runtime-mvp.md) for runtime contracts and validation evidence, and the [Codex CLI 0.144.1 TUI text inventory](docs/i18n/codex-0.144.1-text-inventory.md) for catalogued messages. Random `Worked for` phrases remain a later design recorded in the [Worked for phrase-pack idea](docs/ideas/worked-for-phrases.md).
 
 ## 两个长期方向 / Two Long-Term Directions
 
