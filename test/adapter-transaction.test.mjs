@@ -27,8 +27,11 @@ import { LOCK_WORKSPACE_PACKAGE_NAMES } from "../src/adapter/codex-0.144.1.mjs";
 import { runCli } from "../src/cli.mjs";
 
 const STATE_DIRECTORY = ".codex-ultra-mvp";
-const SNAPSHOT_FILE_NAME =
-  "codex_tui__bottom_pane__status_line_setup__tests__setup_view_snapshot_uses_zh_cn_catalog.snap";
+const SNAPSHOT_FILE_NAMES = [
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_narrow.snap",
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_medium.snap",
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_wide.snap"
+];
 
 const LIB_SOURCE = [
   "mod history_cell;",
@@ -98,6 +101,8 @@ const STATUS_SOURCE = [
   '            name: "Use theme colors".to_string(),',
   '            description: Some("Apply colors from the active /theme".to_string()),',
   "            enabled: use_theme_colors,",
+  "            orderable: false,",
+  "            section_break_after: true,",
   "        }];",
   "",
   "        Self {",
@@ -113,9 +118,136 @@ const STATUS_SOURCE = [
   "",
   "#[cfg(test)]",
   "mod tests {",
+  "    #[test]",
+  "    fn setup_view_snapshot_uses_runtime_preview_values() {",
+  "        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();",
+  "        let view = StatusLineSetupView::new(",
+  "            Some(&[",
+  "                StatusLineItem::ModelName.to_string(),",
+  "                StatusLineItem::CurrentDir.to_string(),",
+  "                StatusLineItem::GitBranch.to_string(),",
+  "            ]),",
+  "            /*use_theme_colors*/ true,",
+  "            StatusSurfacePreviewData::from_iter([",
+  "                (",
+  "                    StatusLineItem::ModelName.preview_item(),",
+  '                    "gpt-5-codex".to_string(),',
+  "                ),",
+  "                (",
+  "                    StatusLineItem::CurrentDir.preview_item(),",
+  '                    "~/codex-rs".to_string(),',
+  "                ),",
+  "                (",
+  "                    StatusLineItem::GitBranch.preview_item(),",
+  '                    "jif/statusline-preview".to_string(),',
+  "                ),",
+  "                (",
+  "                    StatusLineItem::WeeklyLimit.preview_item(),",
+  '                    "weekly 82% left".to_string(),',
+  "                ),",
+  "            ]),",
+  "            AppEventSender::new(tx_raw),",
+  "            crate::keymap::RuntimeKeymap::defaults().list,",
+  "        );",
+  "",
+  "        assert_snapshot!(render_lines(&view, /*width*/ 72));",
+  "    }",
+  "",
   "    fn render_lines(view: &StatusLineSetupView, width: u16) -> String {",
   "        String::new()",
   "    }",
+  "}",
+  ""
+].join("\n");
+
+const HISTORY_SEPARATOR_SOURCE = `//! Turn separators and runtime-metrics labels for transcript history.
+
+use super::*;
+
+#[derive(Debug)]
+/// A visual divider between turns, optionally showing how long the assistant "worked for".
+///
+/// This separator is only emitted for turns that performed concrete work (e.g., running commands,
+/// applying patches, making MCP tool calls), so purely conversational turns do not show an empty
+/// divider.
+pub struct FinalMessageSeparator {
+    elapsed_seconds: Option<u64>,
+    runtime_metrics: Option<RuntimeMetricsSummary>,
+}
+impl FinalMessageSeparator {
+    /// Creates a separator; completed turns should pass protocol turn duration when available.
+    pub(crate) fn new(
+        elapsed_seconds: Option<u64>,
+        runtime_metrics: Option<RuntimeMetricsSummary>,
+    ) -> Self {
+        Self {
+            elapsed_seconds,
+            runtime_metrics,
+        }
+    }
+}
+impl HistoryCell for FinalMessageSeparator {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut label_parts = Vec::new();
+        if let Some(elapsed_seconds) = self
+            .elapsed_seconds
+            .filter(|seconds| *seconds > 60)
+            .map(crate::status_indicator_widget::fmt_elapsed_compact)
+        {
+            label_parts.push(format!("Worked for {elapsed_seconds}"));
+        }
+        if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
+            label_parts.push(metrics_label);
+        }
+
+        if label_parts.is_empty() {
+            return vec![Line::from_iter(["─".repeat(width as usize).dim()])];
+        }
+
+        let label = format!("─ {} ─", label_parts.join(" • "));
+        let (label, _suffix, label_width) = take_prefix_by_width(&label, width as usize);
+        vec![
+            Line::from_iter([
+                label,
+                "─".repeat((width as usize).saturating_sub(label_width)),
+            ])
+            .dim(),
+        ]
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let mut label_parts = Vec::new();
+        if let Some(elapsed_seconds) = self
+            .elapsed_seconds
+            .filter(|seconds| *seconds > 60)
+            .map(crate::status_indicator_widget::fmt_elapsed_compact)
+        {
+            label_parts.push(format!("Worked for {elapsed_seconds}"));
+        }
+        if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
+            label_parts.push(metrics_label);
+        }
+        if label_parts.is_empty() {
+            Vec::new()
+        } else {
+            vec![Line::from(label_parts.join(" • "))]
+        }
+    }
+}
+
+pub(crate) fn runtime_metrics_label(_summary: RuntimeMetricsSummary) -> Option<String> {
+    None
+}
+`;
+
+const HISTORY_TESTS_SOURCE = [
+  "#[test]",
+  "fn final_message_separator_includes_worked_label_after_one_minute() {",
+  "    let cell = FinalMessageSeparator::new(Some(61), /*runtime_metrics*/ None);",
+  "    let rendered = render_lines(&cell.display_lines(/*width*/ 200));",
+  "",
+  "    assert_eq!(rendered.len(), 1);",
+  '    assert!(rendered[0].contains("Worked for"));',
   "}",
   ""
 ].join("\n");
@@ -181,7 +313,10 @@ async function createCodexFixture() {
     "codex-rs/cli/src/main.rs": CLI_MAIN_SOURCE,
     "codex-rs/tui/Cargo.toml": TUI_CARGO_SOURCE,
     "codex-rs/tui/src/lib.rs": LIB_SOURCE,
-    "codex-rs/tui/src/bottom_pane/status_line_setup.rs": STATUS_SOURCE
+    "codex-rs/tui/src/bottom_pane/status_line_setup.rs": STATUS_SOURCE,
+    "codex-rs/tui/src/history_cell/separators.rs":
+      HISTORY_SEPARATOR_SOURCE,
+    "codex-rs/tui/src/history_cell/tests.rs": HISTORY_TESTS_SOURCE
   });
   const overlayDir = join(sourceRoot, "overlay");
   await mkdir(overlayDir, { recursive: true });
@@ -195,11 +330,14 @@ async function createCodexFixture() {
     "#[test]\nfn marker_test() {}\n",
     "utf8"
   );
-  await writeFile(
-    join(overlayDir, SNAPSHOT_FILE_NAME),
-    "配置状态栏\n",
-    "utf8"
-  );
+  await mkdir(join(overlayDir, "snapshots"), { recursive: true });
+  for (const fileName of SNAPSHOT_FILE_NAMES) {
+    await writeFile(
+      join(overlayDir, "snapshots", fileName),
+      `${fileName}\n配置状态栏\n`,
+      "utf8"
+    );
+  }
   return { sourceRoot, overlayDir };
 }
 
@@ -239,7 +377,7 @@ test("adapter plan is read-only and prints relative paths with hashes", async ()
   );
 
   assert.equal(result.command, "adapter plan");
-  assert.equal(result.files.length, 9);
+  assert.equal(result.files.length, 13);
   assert.deepEqual(JSON.parse(output), result);
   for (const file of result.files) {
     assert.match(file.relativePath, /^[^\\/]+(?:\/[^\\/]+)*$/);

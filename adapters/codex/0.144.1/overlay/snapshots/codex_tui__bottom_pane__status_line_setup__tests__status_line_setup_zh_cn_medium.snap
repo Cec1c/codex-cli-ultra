@@ -1,0 +1,21 @@
+---
+source: tui/src/bottom_pane/status_line_setup.rs
+expression: "render_lines(&view, 72)"
+---
+                                                                        
+  配 置 状 态 栏                                                             
+  选 择 要 显 示 在 状 态 栏 中 的 项 目 。                                           
+                                                                        
+  Type to search                                                        
+  >                                                                     
+› [x] 使 用 主 题 颜 色           应 用 当 前  /theme 的 颜 色                       
+  ───────────────────────                                               
+  [x] model                 Current model name                          
+  [x] current-dir           Current working directory                   
+  [x] git-branch            Current Git branch (omitted when unavaila…  
+  [ ] model-with-reasoning  Current model name with reasoning level     
+  [ ] reasoning             Current reasoning level                     
+  [ ] project-name          Project name (omitted when unavailable)     
+                                                                        
+  gpt-5.2-codex · ~/my-project/subdir · feat/awesome-feature            
+  Press space to toggle; ←/→ to move; enter to confirm and close; esc to

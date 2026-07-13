@@ -18,16 +18,23 @@ const execFileAsync = promisify(execFile);
 const MODULE_PATH = "codex-rs/tui/src/lib.rs";
 const STATUS_LINE_PATH =
   "codex-rs/tui/src/bottom_pane/status_line_setup.rs";
+const HISTORY_SEPARATOR_PATH =
+  "codex-rs/tui/src/history_cell/separators.rs";
+const HISTORY_TESTS_PATH = "codex-rs/tui/src/history_cell/tests.rs";
 const WORKSPACE_CARGO_PATH = "codex-rs/Cargo.toml";
 const TUI_CARGO_PATH = "codex-rs/tui/Cargo.toml";
 const CARGO_LOCK_PATH = "codex-rs/Cargo.lock";
 const CLI_MAIN_PATH = "codex-rs/cli/src/main.rs";
 const I18N_PATH = "codex-rs/tui/src/i18n.rs";
 const I18N_TESTS_PATH = "codex-rs/tui/src/i18n_tests.rs";
-const SNAPSHOT_FILE_NAME =
-  "codex_tui__bottom_pane__status_line_setup__tests__setup_view_snapshot_uses_zh_cn_catalog.snap";
-const SNAPSHOT_PATH =
-  "codex-rs/tui/src/bottom_pane/snapshots/" + SNAPSHOT_FILE_NAME;
+const SNAPSHOT_FILE_NAMES = Object.freeze([
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_narrow.snap",
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_medium.snap",
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_wide.snap"
+]);
+const SNAPSHOT_PATHS = SNAPSHOT_FILE_NAMES.map(
+  (fileName) => "codex-rs/tui/src/bottom_pane/snapshots/" + fileName
+);
 const STATE_DIRECTORY = ".codex-ultra-mvp";
 const ADAPTER_DIRECTORY_URL = new URL(
   "../../adapters/codex/0.144.1/",
@@ -245,16 +252,21 @@ function codexStateMetadata(manifest) {
 const CODEX_STATE_FILES = [
   { relativePath: MODULE_PATH, created: false },
   { relativePath: STATUS_LINE_PATH, created: false },
+  { relativePath: HISTORY_SEPARATOR_PATH, created: false },
+  { relativePath: HISTORY_TESTS_PATH, created: false },
   { relativePath: WORKSPACE_CARGO_PATH, created: false },
   { relativePath: TUI_CARGO_PATH, created: false },
   { relativePath: CARGO_LOCK_PATH, created: false },
   { relativePath: CLI_MAIN_PATH, created: false },
   { relativePath: I18N_PATH, created: true },
   { relativePath: I18N_TESTS_PATH, created: true },
-  { relativePath: SNAPSHOT_PATH, created: true }
+  ...SNAPSHOT_PATHS.map((relativePath) => ({
+    relativePath,
+    created: true
+  }))
 ];
 
-const NEW_FUNCTION_ANCHOR = [
+const STATUS_LINE_CONSTRUCTOR_ANCHOR = [
   "    pub(crate) fn new(",
   "        status_line_items: Option<&[String]>,",
   "        use_theme_colors: bool,",
@@ -262,10 +274,18 @@ const NEW_FUNCTION_ANCHOR = [
   "        app_event_tx: AppEventSender,",
   "        list_keymap: ListKeymap,",
   "    ) -> Self {",
-  "        let mut used_ids = HashSet::new();"
+  "        let mut used_ids = HashSet::new();",
+  "        let mut items = vec![MultiSelectItem {",
+  "            id: STATUS_LINE_USE_THEME_COLORS_ITEM_ID.to_string(),",
+  '            name: "Use theme colors".to_string(),',
+  '            description: Some("Apply colors from the active /theme".to_string()),',
+  "            enabled: use_theme_colors,",
+  "            orderable: false,",
+  "            section_break_after: true,",
+  "        }];"
 ].join("\n");
 
-const NEW_FUNCTION_REPLACEMENT = [
+const STATUS_LINE_CONSTRUCTOR_REPLACEMENT = [
   "    pub(crate) fn new(",
   "        status_line_items: Option<&[String]>,",
   "        use_theme_colors: bool,",
@@ -273,7 +293,7 @@ const NEW_FUNCTION_REPLACEMENT = [
   "        app_event_tx: AppEventSender,",
   "        list_keymap: ListKeymap,",
   "    ) -> Self {",
-  "        Self::new_with_translator(",
+  "        Self::new_with_localizer(",
   "            status_line_items,",
   "            use_theme_colors,",
   "            preview_data,",
@@ -283,34 +303,58 @@ const NEW_FUNCTION_REPLACEMENT = [
   "        )",
   "    }",
   "",
-  "    fn new_with_translator(",
+  "    fn new_with_localizer(",
   "        status_line_items: Option<&[String]>,",
   "        use_theme_colors: bool,",
   "        preview_data: StatusSurfacePreviewData,",
   "        app_event_tx: AppEventSender,",
   "        list_keymap: ListKeymap,",
-  "        translator: &crate::i18n::Localizer,",
+  "        localizer: &crate::i18n::Localizer,",
   "    ) -> Self {",
-  "        let mut used_ids = HashSet::new();"
+  "        let mut used_ids = HashSet::new();",
+  "        let mut items = vec![MultiSelectItem {",
+  "            id: STATUS_LINE_USE_THEME_COLORS_ITEM_ID.to_string(),",
+  '            name: localizer.text("tui.status-line.setup.use-theme-colors", None, || {',
+  '                "Use theme colors".to_string()',
+  "            }),",
+  "            description: Some(localizer.text(",
+  '                "tui.status-line.setup.apply-theme-colors",',
+  "                None,",
+  '                || "Apply colors from the active /theme".to_string(),',
+  "            )),",
+  "            enabled: use_theme_colors,",
+  "            orderable: false,",
+  "            section_break_after: true,",
+  "        }];"
 ].join("\n");
 
-const SNAPSHOT_ANCHOR =
-  "    fn render_lines(view: &StatusLineSetupView, width: u16) -> String {";
+const STATUS_LINE_PICKER_ANCHOR = [
+  "            picker: MultiSelectPicker::builder(",
+  '                "Configure Status Line".to_string(),',
+  '                Some("Select which items to display in the status line.".to_string()),',
+  "                app_event_tx,",
+  "            )"
+].join("\n");
 
-const SNAPSHOT_TEST = [
+const STATUS_LINE_PICKER_REPLACEMENT = [
+  "            picker: MultiSelectPicker::builder(",
+  '                localizer.text("tui.status-line.setup.configure-title", None, || {',
+  '                    "Configure Status Line".to_string()',
+  "                }),",
+  "                Some(localizer.text(",
+  '                    "tui.status-line.setup.select-items-description",',
+  "                    None,",
+  '                    || "Select which items to display in the status line.".to_string(),',
+  "                )),",
+  "                app_event_tx,",
+  "            )"
+].join("\n");
+
+const STATUS_LINE_SNAPSHOT_TEST_ANCHOR = [
   "    #[test]",
-  "    fn setup_view_snapshot_uses_zh_cn_catalog() {",
-  "        let translator = crate::i18n::Localizer::from_ftl(",
-  '            "zh-CN",',
-  "            concat!(",
-  '                "tui--status-line--setup--use-theme-colors = 使用主题颜色\\n",',
-  '                "tui--status-line--setup--apply-theme-colors = 应用当前 /theme 的颜色\\n",',
-  '                "tui--status-line--setup--configure-title = 配置状态栏\\n",',
-  '                "tui--status-line--setup--select-items-description = 选择要显示在状态栏中的项目。\\n",',
-  "            ),",
-  "        );",
+  "    fn setup_view_snapshot_uses_runtime_preview_values() {",
   "        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();",
-  "        let view = StatusLineSetupView::new_with_translator(",
+  "        let view = StatusLineSetupView::new(",
   "            Some(&[",
   "                StatusLineItem::ModelName.to_string(),",
   "                StatusLineItem::CurrentDir.to_string(),",
@@ -328,24 +372,244 @@ const SNAPSHOT_TEST = [
   "                ),",
   "                (",
   "                    StatusLineItem::GitBranch.preview_item(),",
-  '                    "codex-ultra/i18n".to_string(),',
+  '                    "jif/statusline-preview".to_string(),',
+  "                ),",
+  "                (",
+  "                    StatusLineItem::WeeklyLimit.preview_item(),",
+  '                    "weekly 82% left".to_string(),',
   "                ),",
   "            ]),",
   "            AppEventSender::new(tx_raw),",
   "            crate::keymap::RuntimeKeymap::defaults().list,",
-  "            &translator,",
   "        );",
   "",
-  "        let rendered = render_lines(&view, /*width*/ 72);",
-  "        let rendered = rendered",
-  "            .lines()",
-  "            .map(str::trim_end)",
-  "            .collect::<Vec<_>>()",
-  '            .join("\\n");',
-  "        assert_snapshot!(rendered);",
-  "    }",
+  "        assert_snapshot!(render_lines(&view, /*width*/ 72));",
+  "    }"
+].join("\n");
+
+const STATUS_LINE_SNAPSHOT_TEST_REPLACEMENT = [
+  STATUS_LINE_SNAPSHOT_TEST_ANCHOR,
   "",
-  SNAPSHOT_ANCHOR
+  "    #[test]",
+  "    fn setup_view_snapshot_uses_zh_cn_localizer() {",
+  "        let localizer = crate::i18n::Localizer::from_ftl(",
+  '            "zh-CN",',
+  "            concat!(",
+  '                "tui--status-line--setup--use-theme-colors = 使用主题颜色\\n",',
+  '                "tui--status-line--setup--apply-theme-colors = 应用当前 /theme 的颜色\\n",',
+  '                "tui--status-line--setup--configure-title = 配置状态栏\\n",',
+  '                "tui--status-line--setup--select-items-description = 选择要显示在状态栏中的项目。\\n",',
+  "            ),",
+  "        );",
+  "        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();",
+  "        let view = StatusLineSetupView::new_with_localizer(",
+  "            Some(&[",
+  "                StatusLineItem::ModelName.to_string(),",
+  "                StatusLineItem::CurrentDir.to_string(),",
+  "                StatusLineItem::GitBranch.to_string(),",
+  "            ]),",
+  "            /*use_theme_colors*/ true,",
+  "            StatusSurfacePreviewData::default(),",
+  "            AppEventSender::new(tx_raw),",
+  "            crate::keymap::RuntimeKeymap::defaults().list,",
+  "            &localizer,",
+  "        );",
+  "",
+  "        assert_snapshot!(",
+  '            "status_line_setup_zh_cn_narrow",',
+  "            render_lines(&view, /*width*/ 32)",
+  "        );",
+  "        assert_snapshot!(",
+  '            "status_line_setup_zh_cn_medium",',
+  "            render_lines(&view, /*width*/ 72)",
+  "        );",
+  "        assert_snapshot!(",
+  '            "status_line_setup_zh_cn_wide",',
+  "            render_lines(&view, /*width*/ 120)",
+  "        );",
+  "    }"
+].join("\n");
+
+const HISTORY_SEPARATOR_ANCHOR = `//! Turn separators and runtime-metrics labels for transcript history.
+
+use super::*;
+
+#[derive(Debug)]
+/// A visual divider between turns, optionally showing how long the assistant "worked for".
+///
+/// This separator is only emitted for turns that performed concrete work (e.g., running commands,
+/// applying patches, making MCP tool calls), so purely conversational turns do not show an empty
+/// divider.
+pub struct FinalMessageSeparator {
+    elapsed_seconds: Option<u64>,
+    runtime_metrics: Option<RuntimeMetricsSummary>,
+}
+impl FinalMessageSeparator {
+    /// Creates a separator; completed turns should pass protocol turn duration when available.
+    pub(crate) fn new(
+        elapsed_seconds: Option<u64>,
+        runtime_metrics: Option<RuntimeMetricsSummary>,
+    ) -> Self {
+        Self {
+            elapsed_seconds,
+            runtime_metrics,
+        }
+    }
+}
+impl HistoryCell for FinalMessageSeparator {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut label_parts = Vec::new();
+        if let Some(elapsed_seconds) = self
+            .elapsed_seconds
+            .filter(|seconds| *seconds > 60)
+            .map(crate::status_indicator_widget::fmt_elapsed_compact)
+        {
+            label_parts.push(format!("Worked for {elapsed_seconds}"));
+        }
+        if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
+            label_parts.push(metrics_label);
+        }
+
+        if label_parts.is_empty() {
+            return vec![Line::from_iter(["─".repeat(width as usize).dim()])];
+        }
+
+        let label = format!("─ {} ─", label_parts.join(" • "));
+        let (label, _suffix, label_width) = take_prefix_by_width(&label, width as usize);
+        vec![
+            Line::from_iter([
+                label,
+                "─".repeat((width as usize).saturating_sub(label_width)),
+            ])
+            .dim(),
+        ]
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let mut label_parts = Vec::new();
+        if let Some(elapsed_seconds) = self
+            .elapsed_seconds
+            .filter(|seconds| *seconds > 60)
+            .map(crate::status_indicator_widget::fmt_elapsed_compact)
+        {
+            label_parts.push(format!("Worked for {elapsed_seconds}"));
+        }
+        if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
+            label_parts.push(metrics_label);
+        }
+        if label_parts.is_empty() {
+            Vec::new()
+        } else {
+            vec![Line::from(label_parts.join(" • "))]
+        }
+    }
+}`;
+
+const HISTORY_SEPARATOR_REPLACEMENT = `//! Turn separators and runtime-metrics labels for transcript history.
+
+use super::*;
+use fluent_bundle::FluentArgs;
+
+#[derive(Debug)]
+/// A visual divider between turns, optionally showing how long the assistant "worked for".
+///
+/// This separator is only emitted for turns that performed concrete work (e.g., running commands,
+/// applying patches, making MCP tool calls), so purely conversational turns do not show an empty
+/// divider.
+pub struct FinalMessageSeparator {
+    elapsed_seconds: Option<u64>,
+    runtime_metrics: Option<RuntimeMetricsSummary>,
+}
+impl FinalMessageSeparator {
+    /// Creates a separator; completed turns should pass protocol turn duration when available.
+    pub(crate) fn new(
+        elapsed_seconds: Option<u64>,
+        runtime_metrics: Option<RuntimeMetricsSummary>,
+    ) -> Self {
+        Self {
+            elapsed_seconds,
+            runtime_metrics,
+        }
+    }
+
+    pub(crate) fn label_parts_with_localizer(
+        &self,
+        localizer: &crate::i18n::Localizer,
+    ) -> Vec<String> {
+        let mut label_parts = Vec::new();
+        if let Some(elapsed_seconds) = self
+            .elapsed_seconds
+            .filter(|seconds| *seconds > 60)
+            .map(crate::status_indicator_widget::fmt_elapsed_compact)
+        {
+            let mut args = FluentArgs::new();
+            args.set("duration", elapsed_seconds.as_str());
+            label_parts.push(localizer.text("tui.history.worked-for", Some(&args), || {
+                format!("Worked for {elapsed_seconds}")
+            }));
+        }
+        if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
+            label_parts.push(metrics_label);
+        }
+        label_parts
+    }
+}
+impl HistoryCell for FinalMessageSeparator {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let label_parts = self.label_parts_with_localizer(crate::i18n::global());
+
+        if label_parts.is_empty() {
+            return vec![Line::from_iter(["─".repeat(width as usize).dim()])];
+        }
+
+        let label = format!("─ {} ─", label_parts.join(" • "));
+        let (label, _suffix, label_width) = take_prefix_by_width(&label, width as usize);
+        vec![
+            Line::from_iter([
+                label,
+                "─".repeat((width as usize).saturating_sub(label_width)),
+            ])
+            .dim(),
+        ]
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let label_parts = self.label_parts_with_localizer(crate::i18n::global());
+        if label_parts.is_empty() {
+            Vec::new()
+        } else {
+            vec![Line::from(label_parts.join(" • "))]
+        }
+    }
+}`;
+
+const WORKED_FOR_TEST_ANCHOR = [
+  "#[test]",
+  "fn final_message_separator_includes_worked_label_after_one_minute() {",
+  "    let cell = FinalMessageSeparator::new(Some(61), /*runtime_metrics*/ None);",
+  "    let rendered = render_lines(&cell.display_lines(/*width*/ 200));",
+  "",
+  "    assert_eq!(rendered.len(), 1);",
+  '    assert!(rendered[0].contains("Worked for"));',
+  "}"
+].join("\n");
+
+const WORKED_FOR_TEST_REPLACEMENT = [
+  WORKED_FOR_TEST_ANCHOR,
+  "",
+  "#[test]",
+  "fn worked_for_uses_zh_cn_localizer() {",
+  "    let localizer = crate::i18n::Localizer::from_ftl(",
+  '        "zh-CN",',
+  '        "tui--history--worked-for = 加班了 { $duration }\\n",',
+  "    );",
+  "    let separator = FinalMessageSeparator::new(Some(477), None);",
+  "",
+  "    assert_eq!(",
+  "        separator.label_parts_with_localizer(&localizer),",
+  '        vec!["加班了 7m 57s".to_string()]',
+  "    );",
+  "}"
 ].join("\n");
 
 function replace(relativePath, anchor, replacement, label) {
@@ -355,6 +619,7 @@ function replace(relativePath, anchor, replacement, label) {
     anchor,
     replacement,
     label,
+    expectedOccurrences: 1,
     preserveLineEndings: true
   };
 }
@@ -413,10 +678,12 @@ function workspaceLockVersionOperation(packageName) {
 }
 
 async function loadCodexOperations(overlayDir) {
-  const [i18nSource, i18nTestsSource, snapshotSource] = await Promise.all([
+  const [i18nSource, i18nTestsSource, ...snapshotSources] = await Promise.all([
     readFile(join(overlayDir, "i18n.rs")),
     readFile(join(overlayDir, "i18n_tests.rs")),
-    readFile(join(overlayDir, SNAPSHOT_FILE_NAME))
+    ...SNAPSHOT_FILE_NAMES.map((fileName) =>
+      readFile(join(overlayDir, "snapshots", fileName))
+    )
   ]);
 
   return [
@@ -440,59 +707,33 @@ async function loadCodexOperations(overlayDir) {
     ),
     replace(
       STATUS_LINE_PATH,
-      NEW_FUNCTION_ANCHOR,
-      NEW_FUNCTION_REPLACEMENT,
-      "StatusLineSetupView::new"
+      STATUS_LINE_CONSTRUCTOR_ANCHOR,
+      STATUS_LINE_CONSTRUCTOR_REPLACEMENT,
+      "localized StatusLineSetupView constructor"
     ),
     replace(
       STATUS_LINE_PATH,
-      'name: "Use theme colors".to_string(),',
-      [
-        'name: translator.text("tui.status-line.setup.use-theme-colors", None, || {',
-        '                "Use theme colors".to_string()',
-        "            }),"
-      ].join("\n"),
-      "use theme colors"
+      STATUS_LINE_PICKER_ANCHOR,
+      STATUS_LINE_PICKER_REPLACEMENT,
+      "localized StatusLineSetupView picker"
     ),
     replace(
       STATUS_LINE_PATH,
-      'description: Some("Apply colors from the active /theme".to_string()),',
-      [
-        "description: Some(translator.text(",
-        '                "tui.status-line.setup.apply-theme-colors",',
-        "                None,",
-        '                || "Apply colors from the active /theme".to_string(),',
-        "            )),"
-      ].join("\n"),
-      "apply theme colors"
+      STATUS_LINE_SNAPSHOT_TEST_ANCHOR,
+      STATUS_LINE_SNAPSHOT_TEST_REPLACEMENT,
+      "zh-CN status line snapshots"
     ),
     replace(
-      STATUS_LINE_PATH,
-      '"Configure Status Line".to_string(),',
-      [
-        'translator.text("tui.status-line.setup.configure-title", None, || {',
-        '                    "Configure Status Line".to_string()',
-        "                }),"
-      ].join("\n"),
-      "configure status line title"
+      HISTORY_SEPARATOR_PATH,
+      HISTORY_SEPARATOR_ANCHOR,
+      HISTORY_SEPARATOR_REPLACEMENT,
+      "localized final message separator"
     ),
     replace(
-      STATUS_LINE_PATH,
-      'Some("Select which items to display in the status line.".to_string()),',
-      [
-        "Some(translator.text(",
-        '                    "tui.status-line.setup.select-items-description",',
-        "                    None,",
-        '                    || "Select which items to display in the status line.".to_string(),',
-        "                )),"
-      ].join("\n"),
-      "configure status line description"
-    ),
-    replace(
-      STATUS_LINE_PATH,
-      SNAPSHOT_ANCHOR,
-      SNAPSHOT_TEST,
-      "zh-CN status line snapshot insertion"
+      HISTORY_TESTS_PATH,
+      WORKED_FOR_TEST_ANCHOR,
+      WORKED_FOR_TEST_REPLACEMENT,
+      "Worked for zh-CN test"
     ),
     replace(
       WORKSPACE_CARGO_PATH,
@@ -567,11 +808,11 @@ async function loadCodexOperations(overlayDir) {
       relativePath: I18N_TESTS_PATH,
       content: i18nTestsSource
     },
-    {
+    ...SNAPSHOT_PATHS.map((relativePath, index) => ({
       type: "create",
-      relativePath: SNAPSHOT_PATH,
-      content: snapshotSource
-    }
+      relativePath,
+      content: snapshotSources[index]
+    }))
   ];
 }
 

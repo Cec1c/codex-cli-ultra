@@ -90,6 +90,8 @@ const STATUS_SOURCE = [
   '            name: "Use theme colors".to_string(),',
   '            description: Some("Apply colors from the active /theme".to_string()),',
   "            enabled: use_theme_colors,",
+  "            orderable: false,",
+  "            section_break_after: true,",
   "        }];",
   "",
   "        Self {",
@@ -105,6 +107,41 @@ const STATUS_SOURCE = [
   "",
   "#[cfg(test)]",
   "mod tests {",
+  "    #[test]",
+  "    fn setup_view_snapshot_uses_runtime_preview_values() {",
+  "        let (tx_raw, _rx) = unbounded_channel::<AppEvent>();",
+  "        let view = StatusLineSetupView::new(",
+  "            Some(&[",
+  "                StatusLineItem::ModelName.to_string(),",
+  "                StatusLineItem::CurrentDir.to_string(),",
+  "                StatusLineItem::GitBranch.to_string(),",
+  "            ]),",
+  "            /*use_theme_colors*/ true,",
+  "            StatusSurfacePreviewData::from_iter([",
+  "                (",
+  "                    StatusLineItem::ModelName.preview_item(),",
+  '                    "gpt-5-codex".to_string(),',
+  "                ),",
+  "                (",
+  "                    StatusLineItem::CurrentDir.preview_item(),",
+  '                    "~/codex-rs".to_string(),',
+  "                ),",
+  "                (",
+  "                    StatusLineItem::GitBranch.preview_item(),",
+  '                    "jif/statusline-preview".to_string(),',
+  "                ),",
+  "                (",
+  "                    StatusLineItem::WeeklyLimit.preview_item(),",
+  '                    "weekly 82% left".to_string(),',
+  "                ),",
+  "            ]),",
+  "            AppEventSender::new(tx_raw),",
+  "            crate::keymap::RuntimeKeymap::defaults().list,",
+  "        );",
+  "",
+  "        assert_snapshot!(render_lines(&view, /*width*/ 72));",
+  "    }",
+  "",
   "    fn render_lines(view: &StatusLineSetupView, width: u16) -> String {",
   "        String::new()",
   "    }",
@@ -112,8 +149,106 @@ const STATUS_SOURCE = [
   ""
 ].join("\n");
 
-const SNAPSHOT_FILE_NAME =
-  "codex_tui__bottom_pane__status_line_setup__tests__setup_view_snapshot_uses_zh_cn_catalog.snap";
+const HISTORY_SEPARATOR_SOURCE = `//! Turn separators and runtime-metrics labels for transcript history.
+
+use super::*;
+
+#[derive(Debug)]
+/// A visual divider between turns, optionally showing how long the assistant "worked for".
+///
+/// This separator is only emitted for turns that performed concrete work (e.g., running commands,
+/// applying patches, making MCP tool calls), so purely conversational turns do not show an empty
+/// divider.
+pub struct FinalMessageSeparator {
+    elapsed_seconds: Option<u64>,
+    runtime_metrics: Option<RuntimeMetricsSummary>,
+}
+impl FinalMessageSeparator {
+    /// Creates a separator; completed turns should pass protocol turn duration when available.
+    pub(crate) fn new(
+        elapsed_seconds: Option<u64>,
+        runtime_metrics: Option<RuntimeMetricsSummary>,
+    ) -> Self {
+        Self {
+            elapsed_seconds,
+            runtime_metrics,
+        }
+    }
+}
+impl HistoryCell for FinalMessageSeparator {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut label_parts = Vec::new();
+        if let Some(elapsed_seconds) = self
+            .elapsed_seconds
+            .filter(|seconds| *seconds > 60)
+            .map(crate::status_indicator_widget::fmt_elapsed_compact)
+        {
+            label_parts.push(format!("Worked for {elapsed_seconds}"));
+        }
+        if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
+            label_parts.push(metrics_label);
+        }
+
+        if label_parts.is_empty() {
+            return vec![Line::from_iter(["─".repeat(width as usize).dim()])];
+        }
+
+        let label = format!("─ {} ─", label_parts.join(" • "));
+        let (label, _suffix, label_width) = take_prefix_by_width(&label, width as usize);
+        vec![
+            Line::from_iter([
+                label,
+                "─".repeat((width as usize).saturating_sub(label_width)),
+            ])
+            .dim(),
+        ]
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let mut label_parts = Vec::new();
+        if let Some(elapsed_seconds) = self
+            .elapsed_seconds
+            .filter(|seconds| *seconds > 60)
+            .map(crate::status_indicator_widget::fmt_elapsed_compact)
+        {
+            label_parts.push(format!("Worked for {elapsed_seconds}"));
+        }
+        if let Some(metrics_label) = self.runtime_metrics.and_then(runtime_metrics_label) {
+            label_parts.push(metrics_label);
+        }
+        if label_parts.is_empty() {
+            Vec::new()
+        } else {
+            vec![Line::from(label_parts.join(" • "))]
+        }
+    }
+}
+
+pub(crate) fn runtime_metrics_label(_summary: RuntimeMetricsSummary) -> Option<String> {
+    None
+}
+`;
+
+const HISTORY_TESTS_SOURCE = [
+  "#[test]",
+  "fn final_message_separator_includes_worked_label_after_one_minute() {",
+  "    let cell = FinalMessageSeparator::new(Some(61), /*runtime_metrics*/ None);",
+  "    let rendered = render_lines(&cell.display_lines(/*width*/ 200));",
+  "",
+  "    assert_eq!(rendered.len(), 1);",
+  '    assert!(rendered[0].contains("Worked for"));',
+  "}",
+  "",
+  "#[test]",
+  "fn ps_output_empty_snapshot() {}",
+  ""
+].join("\n");
+
+const SNAPSHOT_FILE_NAMES = [
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_narrow.snap",
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_medium.snap",
+  "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_wide.snap"
+];
 const CODEX_MANIFEST = {
   schemaVersion: 1,
   upstreamVersion: "0.144.1",
@@ -129,17 +264,21 @@ const EXPECTED_STATE_FILES = [
     relativePath: "codex-rs/tui/src/bottom_pane/status_line_setup.rs",
     created: false
   },
+  {
+    relativePath: "codex-rs/tui/src/history_cell/separators.rs",
+    created: false
+  },
+  { relativePath: "codex-rs/tui/src/history_cell/tests.rs", created: false },
   { relativePath: "codex-rs/Cargo.toml", created: false },
   { relativePath: "codex-rs/tui/Cargo.toml", created: false },
   { relativePath: "codex-rs/Cargo.lock", created: false },
   { relativePath: "codex-rs/cli/src/main.rs", created: false },
   { relativePath: "codex-rs/tui/src/i18n.rs", created: true },
   { relativePath: "codex-rs/tui/src/i18n_tests.rs", created: true },
-  {
-    relativePath:
-      "codex-rs/tui/src/bottom_pane/snapshots/" + SNAPSHOT_FILE_NAME,
+  ...SNAPSHOT_FILE_NAMES.map((fileName) => ({
+    relativePath: "codex-rs/tui/src/bottom_pane/snapshots/" + fileName,
     created: true
-  }
+  }))
 ];
 
 async function pathExists(path) {
@@ -199,7 +338,24 @@ async function createFixture() {
     "bottom_pane",
     "status_line_setup.rs"
   );
+  const historySeparatorPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "history_cell",
+    "separators.rs"
+  );
+  const historyTestsPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "history_cell",
+    "tests.rs"
+  );
   await mkdir(dirname(statusPath), { recursive: true });
+  await mkdir(dirname(historySeparatorPath), { recursive: true });
   await mkdir(dirname(cliMainPath), { recursive: true });
   await mkdir(overlayDir, { recursive: true });
   await writeFile(workspaceCargoPath, WORKSPACE_CARGO_SOURCE, "utf8");
@@ -208,17 +364,22 @@ async function createFixture() {
   await writeFile(cliMainPath, CLI_MAIN_SOURCE, "utf8");
   await writeFile(libPath, LIB_SOURCE, "utf8");
   await writeFile(statusPath, STATUS_SOURCE, "utf8");
+  await writeFile(historySeparatorPath, HISTORY_SEPARATOR_SOURCE, "utf8");
+  await writeFile(historyTestsPath, HISTORY_TESTS_SOURCE, "utf8");
   await writeFile(join(overlayDir, "i18n.rs"), "pub(crate) fn marker() {}\n", "utf8");
   await writeFile(
     join(overlayDir, "i18n_tests.rs"),
     "#[test]\nfn marker_test() {}\n",
     "utf8"
   );
-  await writeFile(
-    join(overlayDir, SNAPSHOT_FILE_NAME),
-    "配置状态栏\n",
-    "utf8"
-  );
+  await mkdir(join(overlayDir, "snapshots"), { recursive: true });
+  for (const fileName of SNAPSHOT_FILE_NAMES) {
+    await writeFile(
+      join(overlayDir, "snapshots", fileName),
+      `${fileName}\n配置状态栏\n`,
+      "utf8"
+    );
+  }
   return {
     sourceRoot,
     overlayDir,
@@ -227,7 +388,9 @@ async function createFixture() {
     tuiCargoPath,
     cliMainPath,
     libPath,
-    statusPath
+    statusPath,
+    historySeparatorPath,
+    historyTestsPath
   };
 }
 
@@ -275,8 +438,41 @@ test("planCodexPatch changes no files during preflight", async () => {
     overlayDir: fixture.overlayDir
   });
 
-  assert.equal(plan.files.length, 9);
+  assert.equal(plan.files.length, 13);
   assert.deepEqual(await snapshotTree(fixture.sourceRoot), before);
+});
+
+test("planCodexPatch includes status-line and Worked for localization", async () => {
+  const fixture = await createFixture();
+
+  const plan = await planCodexPatch(fixture.sourceRoot, {
+    verifyGit: false,
+    overlayDir: fixture.overlayDir
+  });
+  const paths = plan.files.map((file) => file.relativePath);
+
+  assert.ok(paths.includes("codex-rs/tui/src/history_cell/separators.rs"));
+  assert.ok(paths.includes("codex-rs/tui/src/history_cell/tests.rs"));
+  assert.equal(
+    paths.filter((path) =>
+      path.includes("status_line_setup__tests__status_line_setup_zh_cn_")
+    ).length,
+    3
+  );
+  for (const fileName of SNAPSHOT_FILE_NAMES) {
+    const relativePath =
+      "codex-rs/tui/src/bottom_pane/snapshots/" + fileName;
+    const planned = plan.files.find(
+      (file) => file.relativePath === relativePath
+    );
+    const overlay = await readFile(
+      join(fixture.overlayDir, "snapshots", fileName)
+    );
+    assert.equal(
+      planned.afterHash,
+      createHash("sha256").update(overlay).digest("hex")
+    );
+  }
 });
 
 test("planCodexPatch disables optional Git locks", async () => {
@@ -313,7 +509,16 @@ test("applyCodexPatch installs overlays and localized call sites", async () => {
   const status = await readFile(fixture.statusPath, "utf8");
   assert.match(status, /crate::i18n::global\(\)/);
   assert.match(status, /crate::i18n::Localizer/);
-  assert.match(status, /translator\.text\([^)]*None/s);
+  assert.match(status, /new_with_localizer/);
+  assert.match(status, /localizer\.text\([^)]*None/s);
+  assert.match(
+    await readFile(fixture.historySeparatorPath, "utf8"),
+    /label_parts_with_localizer/
+  );
+  assert.match(
+    await readFile(fixture.historyTestsPath, "utf8"),
+    /加班了 7m 57s/
+  );
   assert.match(
     await readFile(fixture.libPath, "utf8"),
     /pub fn ultra_i18n_self_check_json/
@@ -341,21 +546,23 @@ test("applyCodexPatch installs overlays and localized call sites", async () => {
     ),
     "pub(crate) fn marker() {}\n"
   );
-  assert.match(
-    await readFile(
-      join(
-        fixture.sourceRoot,
-        "codex-rs",
-        "tui",
-        "src",
-        "bottom_pane",
-        "snapshots",
-        SNAPSHOT_FILE_NAME
+  for (const fileName of SNAPSHOT_FILE_NAMES) {
+    assert.match(
+      await readFile(
+        join(
+          fixture.sourceRoot,
+          "codex-rs",
+          "tui",
+          "src",
+          "bottom_pane",
+          "snapshots",
+          fileName
+        ),
+        "utf8"
       ),
-      "utf8"
-    ),
-    /配置状态栏/
-  );
+      /配置状态栏/
+    );
+  }
 });
 
 test("planCodexPatch hard-fails a drifting codex-tui lock block", async () => {
