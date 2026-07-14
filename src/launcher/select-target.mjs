@@ -95,6 +95,24 @@ async function canonicalizeLocalPath(path, realpathFile) {
   return { kind: "ok", path: win32.resolve(canonical) };
 }
 
+async function canonicalizeInstallRoot(path, realpathFile) {
+  if (!isAbsoluteLocalWindowsPath(path)) {
+    return { kind: "untrusted", path: null };
+  }
+  try {
+    const canonical = await realpathFile(path);
+    if (!isAbsoluteLocalWindowsPath(canonical)) {
+      return { kind: "untrusted", path: null };
+    }
+    return { kind: "ok", path: win32.resolve(canonical) };
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { kind: "missing", path: win32.resolve(path) };
+    }
+    return { kind: "untrusted", path: null };
+  }
+}
+
 function expectedOfficialPaths(packageJsonPath) {
   const platformPackageJsonPath = win32.join(
     win32.dirname(packageJsonPath),
@@ -384,11 +402,11 @@ export async function selectLaunchTarget(options = {}) {
     );
   }
   const realpathFile = options.realpathFile ?? realpath;
-  const canonicalRoot = await canonicalizeLocalPath(
+  const canonicalRoot = await canonicalizeInstallRoot(
     options.installRoot,
     realpathFile
   );
-  if (canonicalRoot.kind !== "ok") {
+  if (canonicalRoot.kind === "untrusted") {
     return result(
       "error",
       null,

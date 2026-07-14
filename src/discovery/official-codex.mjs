@@ -190,9 +190,9 @@ async function resolveNpmRoot({
     npm.nodePath,
     [npm.npmCliPath, "root", "-g"],
     {
-    env: execEnv,
-    encoding: "utf8",
-    windowsHide: true
+      env: execEnv,
+      encoding: "utf8",
+      windowsHide: true
     }
   );
   const stdout =

@@ -366,6 +366,22 @@ test("a discovered official installation can launch when state is unavailable", 
   });
 });
 
+test("a missing Ultra install root still falls back to discovered official Codex", async () => {
+  const readers = createReaders();
+  const { result } = await select({
+    state: null,
+    recoveredOfficial: exactState.official,
+    readers,
+    realpathFile: async (path) => {
+      if (path === installRoot) throw missingPath("install root missing");
+      return path;
+    }
+  });
+  assert.equal(result.kind, "official");
+  assert.equal(result.path, exactState.official.binaryPath);
+  assert.equal(result.reason, "state-unavailable");
+});
+
 test("a null recovered official cannot override a valid state official", async () => {
   const { result } = await select({ recoveredOfficial: null });
   assert.equal(result.kind, "ultra");
@@ -437,6 +453,19 @@ test("notice markers are deterministic, first-writer-only, and best-effort", asy
     false
   );
   assert.deepEqual(await readdir(noticesDirectory), [
+    `${expectedHash}.notice`
+  ]);
+
+  const nestedNoticesDirectory = join(noticesDirectory, "nested");
+  assert.equal(
+    await writeNoticeOnce({
+      noticesDirectory: nestedNoticesDirectory,
+      reason,
+      detail
+    }),
+    true
+  );
+  assert.deepEqual(await readdir(nestedNoticesDirectory), [
     `${expectedHash}.notice`
   ]);
 
