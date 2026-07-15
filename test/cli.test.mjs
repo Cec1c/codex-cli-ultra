@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { dirname, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { runCli } from "../src/cli.mjs";
+
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 test("catalog extract requires a source path", async () => {
   await assert.rejects(
@@ -14,11 +18,36 @@ test("unknown commands return concise usage", async () => {
   await assert.rejects(runCli(["unknown"]), /Usage:/);
 });
 
-test("pack compile requires catalog, pack, and output paths", async () => {
+test("language validate requires catalog and pack paths", async () => {
   await assert.rejects(
-    runCli(["pack", "compile", "--catalog", "catalog.jsonl"]),
-    /pack compile requires --catalog PATH --pack PATH --output PATH/
+    runCli(["language", "validate", "--catalog", "catalog.jsonl"]),
+    /language validate requires --pack PATH --catalog PATH/
   );
+});
+
+test("language validate reports the five wired messages", async () => {
+  let output = "";
+
+  const result = await runCli(
+    [
+      "language",
+      "validate",
+      "--pack",
+      "packages/languages/zh-CN",
+      "--catalog",
+      "research/codex-0.144.1/tui-messages.jsonl"
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      stdout: { write(chunk) { output += chunk; } }
+    }
+  );
+
+  assert.equal(result.command, "language validate");
+  assert.equal(result.locale, "zh-CN");
+  assert.equal(result.messages, 5);
+  assert.match(result.sourceHash, /^sha256:[a-f0-9]{64}$/);
+  assert.deepEqual(JSON.parse(output), result);
 });
 
 test("adapter commands require a source path", async () => {
@@ -32,9 +61,9 @@ test("adapter commands require a source path", async () => {
   );
 });
 
-test("doctor requires source and compiled catalog paths", async () => {
+test("doctor requires source, language pack, and catalog paths", async () => {
   await assert.rejects(
-    runCli(["doctor", "--source", "codex"]),
-    /doctor requires --source PATH --catalog PATH/
+    runCli(["doctor", "--source", "codex", "--pack", "pack"]),
+    /doctor requires --source PATH --pack PATH --catalog PATH/
   );
 });

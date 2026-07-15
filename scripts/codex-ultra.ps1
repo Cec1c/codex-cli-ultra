@@ -1,12 +1,10 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet("Extract", "Compile", "Apply", "Doctor", "Revert", "Launch")]
+    [ValidateSet("Extract", "Validate", "Plan", "Apply", "Doctor", "Revert", "Launch")]
     [string]$Action,
 
     [string]$CodexSource,
-
-    [string]$Catalog = "build/languages/zh-CN/compiled-messages.json",
 
     [string]$SourceCatalog = "research/codex-0.144.1/tui-messages.jsonl",
 
@@ -61,17 +59,49 @@ function Require-Value {
     }
 }
 
+function Resolve-SingleApplication {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name
+    )
+
+    $sources = @(
+        Get-Command $Name -CommandType Application -All -ErrorAction Stop |
+            ForEach-Object { $_.Source } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+    if ($sources.Count -ne 1) {
+        throw "Expected exactly one application for '$Name'; found $($sources.Count): $($sources -join ', ')"
+    }
+    return $sources[0]
+}
+
 function Invoke-NodeCli {
     param(
         [Parameter(Mandatory)]
         [string[]]$Arguments
     )
 
-    $node = Get-Command node -CommandType Application -ErrorAction Stop
-    & $node.Source $CliPath @Arguments
+    $node = Resolve-SingleApplication -Name "node"
+    & $node $CliPath @Arguments
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
+}
+
+function Invoke-NodeCliCaptured {
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Arguments
+    )
+
+    $node = Resolve-SingleApplication -Name "node"
+    $output = @(& $node $CliPath @Arguments)
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+    return ($output -join "`n").Trim()
 }
 
 switch ($Action) {
@@ -80,20 +110,22 @@ switch ($Action) {
         $source = Resolve-ProjectPath -Path $CodexSource
         Invoke-NodeCli -Arguments @("catalog", "extract", "--source", $source)
     }
-    "Compile" {
-        $sourceCatalogPath = Resolve-ProjectPath -Path $SourceCatalog
+    "Validate" {
+        $catalogPath = Resolve-ProjectPath -Path $SourceCatalog
         $packPath = Resolve-ProjectPath -Path $Pack
-        $outputPath = Resolve-ProjectPath -Path $Catalog -AllowMissing
         Invoke-NodeCli -Arguments @(
-            "pack",
-            "compile",
+            "language",
+            "validate",
             "--catalog",
-            $sourceCatalogPath,
+            $catalogPath,
             "--pack",
-            $packPath,
-            "--output",
-            $outputPath
+            $packPath
         )
+    }
+    "Plan" {
+        Require-Value -Name "CodexSource" -Value $CodexSource
+        $source = Resolve-ProjectPath -Path $CodexSource
+        Invoke-NodeCli -Arguments @("adapter", "plan", "--source", $source)
     }
     "Apply" {
         Require-Value -Name "CodexSource" -Value $CodexSource
@@ -103,11 +135,14 @@ switch ($Action) {
     "Doctor" {
         Require-Value -Name "CodexSource" -Value $CodexSource
         $source = Resolve-ProjectPath -Path $CodexSource
-        $catalogPath = Resolve-ProjectPath -Path $Catalog
+        $catalogPath = Resolve-ProjectPath -Path $SourceCatalog
+        $packPath = Resolve-ProjectPath -Path $Pack
         Invoke-NodeCli -Arguments @(
             "doctor",
             "--source",
             $source,
+            "--pack",
+            $packPath,
             "--catalog",
             $catalogPath
         )
@@ -119,24 +154,47 @@ switch ($Action) {
     }
     "Launch" {
         Require-Value -Name "CodexBinary" -Value $CodexBinary
-        $catalogPath = Resolve-ProjectPath -Path $Catalog
+        $packPath = Resolve-ProjectPath -Path $Pack
+        $catalogPath = Resolve-ProjectPath -Path $SourceCatalog
+        $languagePath = Resolve-ProjectPath -Path (Join-Path $packPath "messages.ftl")
 
-        $binaryPath = if (
-            [System.IO.Path]::IsPathRooted($CodexBinary) -or
-            $CodexBinary.Contains([System.IO.Path]::DirectorySeparatorChar) -or
-            $CodexBinary.Contains([System.IO.Path]::AltDirectorySeparatorChar)
-        ) {
-            Resolve-ProjectPath -Path $CodexBinary
+        $validationJson = Invoke-NodeCliCaptured -Arguments @(
+            "language",
+            "validate",
+            "--catalog",
+            $catalogPath,
+            "--pack",
+            $packPath
+        )
+        try {
+            $validation = $validationJson | ConvertFrom-Json -ErrorAction Stop
         }
-        else {
-            (Get-Command $CodexBinary -CommandType Application -ErrorAction Stop).Source
+        catch {
+            throw "Language validation did not return valid JSON: $validationJson"
+        }
+        $packLocale = [string]$validation.locale
+        if ([string]::IsNullOrWhiteSpace($packLocale)) {
+            throw "Validated language pack has no locale: $packPath"
+        }
+
+        if (
+            -not [System.IO.Path]::IsPathRooted($CodexBinary) -and
+            -not $CodexBinary.Contains([System.IO.Path]::DirectorySeparatorChar) -and
+            -not $CodexBinary.Contains([System.IO.Path]::AltDirectorySeparatorChar)
+        ) {
+            throw "-CodexBinary must be an explicit executable file path for -Action Launch."
+        }
+        $binaryPath = Resolve-ProjectPath -Path $CodexBinary
+        if ([System.IO.Path]::GetExtension($binaryPath) -ine ".exe") {
+            throw "-CodexBinary must point to a Windows .exe file: $binaryPath"
         }
 
         $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
         $startInfo.FileName = $binaryPath
         $startInfo.UseShellExecute = $false
         $startInfo.WorkingDirectory = (Get-Location).ProviderPath
-        $startInfo.Environment["CODEX_ULTRA_CATALOG"] = $catalogPath
+        $startInfo.Environment["CODEX_ULTRA_LOCALE"] = $packLocale
+        $startInfo.Environment["CODEX_ULTRA_FTL_PATH"] = $languagePath
         foreach ($argument in $CodexArguments) {
             $startInfo.ArgumentList.Add($argument)
         }

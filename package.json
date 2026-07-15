@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "test": "node --test",
     "catalog:extract": "node src/cli.mjs catalog extract",
-    "pack:compile": "node src/cli.mjs pack compile",
+    "language:validate": "node src/cli.mjs language validate",
     "adapter:apply": "node src/cli.mjs adapter apply",
     "adapter:revert": "node src/cli.mjs adapter revert",
     "doctor": "node src/cli.mjs doctor"

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "commit": "44918ea10c0f99151c6710411b4322c2f5c96bea",
+  "profile": "release",
+  "cargoVersion": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "buildEnvironment": {
+    "compilationOverrides": "rejected-nonempty",
+    "inheritedProxyVariables": [
+      "HTTP_PROXY",
+      "HTTPS_PROXY"
+    ]
+  },
+  "lockNormalization": {
+    "command": "cargo update --workspace --offline",
+    "reason": "Pinned release metadata labels workspace packages as 0.144.1 while Cargo.lock labels them as 0.0.0.",
+    "changedWorkspacePackages": 132,
+    "patchedLockAlreadyNormalized": true
+  },
+  "baselineBytes": 344187904,
+  "patchedBytes": 344224256,
+  "deltaBytes": 36352,
+  "deltaPercent": 0.010562
+}

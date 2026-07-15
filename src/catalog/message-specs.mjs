@@ -21,7 +21,9 @@ function plainMessage({
     path,
     symbol,
     anchor,
-    english
+    english,
+    args: [],
+    expectedOccurrences: 1
   };
 }
 
@@ -118,5 +120,19 @@ export const MESSAGE_SPECS = [
     english:
       "  API key login is disabled by this workspace. Sign in with ChatGPT to continue.",
     mvpStatus: "catalogued"
-  })
+  }),
+  {
+    id: "tui.history.worked-for",
+    ftlKey: "tui--history--worked-for",
+    surface: "history",
+    kind: "parameterized",
+    translation: "required",
+    mvpStatus: "wired",
+    path: "codex-rs/tui/src/history_cell/separators.rs",
+    symbol: "FinalMessageSeparator",
+    anchor: 'format!("Worked for {elapsed_seconds}")',
+    english: "Worked for {duration}",
+    args: [{ name: "duration", type: "string", sample: "7m 57s" }],
+    expectedOccurrences: 2
+  }
 ];
