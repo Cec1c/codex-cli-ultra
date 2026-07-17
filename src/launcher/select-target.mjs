@@ -11,6 +11,8 @@ import { validateState } from "../state/schema.mjs";
 
 const MANAGED_ENV_KEYS = new Set([
   "codex_ccu_language_pack_root",
+  "codex_ccu_theme_pack_root",
+  "codex_ccu_quota_path",
   "codex_ultra_locale",
   "codex_ultra_ftl_path",
   "codex_ultra_language_preference_path"
@@ -305,7 +307,9 @@ function combineNotices(primary, secondary) {
 async function selectLanguageEnvironment({ installRoot }) {
   return {
     env: {
-      CODEX_CCU_LANGUAGE_PACK_ROOT: win32.join(installRoot, "languages")
+      CODEX_CCU_LANGUAGE_PACK_ROOT: win32.join(installRoot, "languages"),
+      CODEX_CCU_THEME_PACK_ROOT: win32.join(installRoot, "themes"),
+      CODEX_CCU_QUOTA_PATH: win32.join(installRoot, "quota.json")
     },
     notice: null
   };

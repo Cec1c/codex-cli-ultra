@@ -89,6 +89,7 @@ test("status check reports a newer fork revision", async () => {
 test("update passes the latest validated fork release to the installer", async () => {
   let output = "";
   let installerOptions;
+  let contentOptions;
   const latest = manifest(2);
   const code = await manageMain({
     args: ["update", "--json"],
@@ -109,10 +110,20 @@ test("update passes the latest validated fork release to the installer", async (
         manifest: latest
       };
     },
+    syncBundledContent: async (options) => {
+      contentOptions = options;
+      return {
+        language: { locale: "zh-CN", messages: 134 },
+        theme: { id: "ccu.deepseek", displayName: "CCU DeepSeek" },
+        codexHome: "C:\\Users\\me\\.codex"
+      };
+    },
     stdout: { write(chunk) { output += chunk; } }
   });
   assert.equal(code, 0);
   assert.equal(typeof installerOptions.provider.readManifest, "function");
   assert.deepEqual(await installerOptions.provider.readManifest(), latest);
+  assert.equal(contentOptions.installRoot, installRoot);
   assert.equal(JSON.parse(output).displayVersion, latest.displayVersion);
+  assert.equal(JSON.parse(output).content.language.locale, "zh-CN");
 });

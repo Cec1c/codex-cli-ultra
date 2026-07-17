@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.1"
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Fetch fork source for visible-text audit
+        run: git clone --filter=blob:none --depth 1 https://github.com/Cec1c/codex.git .upstream/codex
+      - name: Verify deterministic visible-text audit twice
+        shell: pwsh
+        run: |
+          $first = npm run -s text:audit -- .upstream/codex | ConvertFrom-Json
+          $second = npm run -s text:audit -- .upstream/codex | ConvertFrom-Json
+          if ($first.sha256 -ne $second.sha256) {
+            throw 'visible-text audit is not deterministic'
+          }
+      - name: Verify Rust manager TUI
+        working-directory: tui
+        run: |
+          cargo fmt --all -- --check
+          cargo test --locked
+          cargo build --release --locked

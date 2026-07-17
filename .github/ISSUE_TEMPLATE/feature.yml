@@ -1,0 +1,27 @@
+name: 功能建议 / Feature request
+description: 建议新的界面、主题、安装或同步能力
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 使用场景 / Use case
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案 / Proposal
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: 所属层 / Layer
+      options:
+        - CCU 管理与分发
+        - Codex fork Rust/TUI
+        - FTL 语言包
+        - 主题包
+        - CI/CD

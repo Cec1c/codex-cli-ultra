@@ -1,0 +1,40 @@
+name: Sync fork release channel
+
+on:
+  schedule:
+    - cron: "47 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-fork-release-channel
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Resolve and validate latest CCU fork release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/sync-fork-channel.mjs --write
+      - name: Commit channel update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- release-channels/stable.json; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add release-channels/stable.json
+          git commit -m "chore: 同步最新 fork Release 通道"
+          git push

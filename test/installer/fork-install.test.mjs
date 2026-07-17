@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -72,7 +72,7 @@ async function installRevision(installRoot, revision) {
   return { result, manifest, binaryBytes };
 }
 
-test("fork install records the display release and preserves last-known-good on update", async () => {
+test("fork install keeps only the active CCU release beside the official backup", async () => {
   const installRoot = await mkdtemp(join(tmpdir(), "ccu-fork-install-"));
   const first = await installRevision(installRoot, 1);
   assert.equal(first.result.releaseId, "0.144.5-ccu.i18n.1");
@@ -84,10 +84,13 @@ test("fork install records the display release and preserves last-known-good on 
 
   const second = await installRevision(installRoot, 2);
   assert.equal(second.result.releaseId, "0.144.5-ccu.i18n.2");
-  assert.equal(
-    second.result.state.lastKnownGood.build.releaseId,
-    "0.144.5-ccu.i18n.1"
+  assert.equal(second.result.state.lastKnownGood, null);
+  assert.deepEqual(second.result.removedReleases, ["0.144.5-ccu.i18n.1"]);
+  assert.deepEqual(
+    await readdir(join(installRoot, "releases")),
+    ["0.144.5-ccu.i18n.2"]
   );
   const stored = await readState(join(installRoot, "state.json"));
   assert.equal(stored.active.releaseId, "0.144.5-ccu.i18n.2");
+  assert.equal(stored.lastKnownGood, null);
 });

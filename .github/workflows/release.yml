@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v-prefixed tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.1"
+      - run: npm ci
+      - run: npm test
+      - name: Build release package
+        shell: pwsh
+        run: |
+          $tag = '${{ inputs.tag || github.ref_name }}'
+          if ($tag -notmatch '^v(.+)$') { throw "invalid release tag: $tag" }
+          .\scripts\package-release.ps1 -Version $Matches[1] -OutputDirectory artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codex-cli-ultra-windows
+          path: artifacts/*.zip*
+          if-no-files-found: error
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ inputs.tag || github.ref_name }}'
+          gh release create $tag artifacts/*.zip artifacts/*.sha256 `
+            --title "Codex CLI Ultra $tag" `
+            --notes "首个可运行版本：自动安装 CCU i18n fork、简体中文 FTL、Rust 管理 TUI、状态栏与欢迎页主题，并保留官方英文版作为唯一备份。" `
+            --latest

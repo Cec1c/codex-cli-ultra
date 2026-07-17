@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { resolveInstallRoot } from "./config/constants.mjs";
+import { syncBundledContent } from "./content/sync.mjs";
 import { discoverOfficialCodex } from "./discovery/official-codex.mjs";
 import { installManagementBin } from "./installer/bin.mjs";
 import { installForkFromProvider } from "./installer/install.mjs";
@@ -28,7 +29,8 @@ const USAGE = [
   "  codex-ultra version [--json]",
   "  codex-ultra status [--check] [--json]",
   "  codex-ultra install [--manifest-url URL | --release-dir PATH] [--json]",
-  "  codex-ultra update [--manifest-url URL | --release-dir PATH] [--json]"
+  "  codex-ultra update [--manifest-url URL | --release-dir PATH] [--json]",
+  "  codex-ultra content sync [--source PATH] [--json]"
 ].join("\n");
 
 function optionValue(args, name) {
@@ -214,6 +216,28 @@ export async function manageMain(options = {}) {
     githubToken: options.githubToken ?? env.GITHUB_TOKEN
   };
 
+  if (command === "content" && args[1] === "sync") {
+    const managerSource = options.managerSource ?? resolve(process.argv[1]);
+    const contentRoot = resolve(
+      cwd,
+      optionValue(args, "--source") ??
+        options.contentRoot ??
+        env.CODEX_CCU_CONTENT_ROOT ??
+        join(dirname(managerSource), "..")
+    );
+    const content = await (options.syncBundledContent ?? syncBundledContent)({
+      contentRoot,
+      installRoot,
+      env
+    });
+    if (json) writeJson(stdout, content);
+    else {
+      stdout.write(`语言包 ${content.language.locale} 已同步（${content.language.messages} 条消息）\n`);
+      stdout.write(`主题 ${content.theme.displayName} 已同步\n`);
+    }
+    return 0;
+  }
+
   if (command === "version" || command === "status") {
     const status = await collectStatus(context);
     if (command === "status" && args.includes("--check")) {
@@ -267,6 +291,16 @@ export async function manageMain(options = {}) {
           launcherSource
         }))
     });
+    const contentRoot = resolve(
+      options.contentRoot ??
+        env.CODEX_CCU_CONTENT_ROOT ??
+        join(dirname(managerSource), "..")
+    );
+    const content = await (options.syncBundledContent ?? syncBundledContent)({
+      contentRoot,
+      installRoot,
+      env
+    });
     const report = {
       changed: result.changed,
       releaseId: result.releaseId,
@@ -274,13 +308,15 @@ export async function manageMain(options = {}) {
       upstreamVersion: result.manifest.upstreamVersion,
       upstreamTag: result.manifest.upstreamTag,
       forkCommit: result.manifest.forkCommit,
-      i18nApiVersion: result.manifest.i18nApiVersion
+      i18nApiVersion: result.manifest.i18nApiVersion,
+      content
     };
     if (json) writeJson(stdout, report);
     else {
       stdout.write(
         `${result.changed ? "installed" : "verified"} fork ${report.displayVersion}\n`
       );
+      stdout.write(`已启用 ${content.language.locale} 与 ${content.theme.displayName}\n`);
       stdout.write("Open a new terminal if codex-ultra is not yet on PATH.\n");
     }
     return 0;

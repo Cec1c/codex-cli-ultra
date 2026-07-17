@@ -80,6 +80,30 @@ function errorWithOutput(message, result) {
   );
 }
 
+async function pruneInactiveReleases(installRoot, activeReleaseId, options = {}) {
+  const list = options.readdir ?? readdir;
+  const remove = options.rm ?? rm;
+  const releasesRoot = join(installRoot, "releases");
+  let entries;
+  try {
+    entries = await list(releasesRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+
+  const removed = [];
+  for (const entry of entries) {
+    if (entry.name === activeReleaseId) continue;
+    await remove(join(releasesRoot, entry.name), {
+      recursive: true,
+      force: true
+    });
+    removed.push(entry.name);
+  }
+  return removed;
+}
+
 function runProcess(executable, args, options = {}) {
   const spawnChild = options.spawn ?? spawn;
   const childEnv = { ...(options.env ?? process.env) };
@@ -699,19 +723,12 @@ export async function installForkFromProvider(options) {
       mtimeMs: binaryStat.mtimeMs,
       sha256: binaryHash.sha256
     };
-    const replacesActiveRelease =
-      oldState?.active !== null &&
-      oldState?.active !== undefined &&
-      oldState.active.releaseId !== buildRecord.releaseId;
     const nextState = {
       schemaVersion: STATE_SCHEMA_VERSION,
       official,
       active: buildRecord,
       locale: oldState?.locale ?? null,
-      lastKnownGood:
-        replacesActiveRelease
-          ? { build: oldState.active, locale: oldState.locale }
-          : oldState?.lastKnownGood ?? null
+      lastKnownGood: null
     };
 
     const binDirectory = join(installRoot, "bin");
@@ -730,11 +747,17 @@ export async function installForkFromProvider(options) {
       }
     });
     stateSwitched = true;
+    const removedReleases = await pruneInactiveReleases(
+      installRoot,
+      buildRecord.releaseId,
+      options
+    );
     return {
       changed: !statesEqual(oldState, nextState),
       releaseId,
       manifest,
-      state: nextState
+      state: nextState,
+      removedReleases
     };
   } catch (error) {
     if (pathAdded && !stateSwitched) {

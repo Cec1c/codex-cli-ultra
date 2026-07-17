@@ -2,3 +2,5 @@
 .upstream/
 dist/
 node_modules/
+artifacts/
+tui/target/

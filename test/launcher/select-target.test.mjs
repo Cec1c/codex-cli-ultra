@@ -13,7 +13,9 @@ import { writeNoticeOnce } from "../../src/notices/once.mjs";
 
 const installRoot = "C:\\Users\\me\\AppData\\Local\\codex-cli-ultra";
 const preferenceEnv = {
-  CODEX_CCU_LANGUAGE_PACK_ROOT: `${installRoot}\\languages`
+  CODEX_CCU_LANGUAGE_PACK_ROOT: `${installRoot}\\languages`,
+  CODEX_CCU_THEME_PACK_ROOT: `${installRoot}\\themes`,
+  CODEX_CCU_QUOTA_PATH: `${installRoot}\\quota.json`
 };
 const exactState = {
   schemaVersion: 1,

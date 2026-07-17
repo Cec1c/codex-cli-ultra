@@ -1,0 +1,12 @@
+{
+  "accounts": [
+    {
+      "plan": "plus",
+      "remainingPercent": 75
+    },
+    {
+      "plan": "pro20x",
+      "remainingPercent": 50
+    }
+  ]
+}

@@ -9,12 +9,14 @@ function Normalize-PathEntry([string]$value) {
   try { return [System.IO.Path]::GetFullPath($value).TrimEnd('\') }
   catch { return $value.Trim().TrimEnd('\') }
 }
-$exists = $parts | Where-Object {
-  [string]::Equals((Normalize-PathEntry $_), $entry, [StringComparison]::OrdinalIgnoreCase)
-}
-$changed = -not [bool]$exists
+$kept = @($parts | Where-Object {
+  -not [string]::Equals((Normalize-PathEntry $_), $entry, [StringComparison]::OrdinalIgnoreCase)
+})
+$nextParts = @($entry) + $kept
+$next = $nextParts -join ';'
+$currentNormalized = $parts -join ';'
+$changed = $next -ne $currentNormalized
 if ($changed) {
-  $next = (@($parts) + $entry) -join ';'
   [Environment]::SetEnvironmentVariable('Path', $next, 'User')
 }
 [pscustomobject]@{ changed = $changed; entry = $entry } | ConvertTo-Json -Compress

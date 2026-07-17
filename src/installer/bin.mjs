@@ -5,8 +5,8 @@ import { join, resolve } from "node:path";
 const WRAPPERS = Object.freeze({
   "codex.cmd": '@echo off\r\nnode "%~dp0launcher.mjs" %*\r\nexit /b %ERRORLEVEL%\r\n',
   "codex.ps1": "#!/usr/bin/env pwsh\n& node (Join-Path $PSScriptRoot 'launcher.mjs') @args\nexit $LASTEXITCODE\n",
-  "codex-ultra.cmd": '@echo off\r\nset "NODE_USE_ENV_PROXY=1"\r\nnode "%~dp0codex-ultra.mjs" %*\r\nexit /b %ERRORLEVEL%\r\n',
-  "codex-ultra.ps1": "#!/usr/bin/env pwsh\n$env:NODE_USE_ENV_PROXY = '1'\n& node (Join-Path $PSScriptRoot 'codex-ultra.mjs') @args\nexit $LASTEXITCODE\n"
+  "codex-ultra.cmd": '@echo off\r\nset "NODE_USE_ENV_PROXY=1"\r\nset "CODEX_CCU_CONTENT_ROOT=%~dp0..\\content"\r\nnode "%~dp0codex-ultra.mjs" %*\r\nexit /b %ERRORLEVEL%\r\n',
+  "codex-ultra.ps1": "#!/usr/bin/env pwsh\n$env:NODE_USE_ENV_PROXY = '1'\n$env:CODEX_CCU_CONTENT_ROOT = Join-Path $PSScriptRoot '..\\content'\n& node (Join-Path $PSScriptRoot 'codex-ultra.mjs') @args\nexit $LASTEXITCODE\n"
 });
 
 async function replaceFileAtomic(path, bytes, fsOps = {}) {

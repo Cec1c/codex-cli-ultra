@@ -10,6 +10,7 @@
   "scripts": {
     "build": "node scripts/build-executor.mjs",
     "test": "node --test",
+    "text:audit": "node scripts/audit-visible-text.mjs",
     "catalog:extract": "node src/cli.mjs catalog extract",
     "language:validate": "node src/cli.mjs language validate",
     "adapter:apply": "node src/cli.mjs adapter apply",
