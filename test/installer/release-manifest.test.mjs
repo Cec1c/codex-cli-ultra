@@ -18,9 +18,9 @@ import {
 
 const manifest = {
   schemaVersion: 1,
-  upstreamVersion: "0.144.1",
-  upstreamTag: "rust-v0.144.1",
-  upstreamCommit: "44918ea10c0f99151c6710411b4322c2f5c96bea",
+  upstreamVersion: "0.144.4",
+  upstreamTag: "rust-v0.144.4",
+  upstreamCommit: "8c68d4c87dc54d38861f5114e920c3de2efa5876",
   ultraRevision: 1,
   i18nApiVersion: 1,
   catalogVersion: 1,
@@ -31,7 +31,7 @@ const manifest = {
     sha256: `sha256:${"d".repeat(64)}`
   },
   asset: {
-    name: "codex-ultra-0.144.1-u1-windows-x64.zip",
+    name: "codex-ultra-0.144.4-u1-windows-x64.zip",
     size: 1024,
     sha256: `sha256:${"a".repeat(64)}`
   },
@@ -42,7 +42,7 @@ const manifest = {
     sha256: `sha256:${"b".repeat(64)}`
   },
   sourceArchive: {
-    name: "codex-ultra-0.144.1-u1-source.tar.gz",
+    name: "codex-ultra-0.144.4-u1-source.tar.gz",
     size: 4096,
     sha256: `sha256:${"c".repeat(64)}`
   },
@@ -64,7 +64,7 @@ test("release manifest accepts the exact compatibility contract and returns a cl
   assert.notEqual(value, manifest);
   assert.notEqual(value.asset, manifest.asset);
   value.asset.name = "changed.zip";
-  assert.equal(manifest.asset.name, "codex-ultra-0.144.1-u1-windows-x64.zip");
+  assert.equal(manifest.asset.name, "codex-ultra-0.144.4-u1-windows-x64.zip");
 });
 
 test("release manifest rejects unknown keys and incompatible identity fields", () => {

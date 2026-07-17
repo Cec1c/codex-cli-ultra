@@ -23,8 +23,21 @@ import {
   planOperations,
   revertOperations
 } from "../src/adapter/transaction.mjs";
-import { LOCK_WORKSPACE_PACKAGE_NAMES } from "../src/adapter/codex-0.144.1.mjs";
+import { LOCK_WORKSPACE_PACKAGE_NAMES } from "../src/adapter/codex-0.144.4.mjs";
 import { runCli } from "../src/cli.mjs";
+import {
+  APPROVAL_OVERLAY_SOURCE,
+  CHAT_COMPOSER_SOURCE,
+  CHATWIDGET_CONSTRUCTOR_SOURCE,
+  CHATWIDGET_SOURCE,
+  FOOTER_SOURCE,
+  MCP_STARTUP_SOURCE,
+  SESSION_HEADER_SOURCE,
+  STATUS_CARD_SOURCE,
+  STATUS_FORMAT_SOURCE,
+  STATUS_SURFACES_SOURCE,
+  TOOLTIPS_SOURCE
+} from "./fixtures/codex-adapter-sources.mjs";
 
 const STATE_DIRECTORY = ".codex-ultra-mvp";
 const SNAPSHOT_FILE_NAMES = [
@@ -252,6 +265,180 @@ const HISTORY_TESTS_SOURCE = [
   ""
 ].join("\n");
 
+const SLASH_COMMAND_SOURCE = [
+  "pub enum SlashCommand {",
+  "    Title,",
+  "    Statusline,",
+  "    Theme,",
+  '    #[strum(to_string = "pets", serialize = "pet")]',
+  "    Pets,",
+  "    TestApproval,",
+  "}",
+  "impl SlashCommand {",
+  "    fn description(self) -> &'static str {",
+  "        match self {",
+  '            SlashCommand::Statusline => "configure which items appear in the status line",',
+  '            SlashCommand::Theme => "choose a syntax highlighting theme",',
+  '            SlashCommand::Pets => "choose or hide the terminal pet",',
+  '            SlashCommand::TestApproval => "test approval request",',
+  "        }",
+  "    }",
+  "",
+  "    /// Command string without the leading '/'. Provided for compatibility with",
+  "    /// existing code that expects a method named `command()`.",
+  "    pub fn command(self) -> &'static str {",
+  '        "fixture"',
+  "    }",
+  "    fn supports_inline_args(self) -> bool {",
+  "        matches!(self,",
+  "                | SlashCommand::Raw",
+  "                | SlashCommand::Usage",
+  "                | SlashCommand::Pets",
+  "        )",
+  "    }",
+  "    fn available_in_side_conversation(self) -> bool {",
+  "        matches!(self,",
+  "                | SlashCommand::Status",
+  "                | SlashCommand::Usage",
+  "                | SlashCommand::Ide",
+  "        )",
+  "    }",
+  "    fn available_during_task(self) -> bool {",
+  "        match self {",
+  "            | SlashCommand::Title",
+  "            | SlashCommand::Statusline",
+  "            | SlashCommand::AutoReview => true,",
+  "        }",
+  "    }",
+  "}",
+  "#[cfg(test)]",
+  "mod tests {",
+  "    fn certain_commands_are_available_during_task() {",
+  "        assert!(SlashCommand::Title.available_during_task());",
+  "        assert!(SlashCommand::Statusline.available_during_task());",
+  "        assert!(SlashCommand::Raw.available_during_task());",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const SLASH_DISPATCH_SOURCE = [
+  "impl ChatWidget {",
+  "    fn dispatch_command(&mut self, cmd: SlashCommand) {",
+  "        match cmd {",
+  "            SlashCommand::Theme => {",
+  "                self.open_theme_picker();",
+  "            }",
+  "            SlashCommand::Pets => {",
+  "                self.open_pets_picker();",
+  "            }",
+  "        }",
+  "    }",
+  "    fn dispatch_prepared(&mut self, cmd: SlashCommand, args: String, trimmed: &str) {",
+  "        match cmd {",
+  "            SlashCommand::Pets if !trimmed.is_empty() => {",
+  "                self.select_pet_by_id(args);",
+  "            }",
+  "            _ => self.dispatch_command(cmd),",
+  "        }",
+  "    }",
+  "    fn queued_command_drain_result(&self, cmd: SlashCommand) -> QueueDrain {",
+  "        match cmd {",
+  "            | SlashCommand::Statusline",
+  "            | SlashCommand::Theme",
+  "            | SlashCommand::Pets => QueueDrain::Stop,",
+  "        }",
+  "    }",
+  "    fn dispatch_unknown(&mut self, name: &str) {",
+  "            self.add_info_message(",
+  "                format!(",
+  '                    r#"Unrecognized command \'/{name}\'. Type "/" for a list of supported commands."#',
+  "                ),",
+  "                /*hint*/ None,",
+  "            );",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const ONBOARDING_AUTH_SOURCE = [
+  "impl AuthModeWidget {",
+  "    fn render_pick_mode(&self, area: Rect, buf: &mut Buffer) {",
+  "        let mut lines: Vec<Line> = vec![",
+  "            Line::from(vec![",
+  '                "  ".into(),',
+  '                "Sign in with ChatGPT to use Codex as part of your paid plan".into(),',
+  "            ]),",
+  "            Line::from(vec![",
+  '                "  ".into(),',
+  '                "or connect an API key for usage-based billing".into(),',
+  "            ]),",
+  "        ];",
+  '        let device_code_description = "Sign in from another device with a one-time code";',
+  "        lines.extend(create_mode_item(",
+  "                        0,",
+  "                        option,",
+  '                        "Sign in with ChatGPT",',
+  "                        chatgpt_description,",
+  "        ));",
+  "        lines.extend(create_mode_item(",
+  "                        1,",
+  "                        option,",
+  '                        "Provide your own API key",',
+  '                        "Pay for what you use",',
+  "        ));",
+  "        if !self.is_api_login_allowed() {",
+  "            lines.push(",
+  '                "  API key login is disabled by this workspace. Sign in with ChatGPT to continue."',
+  "                    .dim()",
+  "                    .into(),",
+  "            );",
+  "        }",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const COMMAND_POPUP_SOURCE = [
+  "impl CommandPopup {",
+  "    fn rows_from_matches(&self) {",
+  "                let description = item.description().to_string();",
+  "    }",
+  "}",
+  "impl CommandItem {",
+  "    fn description(&self) -> &str {",
+  "        match self {",
+  "            Self::Builtin(cmd) => cmd.description(),",
+  "            Self::ServiceTier(command) => &command.description,",
+  "        }",
+  "    }",
+  "}",
+  "impl WidgetRef for CommandPopup {",
+  "    fn render_ref(&self, area: Rect, buf: &mut Buffer) {",
+  "        let rows = self.rows_from_matches(self.filtered());",
+  "        render_rows_with_col_width_mode(",
+  "            area.inset(Insets::tlbr(",
+  "                /*top*/ 0, /*left*/ 2, /*bottom*/ 0, /*right*/ 0,",
+  "            )),",
+  "            buf,",
+  "            &rows,",
+  "            &self.state,",
+  "            MAX_POPUP_ROWS,",
+  '            "no matches",',
+  "            COMMAND_COLUMN_WIDTH,",
+  "        );",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const COMMAND_POPUP_SNAPSHOT_SOURCE = [
+  "/statusline - configure which items appear in the status line",
+  "/theme - choose a syntax highlighting theme",
+  "/pets - choose or hide the terminal pet",
+  ""
+].join("\n");
+
 function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
 }
@@ -316,7 +503,25 @@ async function createCodexFixture() {
     "codex-rs/tui/src/bottom_pane/status_line_setup.rs": STATUS_SOURCE,
     "codex-rs/tui/src/history_cell/separators.rs":
       HISTORY_SEPARATOR_SOURCE,
-    "codex-rs/tui/src/history_cell/tests.rs": HISTORY_TESTS_SOURCE
+    "codex-rs/tui/src/history_cell/tests.rs": HISTORY_TESTS_SOURCE,
+    "codex-rs/tui/src/slash_command.rs": SLASH_COMMAND_SOURCE,
+    "codex-rs/tui/src/chatwidget/slash_dispatch.rs": SLASH_DISPATCH_SOURCE,
+    "codex-rs/tui/src/bottom_pane/command_popup.rs": COMMAND_POPUP_SOURCE,
+    "codex-rs/tui/src/status/card.rs": STATUS_CARD_SOURCE,
+    "codex-rs/tui/src/status/format.rs": STATUS_FORMAT_SOURCE,
+    "codex-rs/tui/src/history_cell/session.rs": SESSION_HEADER_SOURCE,
+    "codex-rs/tui/src/tooltips.rs": TOOLTIPS_SOURCE,
+    "codex-rs/tui/src/chatwidget.rs": CHATWIDGET_SOURCE,
+    "codex-rs/tui/src/chatwidget/constructor.rs": CHATWIDGET_CONSTRUCTOR_SOURCE,
+    "codex-rs/tui/src/chatwidget/mcp_startup.rs": MCP_STARTUP_SOURCE,
+    "codex-rs/tui/src/chatwidget/status_surfaces.rs": STATUS_SURFACES_SOURCE,
+    "codex-rs/tui/src/bottom_pane/footer.rs": FOOTER_SOURCE,
+    "codex-rs/tui/src/bottom_pane/chat_composer.rs": CHAT_COMPOSER_SOURCE,
+    "codex-rs/tui/src/bottom_pane/approval_overlay.rs":
+      APPROVAL_OVERLAY_SOURCE,
+    "codex-rs/tui/src/onboarding/auth.rs": ONBOARDING_AUTH_SOURCE,
+    "codex-rs/tui/src/bottom_pane/snapshots/codex_tui__bottom_pane__command_popup__tests__command_popup_default_items.snap":
+      COMMAND_POPUP_SNAPSHOT_SOURCE
   });
   const overlayDir = join(sourceRoot, "overlay");
   await mkdir(overlayDir, { recursive: true });
@@ -377,7 +582,7 @@ test("adapter plan is read-only and prints relative paths with hashes", async ()
   );
 
   assert.equal(result.command, "adapter plan");
-  assert.equal(result.files.length, 13);
+  assert.equal(result.files.length, 29);
   assert.deepEqual(JSON.parse(output), result);
   for (const file of result.files) {
     assert.match(file.relativePath, /^[^\\/]+(?:\/[^\\/]+)*$/);

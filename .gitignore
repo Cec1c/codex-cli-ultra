@@ -1,3 +1,4 @@
 .worktrees/
+.upstream/
 dist/
 node_modules/

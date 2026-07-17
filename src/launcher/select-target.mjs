@@ -10,8 +10,10 @@ import {
 import { validateState } from "../state/schema.mjs";
 
 const MANAGED_ENV_KEYS = new Set([
+  "codex_ccu_language_pack_root",
   "codex_ultra_locale",
-  "codex_ultra_ftl_path"
+  "codex_ultra_ftl_path",
+  "codex_ultra_language_preference_path"
 ]);
 
 function result(kind, path, reason, notice = null, env = {}) {
@@ -300,93 +302,10 @@ function combineNotices(primary, secondary) {
   return `${primary} ${secondary.replace(/^Codex Ultra:\s*/, "")}`;
 }
 
-function readEnvironmentValue(env, name) {
-  const expected = name.toLowerCase();
-  for (const [key, value] of Object.entries(env)) {
-    if (key.toLowerCase() === expected) {
-      return { found: true, value };
-    }
-  }
-  return { found: false, value: undefined };
-}
-
-async function selectLanguageEnvironment({
-  locale,
-  installRoot,
-  env,
-  realpathFile,
-  statFile
-}) {
-  const override = readEnvironmentValue(env, "CODEX_ULTRA_LOCALE");
-  const hasOverride = override.found;
-  const requested = hasOverride ? override.value : locale?.id;
-  if (requested === "en-US" || requested === undefined || requested === null) {
-    return { env: {}, notice: null };
-  }
-  if (!locale || requested !== locale.id) {
-    return {
-      env: {},
-      notice: `Codex Ultra: requested locale ${String(requested)} is unavailable; running English; run codex-ultra doctor.`
-    };
-  }
-
-  const expectedManifestPath = win32.join(
-    installRoot,
-    "languages",
-    locale.id,
-    "manifest.json"
-  );
-  const expectedResourcePath = win32.join(
-    installRoot,
-    "languages",
-    locale.id,
-    "messages.ftl"
-  );
-  if (
-    !windowsPathsEqual(locale.manifestPath, expectedManifestPath) ||
-    !windowsPathsEqual(locale.resourcePath, expectedResourcePath)
-  ) {
-    return {
-      env: {},
-      notice: `Codex Ultra: language pack ${locale.id} is unavailable; running English; run codex-ultra doctor.`
-    };
-  }
-  const manifestPath = await canonicalizeLocalPath(
-    locale.manifestPath,
-    realpathFile
-  );
-  const resourcePath = await canonicalizeLocalPath(
-    locale.resourcePath,
-    realpathFile
-  );
-  if (
-    manifestPath.kind !== "ok" ||
-    resourcePath.kind !== "ok" ||
-    !windowsPathsEqual(manifestPath.path, expectedManifestPath) ||
-    !windowsPathsEqual(resourcePath.path, expectedResourcePath) ||
-    !isWindowsPathInside(installRoot, manifestPath.path) ||
-    !isWindowsPathInside(installRoot, resourcePath.path)
-  ) {
-    return {
-      env: {},
-      notice: `Codex Ultra: language pack ${locale.id} is unavailable; running English; run codex-ultra doctor.`
-    };
-  }
-  const metadata = await readFileStat(resourcePath.path, statFile);
-  if (
-    metadata === null ||
-    metadata.size !== locale.size ||
-    metadata.mtimeMs !== locale.mtimeMs
-  ) {
-    return {
-      env: {},
-      notice: `Codex Ultra: language pack ${locale.id} is unavailable; running English; run codex-ultra doctor.`
-    };
-  }
+async function selectLanguageEnvironment({ installRoot }) {
   return {
     env: {
-      CODEX_ULTRA_LOCALE: locale.id,
-      CODEX_ULTRA_FTL_PATH: resourcePath.path
+      CODEX_CCU_LANGUAGE_PACK_ROOT: win32.join(installRoot, "languages")
     },
     notice: null
   };
@@ -472,26 +391,6 @@ export async function selectLaunchTarget(options = {}) {
     );
   }
 
-  if (
-    official.rootVersion !== null &&
-    official.rootVersion !== active.upstreamVersion
-  ) {
-    if (official.trusted) {
-      return result(
-        "official",
-        official.path,
-        "official-version-changed",
-        `Codex Ultra: official Codex changed from ${active.upstreamVersion} to ${official.rootVersion}; run codex-ultra update.`
-      );
-    }
-    return result(
-      "error",
-      null,
-      "official-upgrade-incomplete",
-      `Codex Ultra: official Codex upgrade from ${active.upstreamVersion} to ${official.rootVersion} is incomplete; run codex-ultra doctor.`
-    );
-  }
-
   const ultra = await inspectUltra(
     active,
     installRoot,
@@ -507,15 +406,22 @@ export async function selectLaunchTarget(options = {}) {
       statFile
     });
     const officialUnavailable = !official.trusted;
+    const officialVersionChanged =
+      official.rootVersion !== null &&
+      official.rootVersion !== active.upstreamVersion;
     const officialNotice = officialUnavailable
       ? `Codex Ultra: official Codex is unavailable while using ${active.releaseId}; run codex-ultra doctor.`
+      : officialVersionChanged
+        ? `Codex Ultra: ${active.releaseId} is based on Codex ${active.upstreamVersion} while official Codex ${official.rootVersion} is installed; continuing in optimistic coexistence mode without claiming feature parity.`
       : null;
     return result(
       "ultra",
       ultra.path,
       officialUnavailable
         ? "official-unavailable-ultra-valid"
-        : "ultra-exact-match",
+        : officialVersionChanged
+          ? "ultra-optimistic-coexistence"
+          : "ultra-exact-match",
       combineNotices(officialNotice, language.notice),
       language.env
     );

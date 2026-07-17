@@ -19,12 +19,12 @@ import { validateState } from "../../src/state/schema.mjs";
 import { readState, writeStateAtomic } from "../../src/state/store.mjs";
 
 const validBuild = {
-  releaseId: "0.144.1-ultra.1",
-  upstreamVersion: "0.144.1",
+  releaseId: "0.144.4-ultra.1",
+  upstreamVersion: "0.144.4",
   ultraRevision: 1,
   platform: "x86_64-pc-windows-msvc",
   binaryPath:
-    "C:\\Users\\me\\AppData\\Local\\codex-cli-ultra\\releases\\0.144.1-ultra.1\\x86_64-pc-windows-msvc\\package\\bin\\codex.exe",
+    "C:\\Users\\me\\AppData\\Local\\codex-cli-ultra\\releases\\0.144.4-ultra.1\\x86_64-pc-windows-msvc\\package\\bin\\codex.exe",
   size: 341000000,
   mtimeMs: 123456789,
   sha256: `sha256:${"a".repeat(64)}`
@@ -44,10 +44,10 @@ const validLocale = {
 const validState = {
   schemaVersion: 1,
   official: {
-    version: "0.144.1",
+    version: "0.144.4",
     packageJsonPath:
       "C:\\npm\\node_modules\\@openai\\codex\\package.json",
-    platformPackageVersion: "0.144.1-win32-x64",
+    platformPackageVersion: "0.144.4-win32-x64",
     platformPackageJsonPath:
       "C:\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\package.json",
     binaryPath:
@@ -100,7 +100,7 @@ test("valid state preserves only launch-stable facts in a deep clone", () => {
   assert.notEqual(result.locale, validState.locale);
 
   result.active.releaseId = "changed";
-  assert.equal(validState.active.releaseId, "0.144.1-ultra.1");
+  assert.equal(validState.active.releaseId, "0.144.4-ultra.1");
 });
 
 test("nullable active and locale plus an exact last-known-good pair are accepted", () => {

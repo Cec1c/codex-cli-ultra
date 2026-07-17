@@ -12,25 +12,28 @@ import {
 import { writeNoticeOnce } from "../../src/notices/once.mjs";
 
 const installRoot = "C:\\Users\\me\\AppData\\Local\\codex-cli-ultra";
+const preferenceEnv = {
+  CODEX_CCU_LANGUAGE_PACK_ROOT: `${installRoot}\\languages`
+};
 const exactState = {
   schemaVersion: 1,
   official: {
-    version: "0.144.1",
+    version: "0.144.4",
     packageJsonPath:
       "C:\\npm\\node_modules\\@openai\\codex\\package.json",
-    platformPackageVersion: "0.144.1-win32-x64",
+    platformPackageVersion: "0.144.4-win32-x64",
     platformPackageJsonPath:
       "C:\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\package.json",
     binaryPath:
       "C:\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
   },
   active: {
-    releaseId: "0.144.1-ultra.1",
-    upstreamVersion: "0.144.1",
+    releaseId: "0.144.4-ultra.1",
+    upstreamVersion: "0.144.4",
     ultraRevision: 1,
     platform: "x86_64-pc-windows-msvc",
     binaryPath:
-      `${installRoot}\\releases\\0.144.1-ultra.1\\x86_64-pc-windows-msvc\\package\\bin\\codex.exe`,
+      `${installRoot}\\releases\\0.144.4-ultra.1\\x86_64-pc-windows-msvc\\package\\bin\\codex.exe`,
     size: 341000000,
     mtimeMs: 123456789,
     sha256: `sha256:${"a".repeat(64)}`
@@ -55,7 +58,7 @@ function missingPath(message = "missing") {
 }
 
 function createReaders({
-  officialVersion = "0.144.1",
+  officialVersion = "0.144.4",
   platformVersion = `${officialVersion}-win32-x64`,
   officialStat = fileStat(100, 1),
   ultraStat = fileStat(exactState.active.size, exactState.active.mtimeMs),
@@ -126,10 +129,10 @@ test("target selection covers exact, upgraded, missing, changed, and removed bin
       expectedReason: "ultra-exact-match"
     },
     {
-      name: "official upgrade selects official",
+      name: "official upgrade keeps verified Ultra optimistically",
       readers: createReaders({ officialVersion: "0.145.0" }),
-      expectedKind: "official",
-      expectedReason: "official-version-changed"
+      expectedKind: "ultra",
+      expectedReason: "ultra-optimistic-coexistence"
     },
     {
       name: "missing Ultra selects official",
@@ -186,7 +189,7 @@ test("target selection covers exact, upgraded, missing, changed, and removed bin
   }
 });
 
-test("selection checks local version sources before Ultra metadata and language metadata", async () => {
+test("selection checks local version sources before Ultra metadata", async () => {
   const readers = createReaders();
   const { result, calls } = await select({ readers });
 
@@ -195,12 +198,11 @@ test("selection checks local version sources before Ultra metadata and language 
     `read:${exactState.official.packageJsonPath}`,
     `read:${exactState.official.platformPackageJsonPath}`,
     `stat:${exactState.official.binaryPath}`,
-    `stat:${exactState.active.binaryPath}`,
-    `stat:${exactState.locale.resourcePath}`
+    `stat:${exactState.active.binaryPath}`
   ]);
 });
 
-test("an incomplete official upgrade never runs the older Ultra", async () => {
+test("an incomplete official upgrade keeps a verified Ultra available", async () => {
   const readers = createReaders({
     officialVersion: "0.145.0",
     platformVersion: null,
@@ -208,33 +210,43 @@ test("an incomplete official upgrade never runs the older Ultra", async () => {
   });
   const { result, calls } = await select({ readers });
 
-  assert.equal(result.kind, "error");
-  assert.equal(result.reason, "official-upgrade-incomplete");
-  assert.equal(calls.includes(`stat:${exactState.active.binaryPath}`), false);
+  assert.equal(result.kind, "ultra");
+  assert.equal(result.reason, "official-unavailable-ultra-valid");
+  assert.equal(calls.includes(`stat:${exactState.active.binaryPath}`), true);
+  assert.match(result.notice, /official Codex is unavailable/i);
 });
 
-test("a valid language file adds only the two runtime language variables", async () => {
+test("an official version change is disclosed as optimistic coexistence", async () => {
+  const { result } = await select({
+    readers: createReaders({ officialVersion: "0.145.0" })
+  });
+
+  assert.equal(result.kind, "ultra");
+  assert.equal(result.reason, "ultra-optimistic-coexistence");
+  assert.match(result.notice, /optimistic coexistence mode/i);
+  assert.match(result.notice, /without claiming feature parity/i);
+});
+
+test("Ultra launch exposes the CCU language-pack directory to the fork", async () => {
   const { result } = await select();
   assert.equal(result.kind, "ultra");
-  assert.deepEqual(result.env, {
-    CODEX_ULTRA_LOCALE: "zh-CN",
-    CODEX_ULTRA_FTL_PATH: exactState.locale.resourcePath
-  });
+  assert.deepEqual(result.env, preferenceEnv);
   assert.equal(result.notice, null);
 });
 
-test("missing or changed language metadata keeps Ultra and runs compiled English", async () => {
+test("launcher leaves language-pack validation to the fork runtime", async () => {
   for (const localeStat of [null, fileStat(1, 2)]) {
-    const { result } = await select({
+    const { result, calls } = await select({
       readers: createReaders({ localeStat })
     });
     assert.equal(result.kind, "ultra");
-    assert.deepEqual(result.env, {});
-    assert.match(result.notice, /language pack.*codex-ultra doctor/i);
+    assert.deepEqual(result.env, preferenceEnv);
+    assert.equal(result.notice, null);
+    assert.equal(calls.includes(`stat:${exactState.locale.resourcePath}`), false);
   }
 });
 
-test("per-session locale overrides never mutate or silently substitute state", async () => {
+test("legacy per-session locale variables cannot bypass the pack-root contract", async () => {
   const disabled = await select({
     env: {
       cOdEx_UlTrA_LoCaLe: "en-US",
@@ -242,23 +254,20 @@ test("per-session locale overrides never mutate or silently substitute state", a
     }
   });
   assert.equal(disabled.result.kind, "ultra");
-  assert.deepEqual(disabled.result.env, {});
+  assert.deepEqual(disabled.result.env, preferenceEnv);
   assert.equal(disabled.result.notice, null);
   assert.equal(disabled.calls.includes(`stat:${exactState.locale.resourcePath}`), false);
 
   const active = await select({
     env: { CODEX_ULTRA_LOCALE: "zh-CN" }
   });
-  assert.deepEqual(active.result.env, {
-    CODEX_ULTRA_LOCALE: "zh-CN",
-    CODEX_ULTRA_FTL_PATH: exactState.locale.resourcePath
-  });
+  assert.deepEqual(active.result.env, preferenceEnv);
 
   const unavailable = await select({
     env: { CODEX_ULTRA_LOCALE: "fr-FR" }
   });
-  assert.deepEqual(unavailable.result.env, {});
-  assert.match(unavailable.result.notice, /requested locale.*codex-ultra doctor/i);
+  assert.deepEqual(unavailable.result.env, preferenceEnv);
+  assert.equal(unavailable.result.notice, null);
   assert.equal(
     unavailable.calls.includes(`stat:${exactState.locale.resourcePath}`),
     false
@@ -312,7 +321,7 @@ test("untrusted Ultra and locale paths never participate in local selection", as
   assert.equal(calls.includes("stat:C:\\other\\codex.exe"), false);
 });
 
-test("an untrusted language path disables only translation, not Ultra", async () => {
+test("an untrusted legacy language path is ignored by the launcher", async () => {
   const outsideState = structuredClone(exactState);
   outsideState.locale.resourcePath = "C:\\other\\messages.ftl";
   outsideState.locale.manifestPath = "C:\\other\\manifest.json";
@@ -324,8 +333,8 @@ test("an untrusted language path disables only translation, not Ultra", async ()
   });
   assert.equal(result.kind, "ultra");
   assert.equal(result.reason, "ultra-exact-match");
-  assert.deepEqual(result.env, {});
-  assert.match(result.notice, /language pack.*codex-ultra doctor/i);
+  assert.deepEqual(result.env, preferenceEnv);
+  assert.equal(result.notice, null);
   assert.equal(calls.includes("stat:C:\\other\\messages.ftl"), false);
 });
 
@@ -388,13 +397,15 @@ test("a null recovered official cannot override a valid state official", async (
   assert.equal(result.reason, "ultra-exact-match");
 });
 
-test("launch environment removes managed locale keys case-insensitively", () => {
+test("launch environment removes legacy language keys and owns the pack root", () => {
   assert.deepEqual(
     buildLaunchEnvironment(
       {
         PATH: "C:\\Windows",
         codex_ultra_locale: "fr-FR",
-        CoDeX_UlTrA_FtL_pAtH: "C:\\untrusted\\messages.ftl"
+        CoDeX_UlTrA_FtL_pAtH: "C:\\untrusted\\messages.ftl",
+        CODEX_ULTRA_LANGUAGE_PREFERENCE_PATH: "C:\\untrusted\\language.txt",
+        codex_ccu_language_pack_root: "C:\\untrusted\\languages"
       },
       {}
     ),
@@ -405,22 +416,22 @@ test("launch environment removes managed locale keys case-insensitively", () => 
       {
         PATH: "C:\\Windows",
         CODEX_ULTRA_LOCALE: "fr-FR",
-        codeX_ultra_ftl_path: "C:\\untrusted\\messages.ftl"
+        codeX_ultra_ftl_path: "C:\\untrusted\\messages.ftl",
+        codex_ultra_language_preference_path: "C:\\untrusted\\language.txt",
+        CODEX_CCU_LANGUAGE_PACK_ROOT: "C:\\untrusted\\languages",
+        CODEX_UI_LANGUAGE: "fr-FR"
       },
-      {
-        CODEX_ULTRA_LOCALE: "zh-CN",
-        CODEX_ULTRA_FTL_PATH: exactState.locale.resourcePath
-      }
+      preferenceEnv
     ),
     {
       PATH: "C:\\Windows",
-      CODEX_ULTRA_LOCALE: "zh-CN",
-      CODEX_ULTRA_FTL_PATH: exactState.locale.resourcePath
+      ...preferenceEnv,
+      CODEX_UI_LANGUAGE: "fr-FR"
     }
   );
 });
 
-test("official and language failures are both preserved in one notice", async () => {
+test("official failure notice is preserved while fork owns language diagnostics", async () => {
   const { result } = await select({
     readers: createReaders({
       officialVersion: null,
@@ -431,7 +442,7 @@ test("official and language failures are both preserved in one notice", async ()
   });
   assert.equal(result.kind, "ultra");
   assert.match(result.notice, /official Codex is unavailable/i);
-  assert.match(result.notice, /language pack zh-CN is unavailable/i);
+  assert.doesNotMatch(result.notice, /language pack/i);
 });
 
 test("notice markers are deterministic, first-writer-only, and best-effort", async () => {
@@ -439,7 +450,7 @@ test("notice markers are deterministic, first-writer-only, and best-effort", asy
     join(tmpdir(), "codex-ultra-notices-")
   );
   const reason = "official-version-changed";
-  const detail = "0.144.1\u00000.145.0";
+  const detail = "0.144.4\u00000.145.0";
   const expectedHash = createHash("sha256")
     .update(`${reason}\0${detail}`)
     .digest("hex");

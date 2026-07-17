@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import { buildExecutors } from "../../scripts/build-executor.mjs";
+
+const execFileAsync = promisify(execFile);
 
 test("build emits independent launcher and management bundles", async () => {
   const outdir = await mkdtemp(join(tmpdir(), "codex-ultra-bundle-"));
@@ -34,4 +38,18 @@ test("build emits independent launcher and management bundles", async () => {
       `launcher bundle contains forbidden input: ${forbidden}`
     );
   }
+
+  const isolatedRoot = join(outdir, "install-root");
+  const management = await execFileAsync(
+    process.execPath,
+    [join(outdir, "codex-ultra.mjs"), "version"],
+    {
+      env: {
+        ...process.env,
+        CODEX_ULTRA_HOME: isolatedRoot
+      },
+      windowsHide: true
+    }
+  );
+  assert.match(management.stdout, /codex-cli-ultra 0\.1\.0/);
 });

@@ -25,7 +25,7 @@ test("language validate requires catalog and pack paths", async () => {
   );
 });
 
-test("language validate reports the five wired messages", async () => {
+test("language validate reports the expanded wired catalog", async () => {
   let output = "";
 
   const result = await runCli(
@@ -35,7 +35,7 @@ test("language validate reports the five wired messages", async () => {
       "--pack",
       "packages/languages/zh-CN",
       "--catalog",
-      "research/codex-0.144.1/tui-messages.jsonl"
+      "research/codex-0.144.4/tui-messages.jsonl"
     ],
     {
       cwd: PROJECT_ROOT,
@@ -45,7 +45,7 @@ test("language validate reports the five wired messages", async () => {
 
   assert.equal(result.command, "language validate");
   assert.equal(result.locale, "zh-CN");
-  assert.equal(result.messages, 5);
+  assert.equal(result.messages, 129);
   assert.match(result.sourceHash, /^sha256:[a-f0-9]{64}$/);
   assert.deepEqual(JSON.parse(output), result);
 });

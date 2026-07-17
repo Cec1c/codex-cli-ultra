@@ -4,23 +4,44 @@
 >
 > **Early status:** This is an unofficial, very early experimental repository. The first version-locked i18n MVP now works, but its interfaces, package specifications, and installation path remain unstable and are not a replacement for the official distribution.
 
-Codex CLI Ultra 希望在不把项目绑定为长期源码分叉的前提下，为 Codex CLI 探索可持续维护的本地化与界面扩展能力。
+Codex CLI Ultra 通过职责分离的长期 fork 和轻量管理器，为 Codex CLI 探索可持续维护的本地化与界面扩展能力。
 
-Codex CLI Ultra explores maintainable localization and interface extension capabilities for Codex CLI without defining the project as a permanent source fork.
+Codex CLI Ultra explores maintainable localization and interface extension capabilities through a responsibility-separated long-lived fork and a lightweight manager.
 
 ## 当前 MVP / Current MVP
 
-当前原型锁定 Codex CLI 0.144.1：从真实源码整理 11 条 TUI 文本，其中 4 条状态栏设置文本和参数化的 `Worked for {duration}` 已接入简体中文。JavaScript 在安装或验证阶段严格检查声明式 Fluent/FTL 语言包，Rust 薄运行时直接加载外部 FTL；语言包缺失、损坏、缺键、参数错误或翻译为空时继续使用调用点原有英文。
+当前原型锁定 Codex CLI 0.144.4：从真实源码整理并接入 129 条 TUI 文本，覆盖状态栏、启动卡片、登录引导、斜杠命令、`/status`、审批、输入占位、MCP 和常用错误提示。JavaScript 在安装或验证阶段严格检查声明式 Fluent/FTL 语言包，Rust 薄运行时直接加载外部 FTL；语言包缺失、损坏、缺键、参数错误或翻译为空时继续使用调用点原有英文。
 
-The current prototype is pinned to Codex CLI 0.144.1. It catalogs 11 real TUI messages and wires four status-line setup messages plus parameterized `Worked for {duration}` text to Simplified Chinese. JavaScript strictly validates declarative Fluent/FTL language packs during installation or verification, while a thin Rust runtime loads external FTL directly and preserves call-site English when the pack is missing, damaged, incomplete, has invalid arguments, or produces empty output.
+The current prototype is pinned to Codex CLI 0.144.4. It catalogs and wires 129 real TUI messages across the status line, session card, sign-in onboarding, slash commands, `/status`, approvals, composer placeholders, MCP startup, and common errors. JavaScript strictly validates declarative Fluent/FTL language packs during installation or verification, while a thin Rust runtime loads external FTL directly and preserves call-site English when the pack is missing, damaged, incomplete, has invalid arguments, or produces empty output.
 
 适配器会校验精确上游提交和源码锚点，以事务方式应用并支持回滚。PowerShell 7 是首个操作入口；当前仍需要从源码构建测试版本，不会修改未知 Codex 版本。
 
 The adapter verifies the exact upstream commit and source anchors, applies changes transactionally, and supports rollback. PowerShell 7 is the first operator entry point. The MVP still requires a source build and never modifies an unknown Codex version.
 
-复现步骤见 [i18n MVP 使用说明](docs/i18n/mvp-usage.md)，运行时合同与验证证据见 [Rust i18n 运行时 MVP](docs/i18n/runtime-mvp.md)，已整理文本见 [Codex CLI 0.144.1 TUI 文本目录](docs/i18n/codex-0.144.1-text-inventory.md)。随机 `Worked for` 短语仍属于后续设计，见 [Worked for 短语包创意](docs/ideas/worked-for-phrases.md)。
+复现步骤见 [i18n MVP 使用说明](docs/i18n/mvp-usage.md)，运行时合同与验证证据见 [Rust i18n 运行时 MVP](docs/i18n/runtime-mvp.md)，已整理文本见 [Codex CLI 0.144.4 TUI 文本目录](docs/i18n/codex-0.144.4-text-inventory.md)。随机 `Worked for` 短语仍属于后续设计，见 [Worked for 短语包创意](docs/ideas/worked-for-phrases.md)。
 
-See the [i18n MVP usage guide](docs/i18n/mvp-usage.md) for reproduction steps, the [Rust i18n runtime MVP](docs/i18n/runtime-mvp.md) for runtime contracts and validation evidence, and the [Codex CLI 0.144.1 TUI text inventory](docs/i18n/codex-0.144.1-text-inventory.md) for catalogued messages. Random `Worked for` phrases remain a later design recorded in the [Worked for phrase-pack idea](docs/ideas/worked-for-phrases.md).
+See the [i18n MVP usage guide](docs/i18n/mvp-usage.md) for reproduction steps, the [Rust i18n runtime MVP](docs/i18n/runtime-mvp.md) for runtime contracts and validation evidence, and the [Codex CLI 0.144.4 TUI text inventory](docs/i18n/codex-0.144.4-text-inventory.md) for catalogued messages. Random `Worked for` phrases remain a later design recorded in the [Worked for phrase-pack idea](docs/ideas/worked-for-phrases.md).
+
+## 当前架构 / Current Architecture
+
+- [`Cec1c/codex`](https://github.com/Cec1c/codex) 负责 Rust/TUI i18n 接口、`/language`、英文回退和编译后的 fork 二进制。
+- 本仓库负责 FTL 语言包、官方版与 fork 共存、下载校验、安装更新、版本状态和后续界面预设。
+- fork Release 使用 `ccu-rust-vX.Y.Z-rN`，二进制显示为 `X.Y.Z-ccu.i18n.N`；同一上游版本的 fork 修复只递增 `N`。
+- GitHub Actions 每 6 小时轮询上游稳定 Release；冲突时停止并告警，不覆盖 fork 改动。
+- 用户安装只需要编译后的二进制和语言包，不需要下载完整 Codex Rust 源码。
+
+The Rust/TUI mechanism and compiled binaries live in `Cec1c/codex`; this repository manages FTL language packs, coexistence with official Codex, verified downloads, installation, updates, version status, and later UI presets. Users do not need the full Codex source tree.
+
+管理执行器当前提供以下命令；公开 Release 尚未发布：
+
+```text
+codex-ultra version
+codex-ultra status --check
+codex-ultra install
+codex-ultra update
+```
+
+详细版本与自动发布契约见 [CCU、Codex i18n fork 与上游跟踪实施计划](docs/CCU_I18N_FORK_PLAN.md)。
 
 ## 两个长期方向 / Two Long-Term Directions
 

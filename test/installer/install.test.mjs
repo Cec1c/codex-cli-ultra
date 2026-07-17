@@ -18,6 +18,7 @@ import {
   installFromProvider,
   runBinarySmokeChecks
 } from "../../src/installer/install.mjs";
+import { validateLanguagePack } from "../../src/language/validate.mjs";
 import { readState } from "../../src/state/store.mjs";
 
 const PROJECT_ROOT = resolve(
@@ -27,15 +28,15 @@ const PROJECT_ROOT = resolve(
 );
 const CATALOG_PATH = join(
   PROJECT_ROOT,
-  "research/codex-0.144.1/tui-messages.jsonl"
+  "research/codex-0.144.4/tui-messages.jsonl"
 );
 const LANGUAGE_ROOT = join(PROJECT_ROOT, "packages/languages/zh-CN");
 const FAKE_CODEX = join(PROJECT_ROOT, "test/fixtures/fake-codex.mjs");
 
 const OFFICIAL = {
-  version: "0.144.1",
+  version: "0.144.4",
   packageJsonPath: "C:\\npm\\node_modules\\@openai\\codex\\package.json",
-  platformPackageVersion: "0.144.1-win32-x64",
+  platformPackageVersion: "0.144.4-win32-x64",
   platformPackageJsonPath:
     "C:\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\package.json",
   binaryPath:
@@ -49,9 +50,9 @@ function digest(bytes) {
 function releaseManifest({ revision = 1, ultraBytes, languageBytes }) {
   return {
     schemaVersion: 1,
-    upstreamVersion: "0.144.1",
-    upstreamTag: "rust-v0.144.1",
-    upstreamCommit: "44918ea10c0f99151c6710411b4322c2f5c96bea",
+    upstreamVersion: "0.144.4",
+    upstreamTag: "rust-v0.144.4",
+    upstreamCommit: "8c68d4c87dc54d38861f5114e920c3de2efa5876",
     ultraRevision: revision,
     i18nApiVersion: 1,
     catalogVersion: 1,
@@ -62,7 +63,7 @@ function releaseManifest({ revision = 1, ultraBytes, languageBytes }) {
       sha256: `sha256:${"d".repeat(64)}`
     },
     asset: {
-      name: `codex-ultra-0.144.1-u${revision}-windows-x64.zip`,
+      name: `codex-ultra-0.144.4-u${revision}-windows-x64.zip`,
       size: ultraBytes.length,
       sha256: digest(ultraBytes)
     },
@@ -73,7 +74,7 @@ function releaseManifest({ revision = 1, ultraBytes, languageBytes }) {
       sha256: digest(languageBytes)
     },
     sourceArchive: {
-      name: `codex-ultra-0.144.1-u${revision}-source.tar.gz`,
+      name: `codex-ultra-0.144.4-u${revision}-source.tar.gz`,
       size: 1,
       sha256: `sha256:${"c".repeat(64)}`
     },
@@ -86,13 +87,13 @@ function oldState(installRoot) {
     schemaVersion: 1,
     official: OFFICIAL,
     active: {
-      releaseId: "0.144.1-ultra.0",
-      upstreamVersion: "0.144.1",
+      releaseId: "0.144.4-ultra.0",
+      upstreamVersion: "0.144.4",
       ultraRevision: 1,
       platform: "x86_64-pc-windows-msvc",
       binaryPath: join(
         installRoot,
-        "releases/0.144.1-ultra.0/x86_64-pc-windows-msvc/package/bin/codex.exe"
+        "releases/0.144.4-ultra.0/x86_64-pc-windows-msvc/package/bin/codex.exe"
       ),
       size: 10,
       mtimeMs: 1,
@@ -178,25 +179,27 @@ async function createHarness({
   };
 }
 
-test("binary smoke checks prove all five common Chinese texts and English fallback", async () => {
-  const messages = {
-    "tui.status-line.setup.use-theme-colors": "使用主题颜色",
-    "tui.status-line.setup.apply-theme-colors": "应用当前 /theme 的颜色",
-    "tui.status-line.setup.configure-title": "配置状态栏",
-    "tui.status-line.setup.select-items-description": "选择要显示在状态栏中的项目。",
-    "tui.history.worked-for": "加班了 7m 57s"
-  };
+test("binary smoke checks prove all catalogued Chinese texts and English fallback", async () => {
+  const language = await validateLanguagePack({
+    packRoot: LANGUAGE_ROOT,
+    catalogPath: CATALOG_PATH
+  });
   const result = await runBinarySmokeChecks({
     binaryPath: process.execPath,
     binaryArgsPrefix: [FAKE_CODEX],
-    upstreamVersion: "0.144.1",
-    language: { locale: "zh-CN", messages },
+    upstreamVersion: "0.144.4",
+    language,
     resourcePath: join(LANGUAGE_ROOT, "messages.ftl"),
     timeoutMs: 10_000
   });
-  assert.deepEqual(result.chinese.messages, messages);
+  assert.deepEqual(result.chinese.messages, language.messages);
+  assert.equal(Object.keys(result.chinese.messages).length, 129);
+  assert.equal(
+    result.chinese.messages["tui.slash-command.description.model"],
+    "选择模型和推理强度"
+  );
   assert.equal(result.english.messages["tui.history.worked-for"], "Worked for 7m 57s");
-  assert.equal(Object.keys(result.english.messages).length, 5);
+  assert.equal(Object.keys(result.english.messages).length, 129);
 });
 
 test("every injected install stage failure preserves state bytes and PATH", async (t) => {
@@ -221,23 +224,23 @@ test("every injected install stage failure preserves state bytes and PATH", asyn
   }
 });
 
-test("successful first install records official, build, locale, and five translations", async () => {
+test("successful first install records official, build, locale, and all translations", async () => {
   const harness = await createHarness();
   const result = await installFromProvider(harness.options);
   const state = await readState(join(harness.installRoot, "state.json"));
   assert.equal(result.changed, true);
   assert.equal(state.official.binaryPath, OFFICIAL.binaryPath);
-  assert.equal(state.active.releaseId, "0.144.1-ultra.1");
+  assert.equal(state.active.releaseId, "0.144.4-ultra.1");
   assert.equal(state.locale.id, "zh-CN");
   assert.equal(state.lastKnownGood, null);
-  assert.equal(Object.keys(result.languageMessages).length, 5);
+  assert.equal(Object.keys(result.languageMessages).length, 129);
   assert.equal(
     result.languageMessages["tui.status-line.setup.configure-title"],
     "配置状态栏"
   );
   assert.equal(
     result.languageMessages["tui.history.worked-for"],
-    "加班了 7m 57s"
+    "工作了 7m 57s"
   );
   assert.equal(harness.pathEntries.has(join(harness.installRoot, "bin")), true);
   assert.equal(
@@ -252,7 +255,7 @@ test("repeated exact install is idempotent and does not rewrite immutable assets
   const statePath = join(harness.installRoot, "state.json");
   const binaryPath = join(
     harness.installRoot,
-    "releases/0.144.1-ultra.1/x86_64-pc-windows-msvc/package/bin/codex.exe"
+    "releases/0.144.4-ultra.1/x86_64-pc-windows-msvc/package/bin/codex.exe"
   );
   const beforeState = await readFile(statePath);
   const beforeMtime = (await stat(binaryPath)).mtimeMs;
@@ -267,7 +270,7 @@ test("an existing immutable release with different binary content is rejected", 
   await installFromProvider(harness.options);
   const binaryPath = join(
     harness.installRoot,
-    "releases/0.144.1-ultra.1/x86_64-pc-windows-msvc/package/bin/codex.exe"
+    "releases/0.144.4-ultra.1/x86_64-pc-windows-msvc/package/bin/codex.exe"
   );
   await writeFile(binaryPath, "tampered");
   const beforeState = await readFile(join(harness.installRoot, "state.json"));
@@ -294,7 +297,7 @@ test("an incompatible official version leaves existing state untouched", async (
         platformPackageVersion: "0.144.3-win32-x64"
       })
     }),
-    /no compatible exact Ultra release is known/
+    /upstreamVersion.*did not match expected/
   );
   assert.deepEqual(await readFile(statePath), before);
 });
@@ -324,8 +327,8 @@ test("successful update records the previous build and locale as last-known-good
   });
   await installFromProvider(second.options);
   const state = await readState(join(first.installRoot, "state.json"));
-  assert.equal(state.active.releaseId, "0.144.1-ultra.2");
-  assert.equal(state.lastKnownGood.build.releaseId, "0.144.1-ultra.1");
+  assert.equal(state.active.releaseId, "0.144.4-ultra.2");
+  assert.equal(state.lastKnownGood.build.releaseId, "0.144.4-ultra.1");
   assert.equal(state.lastKnownGood.locale.id, "zh-CN");
 });
 
@@ -377,6 +380,6 @@ test("a failed later update preserves installed language and last-known-good sta
   assert.deepEqual(await readFile(statePath), beforeState);
   assert.deepEqual(await readFile(languagePath), beforeLanguage);
   const state = await readState(statePath);
-  assert.equal(state.active.releaseId, "0.144.1-ultra.2");
-  assert.equal(state.lastKnownGood.build.releaseId, "0.144.1-ultra.1");
+  assert.equal(state.active.releaseId, "0.144.4-ultra.2");
+  assert.equal(state.lastKnownGood.build.releaseId, "0.144.4-ultra.1");
 });

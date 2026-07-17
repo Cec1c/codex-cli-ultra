@@ -20,7 +20,20 @@ import {
   planCodexPatch,
   revertCodexPatch,
   TARGET_COMMIT
-} from "../src/adapter/codex-0.144.1.mjs";
+} from "../src/adapter/codex-0.144.4.mjs";
+import {
+  APPROVAL_OVERLAY_SOURCE,
+  CHAT_COMPOSER_SOURCE,
+  CHATWIDGET_CONSTRUCTOR_SOURCE,
+  CHATWIDGET_SOURCE,
+  FOOTER_SOURCE,
+  MCP_STARTUP_SOURCE,
+  SESSION_HEADER_SOURCE,
+  STATUS_CARD_SOURCE,
+  STATUS_FORMAT_SOURCE,
+  STATUS_SURFACES_SOURCE,
+  TOOLTIPS_SOURCE
+} from "./fixtures/codex-adapter-sources.mjs";
 
 const LIB_SOURCE = [
   "mod history_cell;",
@@ -244,6 +257,180 @@ const HISTORY_TESTS_SOURCE = [
   ""
 ].join("\n");
 
+const SLASH_COMMAND_SOURCE = [
+  "pub enum SlashCommand {",
+  "    Title,",
+  "    Statusline,",
+  "    Theme,",
+  '    #[strum(to_string = "pets", serialize = "pet")]',
+  "    Pets,",
+  "    TestApproval,",
+  "}",
+  "impl SlashCommand {",
+  "    fn description(self) -> &'static str {",
+  "        match self {",
+  '            SlashCommand::Statusline => "configure which items appear in the status line",',
+  '            SlashCommand::Theme => "choose a syntax highlighting theme",',
+  '            SlashCommand::Pets => "choose or hide the terminal pet",',
+  '            SlashCommand::TestApproval => "test approval request",',
+  "        }",
+  "    }",
+  "",
+  "    /// Command string without the leading '/'. Provided for compatibility with",
+  "    /// existing code that expects a method named `command()`.",
+  "    pub fn command(self) -> &'static str {",
+  '        "fixture"',
+  "    }",
+  "    fn supports_inline_args(self) -> bool {",
+  "        matches!(self,",
+  "                | SlashCommand::Raw",
+  "                | SlashCommand::Usage",
+  "                | SlashCommand::Pets",
+  "        )",
+  "    }",
+  "    fn available_in_side_conversation(self) -> bool {",
+  "        matches!(self,",
+  "                | SlashCommand::Status",
+  "                | SlashCommand::Usage",
+  "                | SlashCommand::Ide",
+  "        )",
+  "    }",
+  "    fn available_during_task(self) -> bool {",
+  "        match self {",
+  "            | SlashCommand::Title",
+  "            | SlashCommand::Statusline",
+  "            | SlashCommand::AutoReview => true,",
+  "        }",
+  "    }",
+  "}",
+  "#[cfg(test)]",
+  "mod tests {",
+  "    fn certain_commands_are_available_during_task() {",
+  "        assert!(SlashCommand::Title.available_during_task());",
+  "        assert!(SlashCommand::Statusline.available_during_task());",
+  "        assert!(SlashCommand::Raw.available_during_task());",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const SLASH_DISPATCH_SOURCE = [
+  "impl ChatWidget {",
+  "    fn dispatch_command(&mut self, cmd: SlashCommand) {",
+  "        match cmd {",
+  "            SlashCommand::Theme => {",
+  "                self.open_theme_picker();",
+  "            }",
+  "            SlashCommand::Pets => {",
+  "                self.open_pets_picker();",
+  "            }",
+  "        }",
+  "    }",
+  "    fn dispatch_prepared(&mut self, cmd: SlashCommand, args: String, trimmed: &str) {",
+  "        match cmd {",
+  "            SlashCommand::Pets if !trimmed.is_empty() => {",
+  "                self.select_pet_by_id(args);",
+  "            }",
+  "            _ => self.dispatch_command(cmd),",
+  "        }",
+  "    }",
+  "    fn queued_command_drain_result(&self, cmd: SlashCommand) -> QueueDrain {",
+  "        match cmd {",
+  "            | SlashCommand::Statusline",
+  "            | SlashCommand::Theme",
+  "            | SlashCommand::Pets => QueueDrain::Stop,",
+  "        }",
+  "    }",
+  "    fn dispatch_unknown(&mut self, name: &str) {",
+  "            self.add_info_message(",
+  "                format!(",
+  '                    r#"Unrecognized command \'/{name}\'. Type "/" for a list of supported commands."#',
+  "                ),",
+  "                /*hint*/ None,",
+  "            );",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const ONBOARDING_AUTH_SOURCE = [
+  "impl AuthModeWidget {",
+  "    fn render_pick_mode(&self, area: Rect, buf: &mut Buffer) {",
+  "        let mut lines: Vec<Line> = vec![",
+  "            Line::from(vec![",
+  '                "  ".into(),',
+  '                "Sign in with ChatGPT to use Codex as part of your paid plan".into(),',
+  "            ]),",
+  "            Line::from(vec![",
+  '                "  ".into(),',
+  '                "or connect an API key for usage-based billing".into(),',
+  "            ]),",
+  "        ];",
+  '        let device_code_description = "Sign in from another device with a one-time code";',
+  "        lines.extend(create_mode_item(",
+  "                        0,",
+  "                        option,",
+  '                        "Sign in with ChatGPT",',
+  "                        chatgpt_description,",
+  "        ));",
+  "        lines.extend(create_mode_item(",
+  "                        1,",
+  "                        option,",
+  '                        "Provide your own API key",',
+  '                        "Pay for what you use",',
+  "        ));",
+  "        if !self.is_api_login_allowed() {",
+  "            lines.push(",
+  '                "  API key login is disabled by this workspace. Sign in with ChatGPT to continue."',
+  "                    .dim()",
+  "                    .into(),",
+  "            );",
+  "        }",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const COMMAND_POPUP_SOURCE = [
+  "impl CommandPopup {",
+  "    fn rows_from_matches(&self) {",
+  "                let description = item.description().to_string();",
+  "    }",
+  "}",
+  "impl CommandItem {",
+  "    fn description(&self) -> &str {",
+  "        match self {",
+  "            Self::Builtin(cmd) => cmd.description(),",
+  "            Self::ServiceTier(command) => &command.description,",
+  "        }",
+  "    }",
+  "}",
+  "impl WidgetRef for CommandPopup {",
+  "    fn render_ref(&self, area: Rect, buf: &mut Buffer) {",
+  "        let rows = self.rows_from_matches(self.filtered());",
+  "        render_rows_with_col_width_mode(",
+  "            area.inset(Insets::tlbr(",
+  "                /*top*/ 0, /*left*/ 2, /*bottom*/ 0, /*right*/ 0,",
+  "            )),",
+  "            buf,",
+  "            &rows,",
+  "            &self.state,",
+  "            MAX_POPUP_ROWS,",
+  '            "no matches",',
+  "            COMMAND_COLUMN_WIDTH,",
+  "        );",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const COMMAND_POPUP_SNAPSHOT_SOURCE = [
+  "/statusline - configure which items appear in the status line",
+  "/theme - choose a syntax highlighting theme",
+  "/pets - choose or hide the terminal pet",
+  ""
+].join("\n");
+
 const SNAPSHOT_FILE_NAMES = [
   "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_narrow.snap",
   "codex_tui__bottom_pane__status_line_setup__tests__status_line_setup_zh_cn_medium.snap",
@@ -251,9 +438,9 @@ const SNAPSHOT_FILE_NAMES = [
 ];
 const CODEX_MANIFEST = {
   schemaVersion: 1,
-  upstreamVersion: "0.144.1",
-  upstreamTag: "rust-v0.144.1",
-  upstreamCommit: "44918ea10c0f99151c6710411b4322c2f5c96bea",
+  upstreamVersion: "0.144.4",
+  upstreamTag: "rust-v0.144.4",
+  upstreamCommit: "8c68d4c87dc54d38861f5114e920c3de2efa5876",
   ultraRevision: 1,
   i18nApiVersion: 1,
   catalogVersion: 1
@@ -264,11 +451,34 @@ const EXPECTED_STATE_FILES = [
     relativePath: "codex-rs/tui/src/bottom_pane/status_line_setup.rs",
     created: false
   },
+  { relativePath: "codex-rs/tui/src/status/format.rs", created: false },
+  { relativePath: "codex-rs/tui/src/status/card.rs", created: false },
+  { relativePath: "codex-rs/tui/src/history_cell/session.rs", created: false },
+  { relativePath: "codex-rs/tui/src/tooltips.rs", created: false },
+  { relativePath: "codex-rs/tui/src/chatwidget.rs", created: false },
+  { relativePath: "codex-rs/tui/src/chatwidget/constructor.rs", created: false },
+  { relativePath: "codex-rs/tui/src/chatwidget/mcp_startup.rs", created: false },
+  { relativePath: "codex-rs/tui/src/chatwidget/status_surfaces.rs", created: false },
+  { relativePath: "codex-rs/tui/src/bottom_pane/footer.rs", created: false },
   {
     relativePath: "codex-rs/tui/src/history_cell/separators.rs",
     created: false
   },
   { relativePath: "codex-rs/tui/src/history_cell/tests.rs", created: false },
+  { relativePath: "codex-rs/tui/src/slash_command.rs", created: false },
+  { relativePath: "codex-rs/tui/src/chatwidget/slash_dispatch.rs", created: false },
+  { relativePath: "codex-rs/tui/src/bottom_pane/chat_composer.rs", created: false },
+  { relativePath: "codex-rs/tui/src/bottom_pane/command_popup.rs", created: false },
+  {
+    relativePath: "codex-rs/tui/src/bottom_pane/approval_overlay.rs",
+    created: false
+  },
+  { relativePath: "codex-rs/tui/src/onboarding/auth.rs", created: false },
+  {
+    relativePath:
+      "codex-rs/tui/src/bottom_pane/snapshots/codex_tui__bottom_pane__command_popup__tests__command_popup_default_items.snap",
+    created: false
+  },
   { relativePath: "codex-rs/Cargo.toml", created: false },
   { relativePath: "codex-rs/tui/Cargo.toml", created: false },
   { relativePath: "codex-rs/Cargo.lock", created: false },
@@ -354,8 +564,127 @@ async function createFixture() {
     "history_cell",
     "tests.rs"
   );
+  const slashCommandPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "slash_command.rs"
+  );
+  const slashDispatchPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "chatwidget",
+    "slash_dispatch.rs"
+  );
+  const onboardingAuthPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "onboarding",
+    "auth.rs"
+  );
+  const commandPopupPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "bottom_pane",
+    "command_popup.rs"
+  );
+  const commandPopupSnapshotPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "bottom_pane",
+    "snapshots",
+    "codex_tui__bottom_pane__command_popup__tests__command_popup_default_items.snap"
+  );
+  const statusCardPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "status",
+    "card.rs"
+  );
+  const statusFormatPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "status",
+    "format.rs"
+  );
+  const approvalOverlayPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "bottom_pane",
+    "approval_overlay.rs"
+  );
+  const sessionHeaderPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "history_cell",
+    "session.rs"
+  );
+  const tooltipsPath = join(sourceRoot, "codex-rs", "tui", "src", "tooltips.rs");
+  const chatwidgetPath = join(sourceRoot, "codex-rs", "tui", "src", "chatwidget.rs");
+  const chatwidgetConstructorPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "chatwidget",
+    "constructor.rs"
+  );
+  const mcpStartupPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "chatwidget",
+    "mcp_startup.rs"
+  );
+  const statusSurfacesPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "chatwidget",
+    "status_surfaces.rs"
+  );
+  const footerPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "bottom_pane",
+    "footer.rs"
+  );
+  const chatComposerPath = join(
+    sourceRoot,
+    "codex-rs",
+    "tui",
+    "src",
+    "bottom_pane",
+    "chat_composer.rs"
+  );
   await mkdir(dirname(statusPath), { recursive: true });
   await mkdir(dirname(historySeparatorPath), { recursive: true });
+  await mkdir(dirname(slashDispatchPath), { recursive: true });
+  await mkdir(dirname(onboardingAuthPath), { recursive: true });
+  await mkdir(dirname(commandPopupPath), { recursive: true });
+  await mkdir(dirname(commandPopupSnapshotPath), { recursive: true });
+  await mkdir(dirname(statusCardPath), { recursive: true });
   await mkdir(dirname(cliMainPath), { recursive: true });
   await mkdir(overlayDir, { recursive: true });
   await writeFile(workspaceCargoPath, WORKSPACE_CARGO_SOURCE, "utf8");
@@ -366,6 +695,26 @@ async function createFixture() {
   await writeFile(statusPath, STATUS_SOURCE, "utf8");
   await writeFile(historySeparatorPath, HISTORY_SEPARATOR_SOURCE, "utf8");
   await writeFile(historyTestsPath, HISTORY_TESTS_SOURCE, "utf8");
+  await writeFile(slashCommandPath, SLASH_COMMAND_SOURCE, "utf8");
+  await writeFile(slashDispatchPath, SLASH_DISPATCH_SOURCE, "utf8");
+  await writeFile(onboardingAuthPath, ONBOARDING_AUTH_SOURCE, "utf8");
+  await writeFile(commandPopupPath, COMMAND_POPUP_SOURCE, "utf8");
+  await writeFile(statusCardPath, STATUS_CARD_SOURCE, "utf8");
+  await writeFile(statusFormatPath, STATUS_FORMAT_SOURCE, "utf8");
+  await writeFile(approvalOverlayPath, APPROVAL_OVERLAY_SOURCE, "utf8");
+  await writeFile(sessionHeaderPath, SESSION_HEADER_SOURCE, "utf8");
+  await writeFile(tooltipsPath, TOOLTIPS_SOURCE, "utf8");
+  await writeFile(chatwidgetPath, CHATWIDGET_SOURCE, "utf8");
+  await writeFile(chatwidgetConstructorPath, CHATWIDGET_CONSTRUCTOR_SOURCE, "utf8");
+  await writeFile(mcpStartupPath, MCP_STARTUP_SOURCE, "utf8");
+  await writeFile(statusSurfacesPath, STATUS_SURFACES_SOURCE, "utf8");
+  await writeFile(footerPath, FOOTER_SOURCE, "utf8");
+  await writeFile(chatComposerPath, CHAT_COMPOSER_SOURCE, "utf8");
+  await writeFile(
+    commandPopupSnapshotPath,
+    COMMAND_POPUP_SNAPSHOT_SOURCE,
+    "utf8"
+  );
   await writeFile(join(overlayDir, "i18n.rs"), "pub(crate) fn marker() {}\n", "utf8");
   await writeFile(
     join(overlayDir, "i18n_tests.rs"),
@@ -390,7 +739,23 @@ async function createFixture() {
     libPath,
     statusPath,
     historySeparatorPath,
-    historyTestsPath
+    historyTestsPath,
+    slashCommandPath,
+    slashDispatchPath,
+    onboardingAuthPath,
+    commandPopupPath,
+    commandPopupSnapshotPath,
+    statusCardPath,
+    statusFormatPath,
+    approvalOverlayPath,
+    sessionHeaderPath,
+    tooltipsPath,
+    chatwidgetPath,
+    chatwidgetConstructorPath,
+    mcpStartupPath,
+    statusSurfacesPath,
+    footerPath,
+    chatComposerPath
   };
 }
 
@@ -438,7 +803,7 @@ test("planCodexPatch changes no files during preflight", async () => {
     overlayDir: fixture.overlayDir
   });
 
-  assert.equal(plan.files.length, 13);
+  assert.equal(plan.files.length, EXPECTED_STATE_FILES.length);
   assert.deepEqual(await snapshotTree(fixture.sourceRoot), before);
 });
 
@@ -517,7 +882,75 @@ test("applyCodexPatch installs overlays and localized call sites", async () => {
   );
   assert.match(
     await readFile(fixture.historyTestsPath, "utf8"),
-    /加班了 7m 57s/
+    /工作了 7m 57s/
+  );
+  assert.match(
+    await readFile(fixture.slashCommandPath, "utf8"),
+    /description_metadata/
+  );
+  assert.match(
+    await readFile(fixture.commandPopupPath, "utf8"),
+    /command-popup-no-matches/
+  );
+  assert.match(
+    await readFile(fixture.statusCardPath, "utf8"),
+    /status-card-model-label/
+  );
+  assert.match(
+    await readFile(fixture.statusFormatPath, "utf8"),
+    /label: &str/
+  );
+  assert.match(
+    await readFile(fixture.approvalOverlayPath, "utf8"),
+    /approval-run-command-title/
+  );
+  assert.match(
+    await readFile(fixture.sessionHeaderPath, "utf8"),
+    /session-card-model-label/
+  );
+  assert.match(
+    await readFile(fixture.sessionHeaderPath, "utf8"),
+    /UnicodeWidthStr::width\(model_label\.as_str\(\)\)/
+  );
+  assert.match(
+    await readFile(fixture.tooltipsPath, "utf8"),
+    /tooltip-rename-threads/
+  );
+  assert.match(
+    await readFile(fixture.chatwidgetPath, "utf8"),
+    /composer-write-file-tests/
+  );
+  assert.match(
+    await readFile(fixture.chatwidgetConstructorPath, "utf8"),
+    /placeholder_key/
+  );
+  assert.match(
+    await readFile(fixture.mcpStartupPath, "utf8"),
+    /mcp-client-failed-to-start/
+  );
+  assert.match(
+    await readFile(fixture.statusSurfacesPath, "utf8"),
+    /status-line-context-used/
+  );
+  assert.match(
+    await readFile(fixture.footerPath, "utf8"),
+    /footer-context-remaining/
+  );
+  assert.match(
+    await readFile(fixture.chatComposerPath, "utf8"),
+    /slash-unrecognized-command/
+  );
+  assert.match(
+    await readFile(fixture.slashDispatchPath, "utf8"),
+    /slash-unrecognized-command/
+  );
+  assert.match(
+    await readFile(fixture.onboardingAuthPath, "utf8"),
+    /onboarding-sign-in-chatgpt/
+  );
+  assert.match(
+    await readFile(fixture.commandPopupSnapshotPath, "utf8"),
+    /\/language - view or choose the display language/
   );
   assert.match(
     await readFile(fixture.libPath, "utf8"),
@@ -533,7 +966,7 @@ test("applyCodexPatch installs overlays and localized call sites", async () => {
   );
   assert.match(
     await readFile(fixture.cargoLockPath, "utf8"),
-    /name = "codex-tui"\nversion = "0\.144\.1"/
+    /name = "codex-tui"\nversion = "0\.144\.4"/
   );
   assert.match(
     await readFile(fixture.cliMainPath, "utf8"),
@@ -824,7 +1257,7 @@ test("doctorCodexPatch reports whether the adapter state is applied", async () =
   assert.deepEqual(
     await doctorCodexPatch(fixture.sourceRoot, { verifyGit: false }),
     {
-      targetCommit: "44918ea10c0f99151c6710411b4322c2f5c96bea",
+      targetCommit: "8c68d4c87dc54d38861f5114e920c3de2efa5876",
       sourceCommit: null,
       supported: null,
       applied: false

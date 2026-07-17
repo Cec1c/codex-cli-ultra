@@ -21,6 +21,9 @@ export async function buildExecutors(options = {}) {
     format: "esm",
     target: "node24",
     bundle: true,
+    banner: {
+      js: 'import { createRequire as __ccuCreateRequire } from "node:module"; const require = __ccuCreateRequire(import.meta.url);'
+    },
     legalComments: "external",
     metafile: true,
     sourcemap: false,

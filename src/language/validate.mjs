@@ -7,7 +7,7 @@ import { TextDecoder } from "node:util";
 
 const LOGICAL_ID_PATTERN =
   /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$/;
-const CATALOG_COUNTS = { records: 11, wired: 5, catalogued: 6 };
+const FLUENT_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 function parseJson(source, message) {
   try {
@@ -114,7 +114,6 @@ function validateCatalog(records, manifest) {
   const seenIds = new Set();
   const seenKeys = new Set();
   let wired = 0;
-  let catalogued = 0;
 
   for (const record of records) {
     if (record.catalogVersion !== 1 || record.catalogVersion !== manifest.catalogVersion) {
@@ -128,10 +127,12 @@ function validateCatalog(records, manifest) {
     if (typeof record.id !== "string" || !LOGICAL_ID_PATTERN.test(record.id)) {
       throw new Error(`invalid logical message id ${record.id ?? "<missing>"}`);
     }
-    const expectedKey = record.id.replaceAll(".", "--");
-    if (record.ftlKey !== expectedKey) {
+    if (
+      typeof record.ftlKey !== "string" ||
+      !FLUENT_ID_PATTERN.test(record.ftlKey)
+    ) {
       throw new Error(
-        `catalog ftlKey ${record.ftlKey ?? "<missing>"} must equal ${expectedKey}`
+        `invalid Fluent message id ${record.ftlKey ?? "<missing>"}`
       );
     }
     if (seenIds.has(record.id)) {
@@ -144,19 +145,11 @@ function validateCatalog(records, manifest) {
     seenKeys.add(record.ftlKey);
     if (record.mvpStatus === "wired") {
       wired += 1;
-    } else {
-      catalogued += 1;
     }
   }
 
-  if (
-    records.length !== CATALOG_COUNTS.records ||
-    wired !== CATALOG_COUNTS.wired ||
-    catalogued !== CATALOG_COUNTS.catalogued
-  ) {
-    throw new Error(
-      "catalog must contain exactly 11 records: 5 wired and 6 catalogued"
-    );
+  if (records.length === 0 || wired === 0) {
+    throw new Error("catalog must contain at least one wired record");
   }
 
   return records.filter((record) => record.mvpStatus === "wired");

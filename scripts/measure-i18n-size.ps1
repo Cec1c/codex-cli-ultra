@@ -16,7 +16,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$PinnedCommit = "44918ea10c0f99151c6710411b4322c2f5c96bea"
+$PinnedCommit = "8c68d4c87dc54d38861f5114e920c3de2efa5876"
 $RequiredCargoVersion = "1.95.0"
 $ExpectedWorkspacePackageCount = 132
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
@@ -408,7 +408,7 @@ try {
     }
 
     if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-        $OutputPath = "research/codex-0.144.1/i18n-size.json"
+        $OutputPath = "research/codex-0.144.4/i18n-size.json"
     }
     $resolvedOutputPath = Resolve-FullPath -Path $OutputPath -BasePath $ProjectRoot
 
@@ -516,7 +516,7 @@ try {
         -ArgumentList @($CliPath, "adapter", "apply", "--source", $patchedWorktree) `
         -WorkingDirectory $ProjectRoot | Out-Null
 
-    # The release tag has workspace.package.version = 0.144.1 while its
+    # The release tag has workspace.package.version = 0.144.4 while its
     # checked-in Cargo.lock still labels workspace packages as 0.0.0. Apply
     # the same non-i18n release-lock normalization to both worktrees before
     # the required --locked builds so that this release metadata drift is not
@@ -547,7 +547,7 @@ try {
         $baselineChangeLines | Where-Object {
             $_ -notin @(
                 '-version = "0.0.0"',
-                '+version = "0.144.1"'
+                '+version = "0.144.4"'
             )
         }
     )
@@ -555,7 +555,7 @@ try {
         $baselineChangeLines | Where-Object { $_ -eq '-version = "0.0.0"' }
     ).Count
     $normalizedVersionLines = @(
-        $baselineChangeLines | Where-Object { $_ -eq '+version = "0.144.1"' }
+        $baselineChangeLines | Where-Object { $_ -eq '+version = "0.144.4"' }
     ).Count
     if (
         $unexpectedBaselineChanges.Count -gt 0 -or
@@ -601,7 +601,7 @@ try {
         }
         lockNormalization = [ordered]@{
             command = "cargo update --workspace --offline"
-            reason = "Pinned release metadata labels workspace packages as 0.144.1 while Cargo.lock labels them as 0.0.0."
+            reason = "Pinned release metadata labels workspace packages as 0.144.4 while Cargo.lock labels them as 0.0.0."
             changedWorkspacePackages = $normalizedWorkspacePackages
             patchedLockAlreadyNormalized = $true
         }

@@ -6,9 +6,9 @@
 
 ## 1. 决策摘要 / Decision Summary
 
-Codex CLI Ultra 的首个实现目标是高频交互 TUI 的 i18n 支持。首期基线为 Codex CLI 0.144.1，对应上游标签 rust-v0.144.1；上游 main 仅用于发现版本漂移，不作为可直接安装的稳定目标。
+Codex CLI Ultra 的首个实现目标是高频交互 TUI 的 i18n 支持。最初基线为 Codex CLI 0.144.1；当前可运行基线已重放到 0.144.4，对应上游标签 rust-v0.144.4。上游 main 仅用于发现版本漂移，不作为可直接安装的稳定目标。
 
-The first implementation goal of Codex CLI Ultra is i18n support for high-frequency interactive TUI surfaces. The initial baseline is Codex CLI 0.144.1, corresponding to the upstream rust-v0.144.1 tag. Upstream main is used only to detect version drift and is not treated as a directly installable stable target.
+The first implementation goal of Codex CLI Ultra is i18n support for high-frequency interactive TUI surfaces. The initial baseline was Codex CLI 0.144.1; the current runnable baseline has been replayed onto 0.144.4 at tag rust-v0.144.4. Upstream main is used only to detect version drift and is not treated as a directly installable stable target.
 
 架构采用薄 Rust i18n 桥接层与 JavaScript 安装执行器的组合。Rust 负责运行时消息查询、格式化、富文本插槽和英文回退；JavaScript 负责版本检测、语言包校验、兼容适配、事务式安装、卸载、诊断和回滚。
 
@@ -176,7 +176,7 @@ The human review report is generated from JSONL and does not manually maintain a
 {
   "schemaVersion": 1,
   "id": "tui.onboarding.auth.sign-in-chatgpt",
-  "ftlKey": "tui--onboarding--auth--sign-in-chatgpt",
+  "ftlKey": "onboarding-sign-in-chatgpt",
   "surface": "onboarding",
   "english": "Sign in with ChatGPT",
   "kind": "plain",
@@ -214,9 +214,9 @@ tui.<surface>.<component>.<semantic-name>
 
 Each segment uses lowercase kebab-case. Message IDs do not contain English sentences, line numbers, version numbers, or translation locales.
 
-Fluent 标识符不使用点号，因此 FTL 键通过确定性映射生成：逻辑 ID 中的点号转换为双连字符。语言包作者看到的键稳定且可以从逻辑 ID 无歧义恢复。
+Fluent 标识符不使用点号。目录为每条消息显式声明简洁的 `ftlKey`，例如逻辑 ID `tui.onboarding.auth.sign-in-chatgpt` 对应 `onboarding-sign-in-chatgpt`。校验器只要求键符合小写 kebab-case 且全局唯一，不再把目录层级机械编码进语言包。
 
-Fluent identifiers do not use dots, so FTL keys are generated through a deterministic mapping: dots in the logical ID become double hyphens. The key visible to language-pack authors is stable and can be mapped back to the logical ID without ambiguity.
+Fluent identifiers do not use dots. The catalog explicitly declares a concise `ftlKey` for each message; for example, logical ID `tui.onboarding.auth.sign-in-chatgpt` maps to `onboarding-sign-in-chatgpt`. Validation requires lowercase kebab-case and global uniqueness rather than mechanically encoding catalog hierarchy into language-pack keys.
 
 ### 5.3 消息类别 / Message Kinds
 
@@ -353,7 +353,7 @@ For each message, the runtime:
 English fragments whose order matters cannot be translated separately. For example, Press, the shortcut, and to continue must be modeled as one complete message:
 
 ~~~ftl
-tui--onboarding--press-to-continue = Press { $key } to continue
+onboarding-press-to-continue = Press { $key } to continue
 ~~~
 
 普通参数可以在翻译中重复使用或调整位置。参数名必须与目录声明一致。
@@ -563,8 +563,8 @@ The first public deliverables are:
 
 ~~~text
 docs/i18n/foundation-design.md
-research/codex-0.144.1/tui-messages.jsonl
-docs/i18n/codex-0.144.1-text-inventory.md
+research/codex-0.144.4/tui-messages.jsonl
+docs/i18n/codex-0.144.4-text-inventory.md
 ~~~
 
 本设计规范审阅通过后，下一份实施计划负责生成真实 JSONL 目录和 Markdown 报告。提取器、Rust 桥接层与 JavaScript 执行器分别进入后续可测试任务，不在设计提交中提前创建空实现。

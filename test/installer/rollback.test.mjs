@@ -17,12 +17,12 @@ import { rollback } from "../../src/installer/rollback.mjs";
 import { writeStateAtomic, readState } from "../../src/state/store.mjs";
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const CATALOG_PATH = join(PROJECT_ROOT, "research/codex-0.144.1/tui-messages.jsonl");
+const CATALOG_PATH = join(PROJECT_ROOT, "research/codex-0.144.4/tui-messages.jsonl");
 const LANGUAGE_ROOT = join(PROJECT_ROOT, "packages/languages/zh-CN");
 const OFFICIAL = {
-  version: "0.144.1",
+  version: "0.144.4",
   packageJsonPath: "C:\\npm\\node_modules\\@openai\\codex\\package.json",
-  platformPackageVersion: "0.144.1-win32-x64",
+  platformPackageVersion: "0.144.4-win32-x64",
   platformPackageJsonPath:
     "C:\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\package.json",
   binaryPath:
@@ -34,7 +34,7 @@ function digest(bytes) {
 }
 
 async function buildRecord(installRoot, revision, bytes) {
-  const releaseId = `0.144.1-ultra.${revision}`;
+  const releaseId = `0.144.4-ultra.${revision}`;
   const binaryPath = join(
     installRoot,
     `releases/${releaseId}/x86_64-pc-windows-msvc/package/bin/codex.exe`
@@ -44,7 +44,7 @@ async function buildRecord(installRoot, revision, bytes) {
   const metadata = await stat(binaryPath);
   return {
     releaseId,
-    upstreamVersion: "0.144.1",
+    upstreamVersion: "0.144.4",
     ultraRevision: revision,
     platform: "x86_64-pc-windows-msvc",
     binaryPath,

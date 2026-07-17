@@ -1,22 +1,22 @@
 # i18n MVP 使用说明 / i18n MVP Usage
 
-> **实验状态：** 本流程只支持 Codex CLI 0.144.1，对应上游提交 `44918ea10c0f99151c6710411b4322c2f5c96bea`。它用于验证源码适配、外部 FTL 和英文回退，不是稳定安装器。
+> **实验状态：** 本流程只支持 Codex CLI 0.144.4，对应上游提交 `8c68d4c87dc54d38861f5114e920c3de2efa5876`。它用于验证源码适配、外部 FTL 和英文回退，不是稳定安装器。
 >
-> **Experimental status:** This workflow supports only Codex CLI 0.144.1 at upstream commit `44918ea10c0f99151c6710411b4322c2f5c96bea`. It validates source adaptation, external FTL, and English fallback; it is not a stable installer.
+> **Experimental status:** This workflow supports only Codex CLI 0.144.4 at upstream commit `8c68d4c87dc54d38861f5114e920c3de2efa5876`. It validates source adaptation, external FTL, and English fallback; it is not a stable installer.
 
 ## 1. 已验证内容 / What Is Proven
 
-- 从真实 Codex TUI 源码确定性提取 11 条消息：5 条已接入，6 条只完成目录整理。
+- 从真实 Codex TUI 源码确定性提取并接入 129 条消息，包含全部原生斜杠命令说明、`/status` 高频文本、启动卡片、提示、输入占位文本、Context/Token 状态、错误提示和审批常用文本。
 
-  Deterministically extract 11 messages from real Codex TUI source: five wired and six catalogued only.
+  Deterministically extract and wire 129 messages from real Codex TUI source, including every built-in slash-command description plus common `/status`, session-card, tooltip, composer-placeholder, Context/Token, error, empty-state, and approval text.
 
 - JavaScript 严格校验声明式语言包的清单、哈希、FTL、消息键和参数。
 
   Strictly validate the declarative language-pack manifest, hashes, FTL, message keys, and arguments in JavaScript.
 
-- Rust 运行时直接读取外部 FTL，翻译四条状态栏设置文本和 `Worked for {duration}`。
+- Rust 运行时直接读取外部 FTL，翻译状态栏、登录引导、`Worked for {duration}` 和命令面板说明。
 
-  Load external FTL directly in Rust and translate four status-line setup messages plus `Worked for {duration}`.
+  Load external FTL directly in Rust and translate status-line, sign-in onboarding, `Worked for {duration}`, and command-popup descriptions.
 
 - 单条消息失败时只回退该条英文；区域、文件或整个 FTL 无法加载时，本次进程完整使用英文。
 
@@ -54,9 +54,9 @@ Do not modify a Codex checkout used for daily work. These paths are examples:
 
 ```powershell
 $CodexRepo = "D:\src\codex"
-$CodexWorktree = Join-Path $env:TEMP ("codex-ultra-0.144.1-{0}" -f [guid]::NewGuid().ToString("N"))
+$CodexWorktree = Join-Path $env:TEMP ("codex-ultra-0.144.4-{0}" -f [guid]::NewGuid().ToString("N"))
 
-git -C $CodexRepo worktree add --detach $CodexWorktree 44918ea10c0f99151c6710411b4322c2f5c96bea
+git -C $CodexRepo worktree add --detach $CodexWorktree 8c68d4c87dc54d38861f5114e920c3de2efa5876
 git -C $CodexWorktree status --short
 git -C $CodexWorktree rev-parse HEAD
 ```
@@ -80,8 +80,8 @@ pwsh -NoProfile -File scripts/codex-ultra.ps1 -Action Validate
 Repeated extraction must not change these generated files:
 
 ```text
-research/codex-0.144.1/tui-messages.jsonl
-docs/i18n/codex-0.144.1-text-inventory.md
+research/codex-0.144.4/tui-messages.jsonl
+docs/i18n/codex-0.144.4-text-inventory.md
 ```
 
 语言包运行时资源是 `packages/languages/zh-CN/messages.ftl`，不再生成或加载 compiled JSON。
@@ -123,7 +123,8 @@ The script verifies:
 - Rust Localizer 单元测试。
 - 窄、中、宽三档中文状态栏快照。
 - 未改变的官方英文状态栏快照。
-- `加班了 7m 57s` 参数化消息。
+- `工作了 7m 57s` 参数化消息。
+- 斜杠命令面板中文说明。
 - locked Cargo 依赖图检查。
 - 有效 FTL 的中文二进制自检。
 - 缺失 FTL 时的完整英文二进制自检。
@@ -132,7 +133,8 @@ The script verifies:
 - Rust Localizer unit tests.
 - Narrow, medium, and wide Chinese status-line snapshots.
 - The unchanged official English status-line snapshot.
-- The parameterized `加班了 7m 57s` message.
+- The parameterized `工作了 7m 57s` message.
+- Chinese slash-command popup descriptions.
 - A locked Cargo dependency-graph check.
 - Chinese binary self-check with valid FTL.
 - Full English binary self-check with missing FTL.
@@ -162,15 +164,15 @@ finally {
 }
 ```
 
-输出 JSON 包含 schema、是否启用、实际 locale、五条已接入消息和一条缺键英文回退探针。
+输出 JSON 包含 schema、是否启用、实际 locale、130 条可翻译消息和一条缺键英文回退探针。
 
-The JSON output includes the schema, active state, actual locale, all five wired messages, and one missing-key English-fallback probe.
+The JSON output includes the schema, active state, actual locale, 130 localizable messages, and one missing-key English-fallback probe.
 
 ### Windows 上游基线说明 / Windows Upstream Baseline Note
 
-固定发布源码中的部分非本项目快照仍期望开发版本 `0.0.0`，而 release manifest 构建实际显示 `0.144.1`。当前 `history_cell` 聚焦回归中有三条 update-available 快照属于该差异；Ultra 不接受或重写这些无关快照，运行时 smoke 只执行与本适配相关且基线稳定的门禁。
+固定发布源码的 Cargo.lock 仍将 workspace 包标记为 `0.0.0`，而 release manifest 构建实际显示 `0.144.4`。适配器会在应用时以事务方式统一这些 workspace 包版本；Ultra 不接受或重写与本地化无关的上游快照。
 
-Some unrelated snapshots in the pinned release source still expect development version `0.0.0`, while the release manifest build renders `0.144.1`. Three update-available snapshots in the focused `history_cell` regression have this mismatch. Ultra neither accepts nor rewrites those unrelated snapshots; the runtime smoke runs only adapter-relevant gates with a stable baseline.
+The pinned release Cargo.lock still labels workspace packages as `0.0.0`, while the release manifest build renders `0.144.4`. The adapter transactionally normalizes those workspace package versions when applied; Ultra does not accept or rewrite unrelated upstream snapshots.
 
 ## 7. 构建与启动测试版本 / Build and Launch a Test Binary
 
@@ -190,9 +192,9 @@ pwsh -NoProfile -File scripts/codex-ultra.ps1 `
   -CodexBinary $CodexBinary
 ```
 
-`Launch` 要求显式传入真实 `.exe` 文件路径。它先验证语言包，直接使用验证结果中的 locale，再只向新建子进程注入 `CODEX_ULTRA_LOCALE` 和 `CODEX_ULTRA_FTL_PATH`。验证 JSON 不会写入 Codex 的 stdout。它不修改机器级环境变量、PATH、代理、认证、会话或用户配置。
+`Launch` 要求显式传入真实 `.exe` 文件路径。它先验证语言包，直接使用验证结果中的 locale，再向新建子进程注入 `CODEX_ULTRA_LOCALE`、`CODEX_ULTRA_FTL_PATH` 和受管的语言偏好文件路径。演示脚本默认把偏好保存在临时目录的 `codex-ultra-demo-language-preference.txt`，也可通过 `-LanguagePreferencePath` 指定其他已有目录下的文件。验证 JSON 不会写入 Codex 的 stdout。它不修改机器级环境变量、PATH、代理、认证或会话。
 
-`Launch` requires an explicit real `.exe` file path. It validates the language pack, uses the locale from that validation result, and injects `CODEX_ULTRA_LOCALE` and `CODEX_ULTRA_FTL_PATH` only into the new child process. Validation JSON is not written to Codex stdout. It does not modify machine-level environment variables, PATH, proxy, authentication, sessions, or user configuration.
+`Launch` requires an explicit real `.exe` file path. It validates the language pack, uses the locale from that validation result, and injects `CODEX_ULTRA_LOCALE`, `CODEX_ULTRA_FTL_PATH`, and the managed language-preference path only into the new child process. By default, the demo script stores the preference in `codex-ultra-demo-language-preference.txt` under the temporary directory; `-LanguagePreferencePath` can select a file under another existing directory. Validation JSON is not written to Codex stdout. It does not modify machine-level environment variables, PATH, proxy, authentication, or sessions.
 
 ## 8. 验证英文回退 / Verify English Fallback
 
@@ -235,14 +237,16 @@ Revert validates adapter state, backups, and current file hashes. If patched fil
 
 ## 10. 当前限制 / Current Limitations
 
-- 只支持精确的 Codex CLI 0.144.1 提交，并且需要本地源码构建。
-- 五条消息已接入：四条状态栏设置文本和一条工作时长消息；六条 onboarding 消息只完成目录整理。
+- 只支持精确的 Codex CLI 0.144.4 提交，并且需要本地源码构建。
+- 上游目录已有 129 条消息：此前 104 条范围，加上 25 条启动卡片、提示、MCP、输入框、Context/Token 和未知命令文本；Ultra 另有 5 条语言入口文本。
+- `/language` 显示当前语言；`/language zh-CN` 和 `/language en` 保存语言选择，重启 Codex 后生效。
 - 每个进程只初始化一次 Localizer；修改 FTL 后需要重启 Codex。
 - 随机 `Worked for` 短语不属于当前 MVP。
-- 全局 `codex` 并排安装、官方自动回退、更新和卸载属于计划 2；预编译 Release 属于计划 3。
+- 并排安装、官方回退和事务式更新的实验代码已经存在，但不属于当前演示 MVP 的交付重点。
 
-- Only the exact Codex CLI 0.144.1 commit is supported, and a local source build is required.
-- Five messages are wired: four status-line setup messages and one worked-duration message; six onboarding messages are catalogued only.
+- Only the exact Codex CLI 0.144.4 commit is supported, and a local source build is required.
+- The upstream catalog contains 129 messages: the previous 104-message scope plus 25 session-card, tooltip, MCP, composer, Context/Token, and unknown-command strings; Ultra adds five language-entry messages.
+- `/language` shows the current language; `/language zh-CN` and `/language en` save the selection for the next Codex launch.
 - Each process initializes the Localizer once; restart Codex after changing FTL.
 - Random `Worked for` phrases are outside the current MVP.
-- Global side-by-side `codex` installation, official fallback, update, and removal belong to Plan 2; precompiled Releases belong to Plan 3.
+- Experimental side-by-side installation, official fallback, and transactional update code exists, but it is outside the current demo MVP's delivery focus.

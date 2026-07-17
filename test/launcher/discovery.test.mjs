@@ -18,7 +18,7 @@ const TARGET = "x86_64-pc-windows-msvc";
 async function createOfficialFixture({
   root,
   npmRoot = join(root, "node_modules"),
-  version = "0.144.1",
+  version = "0.144.4",
   platformVersion = `${version}-win32-x64`,
   optionalDependency = `npm:@openai/codex@${version}-win32-x64`,
   binary = true

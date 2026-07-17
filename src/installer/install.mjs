@@ -25,13 +25,13 @@ import { discoverOfficialCodex } from "../discovery/official-codex.mjs";
 import { validateLanguagePack } from "../language/validate.mjs";
 import { buildLaunchEnvironment } from "../launcher/select-target.mjs";
 import { extractZipSecure } from "../release/archive.mjs";
+import {
+  FORK_MANIFEST_NAME,
+  validateForkManifest
+} from "../release/fork-manifest.mjs";
 import { sha256File } from "../release/hash.mjs";
 import { validateReleaseManifest } from "../release/manifest.mjs";
 import { readState, writeStateAtomic } from "../state/store.mjs";
-
-const STABLE_COMMITS = new Map([
-  ["0.144.1", "44918ea10c0f99151c6710411b4322c2f5c96bea"]
-]);
 
 export const INSTALL_STAGES = Object.freeze([
   "manifest",
@@ -46,6 +46,18 @@ export const INSTALL_STAGES = Object.freeze([
   "smoke-english",
   "move-release",
   "move-language",
+  "path-add",
+  "state-switch"
+]);
+
+export const FORK_INSTALL_STAGES = Object.freeze([
+  "manifest",
+  "download-fork",
+  "verify-fork",
+  "extract-fork",
+  "smoke-version",
+  "move-release",
+  "prepare-bin",
   "path-add",
   "state-switch"
 ]);
@@ -143,10 +155,11 @@ export async function runBinarySmokeChecks(options) {
   let english = null;
   if (phases.has("version")) {
     version = await run(["--version"], options.env ?? process.env);
+    const expectedVersion = options.displayVersion ?? options.upstreamVersion;
     if (
       version.signal ||
       version.code !== 0 ||
-      !version.stdout.includes(options.upstreamVersion)
+      !version.stdout.includes(expectedVersion)
     ) {
       throw errorWithOutput("Codex version smoke probe failed", version);
     }
@@ -196,7 +209,7 @@ function exactJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-async function readOptionalState(path, readStateImpl) {
+export async function readOptionalState(path, readStateImpl) {
   try {
     return await readStateImpl(path);
   } catch (error) {
@@ -205,7 +218,7 @@ async function readOptionalState(path, readStateImpl) {
   }
 }
 
-async function ensureOwnershipMarker(installRoot) {
+export async function ensureOwnershipMarker(installRoot) {
   let rootMetadata = await pathExists(installRoot);
   if (rootMetadata) {
     if (!rootMetadata.isDirectory() || rootMetadata.isSymbolicLink()) {
@@ -278,7 +291,7 @@ async function listDirectoryFiles(root, prefix = "") {
   return files;
 }
 
-async function sameDirectory(left, right, hashFile) {
+export async function sameDirectory(left, right, hashFile) {
   const [leftFiles, rightFiles] = await Promise.all([
     listDirectoryFiles(left),
     listDirectoryFiles(right)
@@ -299,7 +312,7 @@ async function sameDirectory(left, right, hashFile) {
   return true;
 }
 
-async function installImmutableDirectory({
+export async function installImmutableDirectory({
   source,
   destination,
   compare,
@@ -322,7 +335,7 @@ async function runStage(options, name, operation) {
   return await operation();
 }
 
-function assertAssetHash(actual, expected, label) {
+export function assertAssetHash(actual, expected, label) {
   if (actual.size !== expected.size || actual.sha256 !== expected.sha256) {
     throw new Error(`${label} size or SHA-256 did not match the Release manifest`);
   }
@@ -349,7 +362,7 @@ function chooseLocale({ explicitLocale, systemLocale, language, record }) {
   return null;
 }
 
-function statesEqual(left, right) {
+export function statesEqual(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
@@ -385,10 +398,7 @@ export async function installFromProvider(options) {
   try {
     const rawManifest = await runStage(options, "manifest", () => options.provider.readManifest());
     const expectedCommit =
-      options.expectedUpstreamCommit ?? STABLE_COMMITS.get(official.version);
-    if (!expectedCommit) {
-      throw new Error(`no compatible exact Ultra release is known for official Codex ${official.version}`);
-    }
+      options.expectedUpstreamCommit ?? rawManifest?.upstreamCommit;
     const manifest = validateManifest(rawManifest, {
       upstreamVersion: official.version,
       upstreamTag: options.expectedUpstreamTag ?? `rust-v${official.version}`,
@@ -581,4 +591,167 @@ export async function installFromProvider(options) {
 
 export async function updateFromProvider(options) {
   return await installFromProvider(options);
+}
+
+export async function installForkFromProvider(options) {
+  if (!options?.provider) throw new Error("provider is required");
+  const env = options.env ?? process.env;
+  const installRoot = resolve(
+    options.installRoot ?? resolveInstallRoot(env)
+  );
+  if (!isAbsoluteLocalWindowsPath(installRoot)) {
+    throw new Error("installRoot must be on a local Windows drive");
+  }
+
+  const statePath = join(installRoot, "state.json");
+  const discover = options.discoverOfficialCodex ?? discoverOfficialCodex;
+  const validateManifest = options.validateForkManifest ?? validateForkManifest;
+  const hashFile = options.sha256File ?? sha256File;
+  const extractZip = options.extractZipSecure ?? extractZipSecure;
+  const smoke = options.smokeRunner ?? runBinarySmokeChecks;
+  const readStateImpl = options.readState ?? readState;
+  const writeState = options.writeStateAtomic ?? writeStateAtomic;
+  const prepareBin = options.prepareBin ?? (async () => {
+    throw new Error("CCU bin preparation is not implemented");
+  });
+  const addPathEntry = options.addPathEntry ?? (async () => {
+    throw new Error("PATH adapter is not implemented yet");
+  });
+  const removePathEntry = options.removePathEntry ?? (async () => ({ changed: false }));
+
+  const official = await discover({ installRoot, env });
+  const oldState = await readOptionalState(statePath, readStateImpl);
+  let stagingRoot = null;
+  let pathAdded = false;
+  let stateSwitched = false;
+  try {
+    const rawManifest = await runStage(
+      options,
+      "manifest",
+      () => options.provider.readManifest()
+    );
+    const manifest = validateManifest(rawManifest, { platform: PLATFORM });
+
+    await ensureOwnershipMarker(installRoot);
+    stagingRoot = join(installRoot, "cache", `fork-install-${randomUUID()}`);
+    await mkdir(stagingRoot, { recursive: true });
+    const forkZip = join(stagingRoot, manifest.asset.name);
+    const extractedRelease = join(stagingRoot, "release");
+
+    await runStage(options, "download-fork", () =>
+      options.provider.materializeAsset(manifest.asset.name, forkZip)
+    );
+    const archiveHash = await runStage(
+      options,
+      "verify-fork",
+      () => hashFile(forkZip)
+    );
+    assertAssetHash(archiveHash, manifest.asset, "fork asset");
+    await runStage(options, "extract-fork", () =>
+      extractZip(forkZip, extractedRelease)
+    );
+
+    const stagedBinary = join(extractedRelease, "package", "bin", "codex.exe");
+    await runStage(options, "smoke-version", () => smoke({
+      binaryPath: stagedBinary,
+      binaryArgsPrefix: options.binaryArgsPrefix,
+      displayVersion: manifest.displayVersion,
+      upstreamVersion: manifest.upstreamVersion,
+      env,
+      spawn: options.spawn,
+      timeoutMs: options.smokeTimeoutMs,
+      phases: ["version"]
+    }));
+    await writeFile(
+      join(extractedRelease, FORK_MANIFEST_NAME),
+      exactJson(manifest),
+      "utf8"
+    );
+
+    const releaseId = manifest.displayVersion;
+    const finalRelease = join(
+      installRoot,
+      "releases",
+      releaseId,
+      manifest.platform
+    );
+    await runStage(options, "move-release", () =>
+      installImmutableDirectory({
+        source: extractedRelease,
+        destination: finalRelease,
+        compare: async () =>
+          await sameDirectory(extractedRelease, finalRelease, hashFile)
+      })
+    );
+
+    const finalBinary = join(finalRelease, "package", "bin", "codex.exe");
+    const [binaryHash, binaryStat] = await Promise.all([
+      hashFile(finalBinary),
+      stat(finalBinary)
+    ]);
+    const buildRecord = {
+      releaseId,
+      upstreamVersion: manifest.upstreamVersion,
+      ultraRevision: manifest.ultraRevision,
+      platform: manifest.platform,
+      binaryPath: finalBinary,
+      size: binaryHash.size,
+      mtimeMs: binaryStat.mtimeMs,
+      sha256: binaryHash.sha256
+    };
+    const replacesActiveRelease =
+      oldState?.active !== null &&
+      oldState?.active !== undefined &&
+      oldState.active.releaseId !== buildRecord.releaseId;
+    const nextState = {
+      schemaVersion: STATE_SCHEMA_VERSION,
+      official,
+      active: buildRecord,
+      locale: oldState?.locale ?? null,
+      lastKnownGood:
+        replacesActiveRelease
+          ? { build: oldState.active, locale: oldState.locale }
+          : oldState?.lastKnownGood ?? null
+    };
+
+    const binDirectory = join(installRoot, "bin");
+    await runStage(options, "prepare-bin", () =>
+      prepareBin({ installRoot, binDirectory })
+    );
+    const pathResult = await runStage(
+      options,
+      "path-add",
+      () => addPathEntry(binDirectory)
+    );
+    pathAdded = pathResult?.changed === true;
+    await runStage(options, "state-switch", async () => {
+      if (!statesEqual(oldState, nextState)) {
+        await writeState(statePath, nextState);
+      }
+    });
+    stateSwitched = true;
+    return {
+      changed: !statesEqual(oldState, nextState),
+      releaseId,
+      manifest,
+      state: nextState
+    };
+  } catch (error) {
+    if (pathAdded && !stateSwitched) {
+      try {
+        await removePathEntry(join(installRoot, "bin"));
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          "fork installation failed and PATH rollback failed",
+          { cause: error }
+        );
+      }
+    }
+    throw error;
+  } finally {
+    if (stagingRoot !== null) {
+      await rm(stagingRoot, { recursive: true, force: true }).catch(() => {});
+    }
+  }
 }

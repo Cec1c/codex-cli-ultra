@@ -122,8 +122,9 @@ async function readManifestResponse(response) {
 }
 
 export class DirectoryReleaseProvider {
-  constructor(root) {
+  constructor(root, { manifestName = MANIFEST_NAME } = {}) {
     this.root = resolve(root);
+    this.manifestName = validateAssetName(manifestName);
   }
 
   async #resolveSource(name, label) {
@@ -141,7 +142,10 @@ export class DirectoryReleaseProvider {
   }
 
   async readManifest() {
-    const path = await this.#resolveSource(MANIFEST_NAME, "release manifest");
+    const path = await this.#resolveSource(
+      this.manifestName,
+      "release manifest"
+    );
     return await parseManifestText(
       await readFile(path, "utf8"),
       "release manifest"
