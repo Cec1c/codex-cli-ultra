@@ -2,13 +2,13 @@
 
 ## 1. 范围 / Scope
 
-本运行时只支持 Codex CLI `0.144.1`、标签 `rust-v0.144.1`、提交 `44918ea10c0f99151c6710411b4322c2f5c96bea`。完整上游源码不进入本仓库；本项目只维护声明式语言包、Rust overlay、精确适配操作和验证证据。
+本运行时只支持 Codex CLI `0.144.4`、标签 `rust-v0.144.4`、提交 `8c68d4c87dc54d38861f5114e920c3de2efa5876`。完整上游源码不进入本仓库；本项目只维护声明式语言包、Rust overlay、精确适配操作和验证证据。
 
-This runtime supports only Codex CLI `0.144.1`, tag `rust-v0.144.1`, commit `44918ea10c0f99151c6710411b4322c2f5c96bea`. The full upstream source is not stored in this repository; the project maintains only declarative language packs, Rust overlays, exact adapter operations, and validation evidence.
+This runtime supports only Codex CLI `0.144.4`, tag `rust-v0.144.4`, commit `8c68d4c87dc54d38861f5114e920c3de2efa5876`. The full upstream source is not stored in this repository; the project maintains only declarative language packs, Rust overlays, exact adapter operations, and validation evidence.
 
-当前消息目录共 11 条，其中 5 条已接入运行时、6 条 onboarding 消息只完成目录整理。
+当前上游消息目录共 129 条，已经全部接入运行时：原有 104 条，再加上启动会话卡片、提示、MCP 前缀、用量网址提示、输入占位文本、Context/Token 状态和未知命令错误共 25 条。Ultra 另外提供 `/language` 命令说明和 4 条语言选择提示。
 
-The current catalog contains 11 messages: five wired into the runtime and six onboarding messages catalogued only.
+The upstream catalog contains 129 messages, all wired into the runtime: the previous 104-message scope plus 25 session-card, tooltip, MCP-prefix, usage-note, composer-placeholder, Context/Token, and unknown-command strings. Ultra additionally provides the `/language` description and four language-selection messages.
 
 ## 2. 数据流 / Data Flow
 
@@ -38,7 +38,10 @@ Language packs contain data only and execute no code, hooks, or installation log
 | `tui.status-line.setup.apply-theme-colors` | 应用当前 `/theme` 的颜色 |
 | `tui.status-line.setup.configure-title` | 配置状态栏 |
 | `tui.status-line.setup.select-items-description` | 选择要显示在状态栏中的项目。 |
-| `tui.history.worked-for` | 加班了 `{ $duration }` |
+| `tui.history.worked-for` | 工作了 `{ $duration }` |
+| `tui.slash-command.description.model` | 选择模型和推理强度 |
+| `tui.slash-command.description.status` | 显示当前会话配置和令牌用量 |
+| `tui.slash-command.description.permissions` | 选择允许 Codex 执行的操作 |
 
 `Worked for` 只在原有 `> 60` 秒条件满足时显示，继续使用上游紧凑时长格式。随机短语不属于本 MVP。
 
@@ -68,9 +71,9 @@ The patched binary intercepts this exact single argument before Clap parsing:
 codex --ultra-i18n-self-check
 ```
 
-有效 zh-CN FTL 的结果包含五条中文消息，以及一条用于证明单键英文回退的缺键探针：
+有效 zh-CN FTL 的结果包含 130 条可翻译消息（129 条上游目录消息和 `/language` 说明），以及一条用于证明单键英文回退的缺键探针：
 
-With valid zh-CN FTL, the result contains all five Chinese messages and one missing-key probe proving per-message English fallback:
+With valid zh-CN FTL, the result contains 130 localizable messages (129 upstream catalog messages plus the `/language` description) and one missing-key probe proving per-message English fallback:
 
 ```json
 {
@@ -79,15 +82,16 @@ With valid zh-CN FTL, the result contains all five Chinese messages and one miss
   "locale": "zh-CN",
   "messages": {
     "tui.status-line.setup.configure-title": "配置状态栏",
-    "tui.history.worked-for": "加班了 7m 57s",
+    "tui.slash-command.description.model": "选择模型和推理强度",
+    "tui.history.worked-for": "工作了 7m 57s",
     "ultra.i18n.missing-key": "English fallback"
   }
 }
 ```
 
-FTL 缺失或无法加载时，`active` 为 `false`、`locale` 为 `null`，五条消息全部返回原始英文。
+FTL 缺失或无法加载时，`active` 为 `false`、`locale` 为 `null`，全部 130 条消息返回原始英文。
 
-When FTL is missing or cannot load, `active` is `false`, `locale` is `null`, and all five messages return original English.
+When FTL is missing or cannot load, `active` is `false`, `locale` is `null`, and all 130 messages return original English.
 
 ## 6. 可重复验证 / Reproducible Verification
 
@@ -104,7 +108,8 @@ pwsh -NoProfile -File scripts/test-i18n-runtime.ps1 `
 
 The script verifies Cargo 1.95.0, the upstream commit, the applied adapter, and the language pack before running:
 
-- 9 条 Rust Localizer 测试。
+- 10 条 Rust Localizer 测试。
+- 5 条 slash command 聚焦测试和 15 条命令面板测试。
 - 窄、中、宽三档 zh-CN 状态栏快照。
 - 未修改的官方英文状态栏快照。
 - `Worked for` 参数化翻译测试。
@@ -112,7 +117,8 @@ The script verifies Cargo 1.95.0, the upstream commit, the applied adapter, and 
 - 有效 FTL 中文二进制自检。
 - 缺失 FTL 英文二进制自检。
 
-- Nine Rust Localizer tests.
+- Ten Rust Localizer tests.
+- Five focused slash-command tests and 15 command-popup tests.
 - Narrow, medium, and wide zh-CN status-line snapshots.
 - The unchanged official English status-line snapshot.
 - Parameterized `Worked for` translation test.
@@ -120,19 +126,19 @@ The script verifies Cargo 1.95.0, the upstream commit, the applied adapter, and 
 - Valid-FTL Chinese binary self-check.
 - Missing-FTL English binary self-check.
 
-扩展的 `history_cell` 审计结果为 125 passed、3 failed、2 ignored。三条失败是 `pnpm_update_available_history_cell_snapshot`、`standalone_unix_update_available_history_cell_snapshot` 和 `standalone_windows_update_available_history_cell_snapshot`：上游快照仍期望 `0.0.0`，而发布源码构建显示 `0.144.1`。它们不涉及本地化调用点，不被接受或重写，也不计入运行时 smoke 的全绿声明。
+0.144.4 聚焦验证结果为：i18n `10/10`、斜杠命令 `5/5`、命令面板 `15/15`、审批 `34/34`、MCP `17/17`、启动卡片 `4 passed / 1 ignored`。唯一 ignored 测试是上游已标注的 Windows 路径渲染差异。
 
-The broader `history_cell` audit produced 125 passed, three failed, and two ignored tests. The failures are `pnpm_update_available_history_cell_snapshot`, `standalone_unix_update_available_history_cell_snapshot`, and `standalone_windows_update_available_history_cell_snapshot`: the upstream snapshots still expect `0.0.0`, while the release-source build renders `0.144.1`. They do not involve localization call sites, are neither accepted nor rewritten, and are excluded from claims that the runtime smoke is fully green.
+Focused 0.144.4 validation passed i18n `10/10`, slash commands `5/5`, command popup `15/15`, approvals `34/34`, MCP `17/17`, and session cards `4 passed / 1 ignored`. The only ignored test is the upstream-marked Windows path-rendering difference.
 
 ## 7. 同 Profile 体积证据 / Same-Profile Size Evidence
 
-体积测量使用同一固定提交、Cargo 1.95.0 和 `release --locked` profile。baseline 与 patched 两边执行相同的固定上游 Cargo.lock workspace 版本归一化（132 个 workspace 包从 `0.0.0` 对齐为 `0.144.1`），只有 patched 工作树应用 i18n 适配器。两组 worktree 和 target 使用等长绝对路径，构建环境拒绝自定义 Rust 编译器、flags、wrapper 和 release profile 覆盖。
+此前 0.144.1 的体积测量仍作为历史证据保留；0.144.4 本轮只重新验证 Debug 构建和可见演示，尚未重新执行成对的 release 体积测量。
 
-Size measurement uses the same pinned commit, Cargo 1.95.0, and `release --locked` profile. Baseline and patched builds receive the same pinned-upstream Cargo.lock workspace-version normalization (132 workspace packages aligned from `0.0.0` to `0.144.1`); only the patched worktree receives the i18n adapter. Both worktree and target pairs use equal-length absolute paths, while the build environment rejects custom Rust compilers, flags, wrappers, and release-profile overrides.
+The previous 0.144.1 size measurement remains as historical evidence. This 0.144.4 pass revalidated the Debug build and visible demo only; paired release-size measurement has not yet been rerun.
 
-机器可读结果记录于 `research/codex-0.144.1/i18n-size.json`。体积增量是设计证据而不是当前硬性上限；计划 3 会再次测量完整发布包。
+历史机器可读结果记录于 `research/codex-0.144.1/i18n-size.json`。它不应被解释为 0.144.4 的体积数据。
 
-Machine-readable results are stored in `research/codex-0.144.1/i18n-size.json`. The size delta is design evidence rather than a hard ceiling; Plan 3 measures the complete release package again.
+Historical machine-readable results are stored in `research/codex-0.144.1/i18n-size.json`; they must not be interpreted as 0.144.4 size data.
 
 | 项目 / Item | 字节 / Bytes |
 | --- | ---: |

@@ -1,0 +1,18 @@
+[package]
+name = "ccu-manager"
+version = "0.1.0"
+edition = "2024"
+description = "Codex CLI Ultra 的 Ratatui 管理界面"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.29"
+ratatui = "0.29"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

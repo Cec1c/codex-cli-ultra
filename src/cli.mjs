@@ -12,7 +12,7 @@ import {
   doctorCodexPatch,
   planCodexPatch,
   revertCodexPatch
-} from "./adapter/codex-0.144.1.mjs";
+} from "./adapter/codex-0.144.4.mjs";
 
 const USAGE = [
   "Usage:",
@@ -50,11 +50,11 @@ export async function runCli(
     await writeCatalogArtifacts(records, {
       jsonlPath: resolve(
         cwd,
-        "research/codex-0.144.1/tui-messages.jsonl"
+        "research/codex-0.144.4/tui-messages.jsonl"
       ),
       markdownPath: resolve(
         cwd,
-        "docs/i18n/codex-0.144.1-text-inventory.md"
+        "docs/i18n/codex-0.144.4-text-inventory.md"
       )
     });
     return { command: "catalog extract", records: records.length };

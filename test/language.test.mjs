@@ -11,41 +11,41 @@ const WIRED_RECORDS = [
   {
     catalogVersion: 1,
     id: "tui.history.worked-for",
-    ftlKey: "tui--history--worked-for",
+    ftlKey: "history-worked-for",
     args: [{ name: "duration", type: "string", sample: "7m 57s" }],
     mvpStatus: "wired"
   },
   {
     catalogVersion: 1,
     id: "tui.status-line.setup.apply-theme-colors",
-    ftlKey: "tui--status-line--setup--apply-theme-colors",
+    ftlKey: "status-line-apply-theme-colors",
     args: [],
     mvpStatus: "wired"
   },
   {
     catalogVersion: 1,
     id: "tui.status-line.setup.configure-title",
-    ftlKey: "tui--status-line--setup--configure-title",
+    ftlKey: "status-line-configure-title",
     args: [],
     mvpStatus: "wired"
   },
   {
     catalogVersion: 1,
     id: "tui.status-line.setup.select-items-description",
-    ftlKey: "tui--status-line--setup--select-items-description",
+    ftlKey: "status-line-select-items-description",
     args: [],
     mvpStatus: "wired"
   },
   {
     catalogVersion: 1,
     id: "tui.status-line.setup.use-theme-colors",
-    ftlKey: "tui--status-line--setup--use-theme-colors",
+    ftlKey: "status-line-use-theme-colors",
     args: [],
     mvpStatus: "wired"
   }
 ];
 
-const CATALOGUED_RECORDS = [
+const ONBOARDING_WIRED_RECORDS = [
   "api-key-billing-intro",
   "api-key-disabled-workspace",
   "paid-plan-intro",
@@ -55,19 +55,25 @@ const CATALOGUED_RECORDS = [
 ].map((name) => ({
   catalogVersion: 1,
   id: `tui.onboarding.auth.${name}`,
-  ftlKey: `tui--onboarding--auth--${name}`,
+  ftlKey: `onboarding-${name}`,
   args: [],
-  mvpStatus: "catalogued"
+  mvpStatus: "wired"
 }));
 
-const ALL_RECORDS = [...WIRED_RECORDS, ...CATALOGUED_RECORDS];
+const ALL_RECORDS = [...WIRED_RECORDS, ...ONBOARDING_WIRED_RECORDS];
 
 const VALID_FTL = [
-  "tui--status-line--setup--use-theme-colors = 使用主题颜色",
-  "tui--status-line--setup--apply-theme-colors = 应用当前 /theme 的颜色",
-  "tui--status-line--setup--configure-title = 配置状态栏",
-  "tui--status-line--setup--select-items-description = 选择要显示在状态栏中的项目。",
-  "tui--history--worked-for = 加班了 { $duration }",
+  "status-line-use-theme-colors = 使用主题颜色",
+  "status-line-apply-theme-colors = 应用当前 /theme 的颜色",
+  "status-line-configure-title = 配置状态栏",
+  "status-line-select-items-description = 选择要显示在状态栏中的项目。",
+  "onboarding-paid-plan-intro = 登录 ChatGPT，将 Codex 作为付费方案的一部分使用",
+  "onboarding-api-key-billing-intro = 或连接 API 密钥，按使用量计费",
+  "onboarding-sign-in-chatgpt = 登录 ChatGPT",
+  "onboarding-provide-api-key = 提供您自己的 API 密钥",
+  "onboarding-pay-for-usage = 按使用量付费",
+  "onboarding-api-key-disabled-workspace = 此工作区已禁用 API 密钥登录。请登录 ChatGPT 以继续。",
+  "history-worked-for = 工作了 { $duration }",
   ""
 ].join("\n");
 
@@ -115,43 +121,37 @@ async function createPackFixture({
   return { packRoot, catalogPath };
 }
 
-test("validateLanguagePack formats the five wired messages with catalog samples", async () => {
+test("validateLanguagePack formats all eleven wired messages with catalog samples", async () => {
   const { packRoot, catalogPath } = await createPackFixture();
 
   const result = await validateLanguagePack({ packRoot, catalogPath });
   assert.equal(result.locale, "zh-CN");
-  assert.equal(Object.keys(result.messages).length, 5);
-  assert.equal(result.messages["tui.history.worked-for"], "加班了 7m 57s");
+  assert.equal(Object.keys(result.messages).length, 11);
+  assert.equal(result.messages["tui.history.worked-for"], "工作了 7m 57s");
+  assert.equal(
+    result.messages["tui.onboarding.auth.sign-in-chatgpt"],
+    "登录 ChatGPT"
+  );
   assert.match(result.sourceHash, /^sha256:[a-f0-9]{64}$/);
-});
-
-test("validateLanguagePack does not require translations for catalogued records", async () => {
-  const { packRoot, catalogPath } = await createPackFixture();
-
-  const result = await validateLanguagePack({ packRoot, catalogPath });
-
-  for (const record of CATALOGUED_RECORDS) {
-    assert.equal(result.messages[record.id], undefined);
-  }
 });
 
 test("validateLanguagePack rejects a missing wired key", async () => {
   const { packRoot, catalogPath } = await createPackFixture({
     ftl: VALID_FTL.replace(
-      "tui--status-line--setup--configure-title = 配置状态栏\n",
+      "status-line-configure-title = 配置状态栏\n",
       ""
     )
   });
 
   await assert.rejects(
     validateLanguagePack({ packRoot, catalogPath }),
-    /missing required key tui--status-line--setup--configure-title/
+    /missing required key status-line-configure-title/
   );
 });
 
 test("validateLanguagePack rejects malformed FTL", async () => {
   const { packRoot, catalogPath } = await createPackFixture({
-    ftl: "tui--history--worked-for = 加班了 { $duration\n"
+    ftl: "history-worked-for = 工作了 { $duration\n"
   });
 
   await assert.rejects(
@@ -166,8 +166,8 @@ test("validateLanguagePack rejects syntax accepted only by the permissive runtim
   const { packRoot, catalogPath } = await createPackFixture({
     records,
     ftl: VALID_FTL.replace(
-      "tui--history--worked-for = 加班了 { $duration }",
-      "tui--history--worked-for = { NUMBER($duration minimumFractionDigits: 2) }"
+      "history-worked-for = 工作了 { $duration }",
+      "history-worked-for = { NUMBER($duration minimumFractionDigits: 2) }"
     )
   });
 
@@ -203,34 +203,34 @@ test("validateLanguagePack can explicitly skip resource hash verification", asyn
     verifyHashes: false
   });
 
-  assert.equal(Object.keys(result.messages).length, 5);
+  assert.equal(Object.keys(result.messages).length, 11);
 });
 
 test("validateLanguagePack rejects an empty formatted translation", async () => {
   const { packRoot, catalogPath } = await createPackFixture({
     ftl: VALID_FTL.replace(
-      "tui--status-line--setup--configure-title = 配置状态栏",
-      'tui--status-line--setup--configure-title = { "" }'
+      "status-line-configure-title = 配置状态栏",
+      'status-line-configure-title = { "" }'
     )
   });
 
   await assert.rejects(
     validateLanguagePack({ packRoot, catalogPath }),
-    /empty translation for tui--status-line--setup--configure-title/
+    /empty translation for status-line-configure-title/
   );
 });
 
 test("validateLanguagePack rejects a translation missing duration", async () => {
   const { packRoot, catalogPath } = await createPackFixture({
     ftl: VALID_FTL.replace(
-      "tui--history--worked-for = 加班了 { $duration }",
-      "tui--history--worked-for = 加班了"
+      "history-worked-for = 工作了 { $duration }",
+      "history-worked-for = 工作了"
     )
   });
 
   await assert.rejects(
     validateLanguagePack({ packRoot, catalogPath }),
-    /translation tui--history--worked-for does not use argument duration/
+    /translation history-worked-for does not use argument duration/
   );
 });
 
@@ -273,30 +273,23 @@ test("validateLanguagePack rejects duplicate fallback locales", async () => {
   );
 });
 
-test("validateLanguagePack rejects a mismatched logical ID alias", async () => {
+test("validateLanguagePack rejects an invalid Fluent message ID", async () => {
   const records = structuredClone(ALL_RECORDS);
   const record = records.find(
     (item) => item.id === "tui.status-line.setup.configure-title"
   );
-  record.ftlKey = "tui--status-line--setup--configure-heading";
-  const { packRoot, catalogPath } = await createPackFixture({
-    records,
-    ftl: VALID_FTL.replace(
-      "tui--status-line--setup--configure-title = 配置状态栏",
-      "tui--status-line--setup--configure-heading = 配置状态栏"
-    )
-  });
+  record.ftlKey = "Status.Line";
+  const { packRoot, catalogPath } = await createPackFixture({ records });
 
   await assert.rejects(
     validateLanguagePack({ packRoot, catalogPath }),
-    /ftlKey .* must equal tui--status-line--setup--configure-title/
+    /invalid Fluent message id Status\.Line/
   );
 });
 
 test("validateLanguagePack rejects a noncanonical logical message ID", async () => {
   const records = structuredClone(ALL_RECORDS);
   records[5].id = "Tui.onboarding.auth.api-key-billing-intro";
-  records[5].ftlKey = records[5].id.replaceAll(".", "--");
   const { packRoot, catalogPath } = await createPackFixture({ records });
 
   await assert.rejects(
@@ -316,15 +309,14 @@ test("validateLanguagePack rejects an unknown catalog MVP status", async () => {
   );
 });
 
-test("validateLanguagePack rejects a catalog with only four wired records", async () => {
+test("validateLanguagePack does not require translations for catalogued records", async () => {
   const records = structuredClone(ALL_RECORDS);
   records[0].mvpStatus = "catalogued";
   const { packRoot, catalogPath } = await createPackFixture({ records });
 
-  await assert.rejects(
-    validateLanguagePack({ packRoot, catalogPath }),
-    /catalog must contain exactly 11 records: 5 wired and 6 catalogued/
-  );
+  const result = await validateLanguagePack({ packRoot, catalogPath });
+  assert.equal(Object.keys(result.messages).length, 10);
+  assert.equal(result.messages[records[0].id], undefined);
 });
 
 test("validateLanguagePack rejects an extra catalog record", async () => {
@@ -332,15 +324,15 @@ test("validateLanguagePack rejects an extra catalog record", async () => {
   records.push({
     catalogVersion: 1,
     id: "tui.extra.message",
-    ftlKey: "tui--extra--message",
+    ftlKey: "extra-message",
     args: [],
-    mvpStatus: "catalogued"
+    mvpStatus: "wired"
   });
   const { packRoot, catalogPath } = await createPackFixture({ records });
 
   await assert.rejects(
     validateLanguagePack({ packRoot, catalogPath }),
-    /catalog must contain exactly 11 records: 5 wired and 6 catalogued/
+    /missing required key extra-message/
   );
 });
 
@@ -391,7 +383,7 @@ test("validateLanguagePack accepts a nonempty third-party SPDX license", async (
 
   const result = await validateLanguagePack({ packRoot, catalogPath });
 
-  assert.equal(Object.keys(result.messages).length, 5);
+  assert.equal(Object.keys(result.messages).length, 11);
 });
 
 test("validateLanguagePack rejects an empty manifest license", async () => {

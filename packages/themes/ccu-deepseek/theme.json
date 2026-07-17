@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "type": "theme",
+  "id": "ccu.deepseek",
+  "displayName": "CCU DeepSeek",
+  "version": "0.1.0",
+  "statusLine": {
+    "separator": " │ ",
+    "progressWidth": 10,
+    "filled": "█",
+    "empty": "░",
+    "colors": {
+      "model": "#5eead4",
+      "usage": "#93c5fd",
+      "progress": "#a3e635",
+      "time": "#fbbf24",
+      "quota": "#f472b6",
+      "separator": "#64748b"
+    }
+  },
+  "welcome": {
+    "title": "#5eead4",
+    "version": "#94a3b8",
+    "label": "#64748b",
+    "model": "#f8fafc",
+    "path": "#86efac",
+    "permissions": "#f472b6"
+  }
+}

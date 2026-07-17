@@ -21,7 +21,7 @@ async function createSourceTree(source) {
 const specs = [
   {
     id: "tui.sample.beta",
-    ftlKey: "tui--sample--beta",
+    ftlKey: "sample-beta",
     surface: "sample",
     kind: "plain",
     translation: "required",
@@ -33,7 +33,7 @@ const specs = [
   },
   {
     id: "tui.sample.alpha",
-    ftlKey: "tui--sample--alpha",
+    ftlKey: "sample-alpha",
     surface: "sample",
     kind: "plain",
     translation: "required",
@@ -58,25 +58,25 @@ test("extractCatalog returns stable records with real line numbers and fingerpri
   assert.equal(records[1].source.line, 3);
   assert.deepEqual(records[0].source.lines, [2]);
   assert.match(records[0].source.fingerprint, /^sha256:[a-f0-9]{64}$/);
-  assert.equal(records[0].source.release, "rust-v0.144.1");
+  assert.equal(records[0].source.release, "rust-v0.144.4");
   assert.equal(
     records[0].source.commit,
-    "44918ea10c0f99151c6710411b4322c2f5c96bea"
+    "8c68d4c87dc54d38861f5114e920c3de2efa5876"
   );
   assert.equal(records[0].catalogVersion, 1);
   assert.deepEqual(records[0].args, []);
   assert.equal(records[0].expectedOccurrences, 1);
 });
 
-test("catalog keeps six researched messages and adds Worked for as the fifth wired message", () => {
-  assert.equal(MESSAGE_SPECS.length, 11);
+test("catalog wires the core UI and all slash command descriptions", () => {
+  assert.equal(MESSAGE_SPECS.length, 129);
   assert.equal(
     MESSAGE_SPECS.filter((item) => item.mvpStatus === "wired").length,
-    5
+    129
   );
   assert.equal(
     MESSAGE_SPECS.filter((item) => item.mvpStatus === "catalogued").length,
-    6
+    0
   );
   const worked = MESSAGE_SPECS.find(
     (item) => item.id === "tui.history.worked-for"
@@ -90,6 +90,11 @@ test("catalog keeps six researched messages and adds Worked for as the fifth wir
   );
   assert.deepEqual(existing.args, []);
   assert.equal(existing.expectedOccurrences, 1);
+  const slashModel = MESSAGE_SPECS.find(
+    (item) => item.id === "tui.slash-command.description.model"
+  );
+  assert.equal(slashModel.ftlKey, "slash-model-description");
+  assert.equal(slashModel.english, "choose what model and reasoning effort to use");
 });
 
 test("extractCatalog records every source line for a repeated semantic message", async () => {
@@ -99,7 +104,7 @@ test("extractCatalog records every source line for a repeated semantic message",
   const [record] = await extractCatalog(sourceRoot, [
     {
       id: "tui.history.worked-for",
-      ftlKey: "tui--history--worked-for",
+      ftlKey: "history-worked-for",
       surface: "history",
       kind: "parameterized",
       translation: "required",
@@ -147,7 +152,7 @@ test("writeCatalogArtifacts emits deterministic JSONL and a Chinese-first report
   const markdown = await readFile(markdownPath, "utf8");
   assert.equal(jsonl.split("\n").filter(Boolean).length, 2);
   assert.equal(JSON.parse(jsonl.split("\n")[0]).id, "tui.sample.alpha");
-  assert.match(markdown, /^# Codex CLI 0\.144\.1 TUI 文本目录/m);
+  assert.match(markdown, /^# Codex CLI 0\.144\.4 TUI 文本目录/m);
   assert.match(markdown, /## 已接入 MVP \/ Wired in MVP/);
   assert.match(markdown, /tui\.sample\.beta/);
   assert.equal(markdown.endsWith("\n\n"), false);

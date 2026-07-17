@@ -1,26 +1,76 @@
 # Codex CLI Ultra
 
-> **早期状态：** 这是一个非官方、非常早期的实验仓库。首个锁定版本的 i18n MVP 已经完成，但接口、包规范和安装方式仍不稳定，不适合替代官方发行版。
+> **v0.1.0：** 这是一个非官方的 Windows x64 社区发行版。它保留 npm 安装的官方英文 Codex 作为备份，并把带外部 i18n、主题状态栏和 Rust 管理界面的 CCU fork 作为 `codex` 默认入口。
 >
-> **Early status:** This is an unofficial, very early experimental repository. The first version-locked i18n MVP now works, but its interfaces, package specifications, and installation path remain unstable and are not a replacement for the official distribution.
+> **v0.1.0:** This is an unofficial Windows x64 community distribution. It keeps the npm-installed official English Codex as a backup and makes the CCU fork with external i18n, themed status line, and a Rust manager the default `codex` entry point.
 
-Codex CLI Ultra 希望在不把项目绑定为长期源码分叉的前提下，为 Codex CLI 探索可持续维护的本地化与界面扩展能力。
+Codex CLI Ultra 通过职责分离的长期 fork 和轻量管理器，为 Codex CLI 探索可持续维护的本地化与界面扩展能力。
 
-Codex CLI Ultra explores maintainable localization and interface extension capabilities for Codex CLI without defining the project as a permanent source fork.
+Codex CLI Ultra explores maintainable localization and interface extension capabilities through a responsibility-separated long-lived fork and a lightweight manager.
 
 ## 当前 MVP / Current MVP
 
-当前原型锁定 Codex CLI 0.144.1：从真实源码整理 11 条 TUI 文本，其中 4 条状态栏设置文本和参数化的 `Worked for {duration}` 已接入简体中文。JavaScript 在安装或验证阶段严格检查声明式 Fluent/FTL 语言包，Rust 薄运行时直接加载外部 FTL；语言包缺失、损坏、缺键、参数错误或翻译为空时继续使用调用点原有英文。
+当前首个 fork Release 基于 Codex CLI 0.144.5，显示版本为 `0.144.5-ccu.i18n.1`。外部简体中文 FTL 覆盖 129 条已接线文本；隐藏自检覆盖 133 条消息，包含启动欢迎页、状态栏、登录引导、斜杠命令、`/status`、审批、输入占位、MCP 和常用错误提示。语言包缺失、损坏、缺键、参数错误或翻译为空时逐条回退到二进制内置英文。
 
-The current prototype is pinned to Codex CLI 0.144.1. It catalogs 11 real TUI messages and wires four status-line setup messages plus parameterized `Worked for {duration}` text to Simplified Chinese. JavaScript strictly validates declarative Fluent/FTL language packs during installation or verification, while a thin Rust runtime loads external FTL directly and preserves call-site English when the pack is missing, damaged, incomplete, has invalid arguments, or produces empty output.
+The first fork Release is based on Codex CLI 0.144.5 and reports `0.144.5-ccu.i18n.1`. Its external Simplified Chinese FTL wires 129 catalogued strings, while the hidden runtime probe covers 133 messages across the welcome card, status line, onboarding, slash commands, `/status`, approvals, composer placeholders, MCP, and common errors. Missing, damaged, incomplete, or invalid translations fall back per message to the English compiled into the binary.
 
-适配器会校验精确上游提交和源码锚点，以事务方式应用并支持回滚。PowerShell 7 是首个操作入口；当前仍需要从源码构建测试版本，不会修改未知 Codex 版本。
+fork 每 6 小时检查一次上游稳定 Release，从对应 `rust-vX.Y.Z` tag 建立发布分支并重放 CCU 提交；冲突时创建告警 Issue 并停止。CCU 自动读取 fork Release channel、校验 manifest/大小/SHA256、事务安装并清理旧 CCU 版本。
 
-The adapter verifies the exact upstream commit and source anchors, applies changes transactionally, and supports rollback. PowerShell 7 is the first operator entry point. The MVP still requires a source build and never modifies an unknown Codex version.
+The fork checks upstream stable Releases every six hours, creates a release branch from the matching `rust-vX.Y.Z` tag, and replays the CCU commits. Conflicts open an alert issue and stop the release. CCU follows the fork Release channel, validates the manifest, size, and SHA256, installs transactionally, and removes stale CCU versions.
 
-复现步骤见 [i18n MVP 使用说明](docs/i18n/mvp-usage.md)，运行时合同与验证证据见 [Rust i18n 运行时 MVP](docs/i18n/runtime-mvp.md)，已整理文本见 [Codex CLI 0.144.1 TUI 文本目录](docs/i18n/codex-0.144.1-text-inventory.md)。随机 `Worked for` 短语仍属于后续设计，见 [Worked for 短语包创意](docs/ideas/worked-for-phrases.md)。
+实现与恢复检查点见 [进度记录](docs/PLAN2_PROGRESS.md)，自动发布契约见 [CCU、fork 与上游跟踪计划](docs/CCU_I18N_FORK_PLAN.md)，已整理文本见 [Codex CLI 0.144.4 TUI 文本目录](docs/i18n/codex-0.144.4-text-inventory.md)。
 
-See the [i18n MVP usage guide](docs/i18n/mvp-usage.md) for reproduction steps, the [Rust i18n runtime MVP](docs/i18n/runtime-mvp.md) for runtime contracts and validation evidence, and the [Codex CLI 0.144.1 TUI text inventory](docs/i18n/codex-0.144.1-text-inventory.md) for catalogued messages. Random `Worked for` phrases remain a later design recorded in the [Worked for phrase-pack idea](docs/ideas/worked-for-phrases.md).
+See the [progress checkpoint](docs/PLAN2_PROGRESS.md), the [CCU/fork/upstream release plan](docs/CCU_I18N_FORK_PLAN.md), and the [Codex CLI 0.144.4 TUI text inventory](docs/i18n/codex-0.144.4-text-inventory.md).
+
+## 当前架构 / Current Architecture
+
+- [`Cec1c/codex`](https://github.com/Cec1c/codex) 负责 Rust/TUI i18n 接口、`/language`、英文回退和编译后的 fork 二进制。
+- 本仓库负责 FTL 语言包、官方版与 fork 共存、下载校验、安装更新、版本状态和后续界面预设。
+- fork Release 使用 `ccu-rust-vX.Y.Z-rN`，二进制显示为 `X.Y.Z-ccu.i18n.N`；同一上游版本的 fork 修复只递增 `N`。
+- GitHub Actions 每 6 小时轮询上游稳定 Release；冲突时停止并告警，不覆盖 fork 改动。
+- 安装后只保留两份 Codex：官方 npm 英文版备份，以及一个当前运行中的 CCU Release；旧 CCU Release 自动清理。
+- CCU shim 被写入用户 PATH，并排在官方 npm shim 前；因此新终端中的 `codex --yolo` 默认启动 CCU。
+- 用户安装只需要编译后的二进制、管理器和内容包，不需要下载完整 Codex Rust 源码。
+
+The Rust/TUI mechanism and compiled binaries live in `Cec1c/codex`; this repository manages FTL language packs, coexistence with official Codex, verified downloads, installation, updates, version status, and later UI presets. Users do not need the full Codex source tree.
+
+## 安装与验证 / Install and verify
+
+PowerShell 7 本地源码安装：
+
+```powershell
+cd D:\codex-cli-ultra
+.\install.ps1 -ForkReleaseDir <解压后的-fork-Release-目录>
+```
+
+从 GitHub Release 安装：下载 `codex-cli-ultra-v0.1.0-windows-x64.zip` 和同名 `.sha256`，核对 SHA256，解压后运行其中的 `install.ps1`。安装器会发现官方 npm Codex、安装 fork、同步中文/主题、创建管理 shim，并更新用户 PATH。
+
+```powershell
+codex-ultra version
+codex-ultra status --check
+codex --version
+codex --yolo
+ccu-manager
+```
+
+预期 `codex --version` 包含 `0.144.5-ccu.i18n.1`；`codex --yolo` 显示中文欢迎页、`YOLO 模式` 与主题状态栏。官方备份路径可由 `codex-ultra status --json` 查看。
+
+The GitHub Release ZIP contains the payload installer. Verify its adjacent SHA256 file, extract it, and run `install.ps1` in PowerShell 7. A new terminal should resolve `codex` to the CCU shim, while `codex-ultra status --json` records the retained official backup.
+
+管理执行器提供：
+
+```text
+codex-ultra version
+codex-ultra status --check
+codex-ultra install
+codex-ultra update
+codex-ultra content sync
+ccu-manager
+```
+
+Rust 管理器有“状态、语言包、主题包”三个页面，支持刷新、在线检查、更新和本地 FTL/主题同步；主题包接口已为后续布局与配色扩展预留。
+
+详细版本与自动发布契约见 [CCU、Codex i18n fork 与上游跟踪实施计划](docs/CCU_I18N_FORK_PLAN.md)。
 
 ## 两个长期方向 / Two Long-Term Directions
 
@@ -44,11 +94,11 @@ Theme packs are intended to go beyond color replacement. The long-term vision in
 
 The first theme milestone is a highly customizable status line: theme authors should be able to compose segments, control order and priority, define formatting and styles, and degrade gracefully when terminal width is limited.
 
-## 初期入口 / Initial Entry Point
+## 运行与分发入口 / Runtime and distribution entry points
 
-项目会首先从 PowerShell 7 入口开始，优先支持 Windows 11。这个选择用于尽快跑通探测、安装、卸载、诊断和回滚流程，并不代表未来只支持 Windows。
+v0.1.0 使用 PowerShell 7 安装器、Node.js 管理执行器和 Rust Ratatui 管理界面，优先支持 Windows 11。后续平台可以复用相同的 Release manifest、外部语言包和主题包合同。
 
-The project will begin with a PowerShell 7 entry point and prioritize Windows 11. This provides a practical path to validate detection, installation, removal, diagnostics, and rollback, without making the project Windows-only in the long term.
+v0.1.0 uses a PowerShell 7 installer, a Node.js management executor, and a Rust Ratatui manager, with Windows 11 as the first supported platform. Future platforms can reuse the same Release manifest, external language-pack, and theme-pack contracts.
 
 部分适配设计会参考 [Codex 的开源代码](https://github.com/openai/codex)，用于理解现有字符串、TUI 渲染和配置入口。兼容层应保持轻量、可验证，并对 Codex 版本变化明确失败，而不是静默破坏用户安装。
 

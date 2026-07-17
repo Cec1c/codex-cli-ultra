@@ -6,11 +6,13 @@ param(
 
     [string]$CodexSource,
 
-    [string]$SourceCatalog = "research/codex-0.144.1/tui-messages.jsonl",
+    [string]$SourceCatalog = "research/codex-0.144.4/tui-messages.jsonl",
 
     [string]$Pack = "packages/languages/zh-CN",
 
     [string]$CodexBinary,
+
+    [string]$LanguagePreferencePath = (Join-Path ([System.IO.Path]::GetTempPath()) "codex-ultra-demo-language-preference.txt"),
 
     [Parameter(ValueFromRemainingArguments)]
     [string[]]$CodexArguments
@@ -188,6 +190,11 @@ switch ($Action) {
         if ([System.IO.Path]::GetExtension($binaryPath) -ine ".exe") {
             throw "-CodexBinary must point to a Windows .exe file: $binaryPath"
         }
+        $preferencePath = Resolve-ProjectPath -Path $LanguagePreferencePath -AllowMissing
+        $preferenceDirectory = Split-Path -Parent $preferencePath
+        if (-not (Test-Path -LiteralPath $preferenceDirectory -PathType Container)) {
+            throw "Language preference directory does not exist: $preferenceDirectory"
+        }
 
         $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
         $startInfo.FileName = $binaryPath
@@ -195,6 +202,7 @@ switch ($Action) {
         $startInfo.WorkingDirectory = (Get-Location).ProviderPath
         $startInfo.Environment["CODEX_ULTRA_LOCALE"] = $packLocale
         $startInfo.Environment["CODEX_ULTRA_FTL_PATH"] = $languagePath
+        $startInfo.Environment["CODEX_ULTRA_LANGUAGE_PREFERENCE_PATH"] = $preferencePath
         foreach ($argument in $CodexArguments) {
             $startInfo.ArgumentList.Add($argument)
         }

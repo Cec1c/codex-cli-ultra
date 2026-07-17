@@ -1,0 +1,28 @@
+name: 翻译贡献 / Translation
+description: 新增或改进 FTL 翻译
+title: "[i18n] "
+labels: ["i18n"]
+body:
+  - type: input
+    id: locale
+    attributes:
+      label: Locale
+      placeholder: zh-CN
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 文本范围 / Scope
+      description: 列出调用点、FTL 键和英文回退。
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 检查 / Checks
+      options:
+        - label: 已保留全部 Fluent 参数名
+          required: true
+        - label: 已验证缺键或坏包时回退英文
+          required: true

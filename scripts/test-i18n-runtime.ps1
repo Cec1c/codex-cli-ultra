@@ -9,9 +9,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$PinnedCommit = "44918ea10c0f99151c6710411b4322c2f5c96bea"
+$PinnedCommit = "8c68d4c87dc54d38861f5114e920c3de2efa5876"
 $RequiredCargoVersion = "1.95.0"
-$CatalogPath = Join-Path $ProjectRoot "research/codex-0.144.1/tui-messages.jsonl"
+$CatalogPath = Join-Path $ProjectRoot "research/codex-0.144.4/tui-messages.jsonl"
 $PackRoot = Join-Path $ProjectRoot "packages/languages/zh-CN"
 $FtlPath = Join-Path $PackRoot "messages.ftl"
 $CliPath = Join-Path $ProjectRoot "src/cli.mjs"
@@ -253,7 +253,7 @@ if ($doctor.PSObject.Properties.Name -contains "recoveryState") {
 Invoke-CargoTest `
     -Label "Run Rust i18n unit tests" `
     -Filter "i18n::tests" `
-    -ExpectedPassed 9 `
+    -ExpectedPassed 10 `
     -CargoPath $cargo `
     -RustRoot $rustRoot
 Invoke-CargoTest `
@@ -305,7 +305,9 @@ try {
             "tui.status-line.setup.apply-theme-colors" = "应用当前 /theme 的颜色"
             "tui.status-line.setup.configure-title" = "配置状态栏"
             "tui.status-line.setup.select-items-description" = "选择要显示在状态栏中的项目。"
-            "tui.history.worked-for" = "加班了 7m 57s"
+            "tui.history.worked-for" = "工作了 7m 57s"
+            "tui.slash-command.description.model" = "选择模型和推理强度"
+            "tui.slash-command.description.status" = "显示当前会话配置和令牌用量"
         })
 
     $env:CODEX_ULTRA_FTL_PATH = Join-Path $env:TEMP ("codex-ultra-missing-{0}.ftl" -f [guid]::NewGuid().ToString("N"))

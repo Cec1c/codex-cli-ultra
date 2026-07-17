@@ -1,0 +1,29 @@
+name: 错误报告 / Bug report
+description: 报告安装、更新、语言包、主题或 TUI 问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述 / Summary
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: 版本 / Versions
+      description: 请提供 CCU、fork 和官方 Codex 版本。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤 / Reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / Logs
+      render: text
