@@ -8,7 +8,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { discoverOfficialCodex } from "../../src/discovery/official-codex.mjs";
@@ -135,17 +135,18 @@ test("uses npm.cmd root -g locally when no npm root is injected", async () => {
   });
 
   await assertSamePath(result.binaryPath, fixture.binaryPath);
-  assert.deepEqual(calls, [
+  assert.equal(calls.length, 1);
+  await assertSamePath(calls[0].file, nodePath);
+  await assertSamePath(calls[0].arguments_[0], npmCliPath);
+  assert.deepEqual(calls[0].arguments_.slice(1), ["root", "-g"]);
+  await assertSamePath(calls[0].options.env.PATH, npmBin);
+  assert.deepEqual(
     {
-      file: resolve(nodePath),
-      arguments_: [resolve(npmCliPath), "root", "-g"],
-      options: {
-        env: { PATH: resolve(npmBin) },
-        encoding: "utf8",
-        windowsHide: true
-      }
-    }
-  ]);
+      encoding: calls[0].options.encoding,
+      windowsHide: calls[0].options.windowsHide
+    },
+    { encoding: "utf8", windowsHide: true }
+  );
 });
 
 test("refuses to execute npm from relative or network PATH entries", async () => {
