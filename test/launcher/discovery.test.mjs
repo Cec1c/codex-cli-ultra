@@ -3,6 +3,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   writeFile
 } from "node:fs/promises";
@@ -14,6 +15,13 @@ import { discoverOfficialCodex } from "../../src/discovery/official-codex.mjs";
 
 const PLATFORM_PACKAGE = "@openai/codex-win32-x64";
 const TARGET = "x86_64-pc-windows-msvc";
+
+async function assertSamePath(actual, expected) {
+  assert.equal(
+    (await realpath(actual)).toLowerCase(),
+    (await realpath(expected)).toLowerCase()
+  );
+}
 
 async function createOfficialFixture({
   root,
@@ -85,13 +93,19 @@ test("discovers the exact official Windows platform package from an injected npm
     installRoot
   });
 
-  assert.deepEqual(result, {
-    version: fixture.version,
-    packageJsonPath: resolve(fixture.packageJsonPath),
-    platformPackageVersion: fixture.platformVersion,
-    platformPackageJsonPath: resolve(fixture.platformPackageJsonPath),
-    binaryPath: resolve(fixture.binaryPath)
-  });
+  assert.deepEqual(
+    {
+      version: result.version,
+      platformPackageVersion: result.platformPackageVersion
+    },
+    {
+      version: fixture.version,
+      platformPackageVersion: fixture.platformVersion
+    }
+  );
+  await assertSamePath(result.packageJsonPath, fixture.packageJsonPath);
+  await assertSamePath(result.platformPackageJsonPath, fixture.platformPackageJsonPath);
+  await assertSamePath(result.binaryPath, fixture.binaryPath);
 });
 
 test("uses npm.cmd root -g locally when no npm root is injected", async () => {
@@ -120,7 +134,7 @@ test("uses npm.cmd root -g locally when no npm root is injected", async () => {
     }
   });
 
-  assert.equal(result.binaryPath, resolve(fixture.binaryPath));
+  await assertSamePath(result.binaryPath, fixture.binaryPath);
   assert.deepEqual(calls, [
     {
       file: resolve(nodePath),
@@ -291,5 +305,5 @@ test("discovery never mutates or removes the official npm package", async () => 
     npmRoot: fixture.npmRoot,
     installRoot
   });
-  assert.equal(second.binaryPath, resolve(fixture.binaryPath));
+  await assertSamePath(second.binaryPath, fixture.binaryPath);
 });

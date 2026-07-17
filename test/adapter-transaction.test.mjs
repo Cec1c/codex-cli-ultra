@@ -452,6 +452,12 @@ async function pathExists(path) {
   }
 }
 
+function pathHasSuffix(path, suffix) {
+  const normalizedPath = path.replaceAll("\\", "/").toLowerCase();
+  const normalizedSuffix = suffix.replaceAll("\\", "/").toLowerCase();
+  return normalizedPath.endsWith(`/${normalizedSuffix}`);
+}
+
 async function writeFixtureFile(root, relativePath, content) {
   const path = join(root, ...relativePath.split("/"));
   await mkdir(dirname(path), { recursive: true });
@@ -724,7 +730,7 @@ test("revertOperations retries partial tombstone cleanup without rereading state
   );
 
   const rmImpl = async (path, options) => {
-    if (path === tombstoneRoot && options?.recursive) {
+    if (pathHasSuffix(path, "claims/active.cleanup-pending") && options?.recursive) {
       cleanupAttempts += 1;
       if (cleanupAttempts === 1) {
         await rm(join(tombstoneRoot, "state.json"), { force: true });
@@ -740,7 +746,10 @@ test("revertOperations retries partial tombstone cleanup without rereading state
     return rm(path, options);
   };
   const renameImpl = async (oldPath, newPath) => {
-    if (oldPath === stateRoot && newPath === tombstoneRoot) {
+    if (
+      pathHasSuffix(oldPath, "claims/active") &&
+      pathHasSuffix(newPath, "claims/active.cleanup-pending")
+    ) {
       stateRenames += 1;
     }
     return rename(oldPath, newPath);
@@ -1042,7 +1051,7 @@ test("create never overwrites a target that appears after preflight", async () =
       ],
       {
         linkImpl: async (existingPath, newPath) => {
-          if (!raced && newPath === targetPath) {
+          if (!raced && pathHasSuffix(newPath, "src/race.txt")) {
             raced = true;
             await writeFile(targetPath, "competitor\n", "utf8");
           }
@@ -1251,14 +1260,20 @@ test("apply forward, rollback, and cleanup all use injected fs operations", asyn
           return writeFile(path, data, ...args);
         },
         renameImpl: async (oldPath, newPath) => {
-          if (oldPath === stateRoot && newPath === tombstoneRoot) {
+          if (
+            pathHasSuffix(oldPath, STATE_DIRECTORY) &&
+            pathHasSuffix(newPath, `${STATE_DIRECTORY}.cleanup-pending`)
+          ) {
             stateTransitionSeen = true;
           }
           return rename(oldPath, newPath);
         },
         linkImpl: (...args) => link(...args),
         rmImpl: async (path, options) => {
-          if (path === tombstoneRoot && options?.recursive) {
+          if (
+            pathHasSuffix(path, `${STATE_DIRECTORY}.cleanup-pending`) &&
+            options?.recursive
+          ) {
             stateCleanupSeen = true;
           }
           return rm(path, options);
