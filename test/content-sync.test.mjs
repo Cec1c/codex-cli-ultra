@@ -47,3 +47,16 @@ test("installer guards recursive content replacement with an absolute child-path
   assert.match(packager, /Release staging directory/);
   assert.match(packager, /Release ZIP/);
 });
+
+test("PowerShell installer lets the core claim ownership before copying local payloads", async () => {
+  const source = await readFile(join(projectRoot, "install.ps1"), "utf8");
+  const installCall = source.indexOf("& node @arguments");
+  const managerCopy = source.indexOf("Copy-Item -LiteralPath $managerExecutable");
+  const contentCopy = source.indexOf("Copy-Item -LiteralPath $contentSource -Destination $content -Recurse");
+
+  assert.ok(installCall >= 0, "core install invocation must exist");
+  assert.ok(managerCopy > installCall, "manager executable must be copied after ownership");
+  assert.ok(contentCopy > installCall, "bundled content must be copied after ownership");
+  assert.match(source, /\$env:CODEX_CCU_CONTENT_ROOT = \$contentSource/);
+  assert.match(source, /Temporary content directory/);
+});

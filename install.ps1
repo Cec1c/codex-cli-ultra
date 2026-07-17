@@ -52,38 +52,52 @@ if ($installRoot.Equals([System.IO.Path]::GetFullPath($sourceRoot), [System.Stri
 }
 $bin = Join-Path $installRoot 'bin'
 $content = Assert-ChildPath -Root $installRoot -Candidate (Join-Path $installRoot 'content') -Label 'Content directory'
-New-Item -ItemType Directory -Path $bin -Force | Out-Null
+$temporaryContent = $null
 
 if ($packaged) {
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'bin\codex-ultra.mjs') -Destination $bin -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'bin\launcher.mjs') -Destination $bin -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'bin\ccu-manager.exe') -Destination $bin -Force
-    if (Test-Path -LiteralPath $content) { Remove-Item -LiteralPath $content -Recurse -Force }
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'content') -Destination $content -Recurse
+    $managerEntrypoint = Join-Path $sourceRoot 'bin\codex-ultra.mjs'
+    $managerExecutable = Join-Path $sourceRoot 'bin\ccu-manager.exe'
+    $contentSource = Join-Path $sourceRoot 'content'
 }
 else {
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'dist\codex-ultra.mjs') -Destination $bin -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'dist\launcher.mjs') -Destination $bin -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tui\target\release\ccu-manager.exe') -Destination $bin -Force
-    if (Test-Path -LiteralPath $content) { Remove-Item -LiteralPath $content -Recurse -Force }
-    New-Item -ItemType Directory -Path (Join-Path $content 'languages') -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $content 'themes') -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $content 'catalog') -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\languages\zh-CN') -Destination (Join-Path $content 'languages\zh-CN') -Recurse
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\themes\ccu-deepseek') -Destination (Join-Path $content 'themes\ccu-deepseek') -Recurse
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'research\codex-0.144.4\tui-messages.jsonl') -Destination (Join-Path $content 'catalog\tui-messages.jsonl')
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\quota.example.json') -Destination (Join-Path $content 'quota.example.json')
+    $managerEntrypoint = Join-Path $sourceRoot 'dist\codex-ultra.mjs'
+    $managerExecutable = Join-Path $sourceRoot 'tui\target\release\ccu-manager.exe'
+    $temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    $temporaryContent = Assert-ChildPath `
+        -Root $temporaryRoot `
+        -Candidate (Join-Path $temporaryRoot ("codex-cli-ultra-content-{0}" -f [guid]::NewGuid().ToString('N'))) `
+        -Label 'Temporary content directory'
+    New-Item -ItemType Directory -Path (Join-Path $temporaryContent 'languages') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $temporaryContent 'themes') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $temporaryContent 'catalog') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\languages\zh-CN') -Destination (Join-Path $temporaryContent 'languages\zh-CN') -Recurse
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\themes\ccu-deepseek') -Destination (Join-Path $temporaryContent 'themes\ccu-deepseek') -Recurse
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'research\codex-0.144.4\tui-messages.jsonl') -Destination (Join-Path $temporaryContent 'catalog\tui-messages.jsonl')
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\quota.example.json') -Destination (Join-Path $temporaryContent 'quota.example.json')
+    $contentSource = $temporaryContent
 }
 
 $env:CODEX_ULTRA_HOME = $installRoot
-$env:CODEX_CCU_CONTENT_ROOT = $content
-$arguments = @((Join-Path $bin 'codex-ultra.mjs'), 'install')
+$env:CODEX_CCU_CONTENT_ROOT = $contentSource
+$arguments = @($managerEntrypoint, 'install')
 if ($ForkReleaseDir) {
     $arguments += @('--release-dir', [System.IO.Path]::GetFullPath($ForkReleaseDir))
 }
-& node @arguments
-if ($LASTEXITCODE -ne 0) {
-    throw "codex-ultra install failed with exit code $LASTEXITCODE"
+try {
+    & node @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "codex-ultra install failed with exit code $LASTEXITCODE"
+    }
+
+    New-Item -ItemType Directory -Path $bin -Force | Out-Null
+    Copy-Item -LiteralPath $managerExecutable -Destination (Join-Path $bin 'ccu-manager.exe') -Force
+    if (Test-Path -LiteralPath $content) { Remove-Item -LiteralPath $content -Recurse -Force }
+    Copy-Item -LiteralPath $contentSource -Destination $content -Recurse
+}
+finally {
+    if ($temporaryContent -and (Test-Path -LiteralPath $temporaryContent)) {
+        Remove-Item -LiteralPath $temporaryContent -Recurse -Force
+    }
 }
 
 $env:Path = "$bin;$env:Path"
