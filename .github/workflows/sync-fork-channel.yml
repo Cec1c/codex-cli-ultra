@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- release-channels/stable.json; then
+          if [[ -z "$(git status --short -- release-channels/stable.json)" ]]; then
             exit 0
           fi
           git config user.name github-actions[bot]
