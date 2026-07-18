@@ -10,9 +10,9 @@ Codex CLI Ultra explores maintainable localization and interface extension capab
 
 ## 当前 MVP / Current MVP
 
-当前首个 fork Release 基于 Codex CLI 0.144.5，显示版本为 `0.144.5-ccu.i18n.1`。外部简体中文 FTL 覆盖 129 条已接线文本；隐藏自检覆盖 133 条消息，包含启动欢迎页、状态栏、登录引导、斜杠命令、`/status`、审批、输入占位、MCP 和常用错误提示。语言包缺失、损坏、缺键、参数错误或翻译为空时逐条回退到二进制内置英文。
+当前稳定 fork Release 基于 Codex CLI 0.144.5，显示版本为 `0.144.5-ccu.i18n.2`。外部简体中文 FTL 覆盖 129 条已接线文本；隐藏自检覆盖 133 条消息，包含启动欢迎页、状态栏、登录引导、斜杠命令、`/status`、审批、输入占位、MCP 和常用错误提示。语言包缺失、损坏、缺键、参数错误或翻译为空时逐条回退到二进制内置英文。
 
-The first fork Release is based on Codex CLI 0.144.5 and reports `0.144.5-ccu.i18n.1`. Its external Simplified Chinese FTL wires 129 catalogued strings, while the hidden runtime probe covers 133 messages across the welcome card, status line, onboarding, slash commands, `/status`, approvals, composer placeholders, MCP, and common errors. Missing, damaged, incomplete, or invalid translations fall back per message to the English compiled into the binary.
+The current stable fork Release is based on Codex CLI 0.144.5 and reports `0.144.5-ccu.i18n.2`. Its external Simplified Chinese FTL wires 129 catalogued strings, while the hidden runtime probe covers 133 messages across the welcome card, status line, onboarding, slash commands, `/status`, approvals, composer placeholders, MCP, and common errors. Missing, damaged, incomplete, or invalid translations fall back per message to the English compiled into the binary.
 
 fork 每 6 小时检查一次上游稳定 Release，从对应 `rust-vX.Y.Z` tag 建立发布分支并重放 CCU 提交；冲突时创建告警 Issue 并停止。CCU 自动读取 fork Release channel、校验 manifest/大小/SHA256、事务安装并清理旧 CCU 版本。
 
@@ -53,7 +53,7 @@ codex --yolo
 ccu-manager
 ```
 
-预期 `codex --version` 包含 `0.144.5-ccu.i18n.1`；`codex --yolo` 显示中文欢迎页、`YOLO 模式` 与主题状态栏。官方备份路径可由 `codex-ultra status --json` 查看。
+预期 `codex --version` 包含 `0.144.5-ccu.i18n.2`；`codex --yolo` 显示中文欢迎页、`YOLO 模式` 与主题状态栏。官方备份路径可由 `codex-ultra status --json` 查看。
 
 The GitHub Release ZIP contains the payload installer. Verify its adjacent SHA256 file, extract it, and run `install.ps1` in PowerShell 7. A new terminal should resolve `codex` to the CCU shim, while `codex-ultra status --json` records the retained official backup.
 
