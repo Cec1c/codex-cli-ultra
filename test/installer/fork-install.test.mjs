@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -43,7 +50,7 @@ const official = {
     "C:\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
 };
 
-async function installRevision(installRoot, revision) {
+async function installRevision(installRoot, revision, overrides = {}) {
   const assetBytes = Buffer.from(`archive-r${revision}`);
   const binaryBytes = Buffer.from(`binary-r${revision}`);
   const manifest = forkManifest(assetBytes, revision);
@@ -67,7 +74,8 @@ async function installRevision(installRoot, revision) {
       assert.deepEqual(options.phases, ["version"]);
     },
     prepareBin: async () => {},
-    addPathEntry: async () => ({ changed: false })
+    addPathEntry: async () => ({ changed: false }),
+    ...overrides
   });
   return { result, manifest, binaryBytes };
 }
@@ -86,6 +94,7 @@ test("fork install keeps only the active CCU release beside the official backup"
   assert.equal(second.result.releaseId, "0.144.5-ccu.i18n.2");
   assert.equal(second.result.state.lastKnownGood, null);
   assert.deepEqual(second.result.removedReleases, ["0.144.5-ccu.i18n.1"]);
+  assert.deepEqual(second.result.deferredReleases, []);
   assert.deepEqual(
     await readdir(join(installRoot, "releases")),
     ["0.144.5-ccu.i18n.2"]
@@ -93,4 +102,25 @@ test("fork install keeps only the active CCU release beside the official backup"
   const stored = await readState(join(installRoot, "state.json"));
   assert.equal(stored.active.releaseId, "0.144.5-ccu.i18n.2");
   assert.equal(stored.lastKnownGood, null);
+});
+
+test("fork install defers cleanup when the running Codex locks the old release", async () => {
+  const installRoot = await mkdtemp(join(tmpdir(), "ccu-fork-install-locked-"));
+  await installRevision(installRoot, 1);
+  const second = await installRevision(installRoot, 2, {
+    rm: async (path, options) => {
+      if (path.endsWith(join("releases", "0.144.5-ccu.i18n.1"))) {
+        throw Object.assign(new Error("binary is locked"), { code: "EPERM" });
+      }
+      return rm(path, options);
+    }
+  });
+
+  assert.equal(second.result.state.active.releaseId, "0.144.5-ccu.i18n.2");
+  assert.deepEqual(second.result.removedReleases, []);
+  assert.deepEqual(second.result.deferredReleases, ["0.144.5-ccu.i18n.1"]);
+  assert.deepEqual(
+    (await readdir(join(installRoot, "releases"))).sort(),
+    ["0.144.5-ccu.i18n.1", "0.144.5-ccu.i18n.2"]
+  );
 });

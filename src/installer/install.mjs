@@ -80,7 +80,17 @@ function errorWithOutput(message, result) {
   );
 }
 
-async function pruneInactiveReleases(installRoot, activeReleaseId, options = {}) {
+const DEFERRED_RELEASE_CLEANUP_CODES = new Set([
+  "EBUSY",
+  "ENOTEMPTY",
+  "EPERM"
+]);
+
+export async function pruneInactiveReleases(
+  installRoot,
+  activeReleaseId,
+  options = {}
+) {
   const list = options.readdir ?? readdir;
   const remove = options.rm ?? rm;
   const releasesRoot = join(installRoot, "releases");
@@ -92,16 +102,22 @@ async function pruneInactiveReleases(installRoot, activeReleaseId, options = {})
     throw error;
   }
 
-  const removed = [];
+  const removedReleases = [];
+  const deferredReleases = [];
   for (const entry of entries) {
     if (entry.name === activeReleaseId) continue;
-    await remove(join(releasesRoot, entry.name), {
-      recursive: true,
-      force: true
-    });
-    removed.push(entry.name);
+    try {
+      await remove(join(releasesRoot, entry.name), {
+        recursive: true,
+        force: true
+      });
+      removedReleases.push(entry.name);
+    } catch (error) {
+      if (!DEFERRED_RELEASE_CLEANUP_CODES.has(error?.code)) throw error;
+      deferredReleases.push(entry.name);
+    }
   }
-  return removed;
+  return { removedReleases, deferredReleases };
 }
 
 function runProcess(executable, args, options = {}) {
@@ -747,7 +763,7 @@ export async function installForkFromProvider(options) {
       }
     });
     stateSwitched = true;
-    const removedReleases = await pruneInactiveReleases(
+    const cleanup = await pruneInactiveReleases(
       installRoot,
       buildRecord.releaseId,
       options
@@ -757,7 +773,7 @@ export async function installForkFromProvider(options) {
       releaseId,
       manifest,
       state: nextState,
-      removedReleases
+      ...cleanup
     };
   } catch (error) {
     if (pathAdded && !stateSwitched) {
