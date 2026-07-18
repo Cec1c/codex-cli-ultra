@@ -14,6 +14,20 @@ function assertExactKeys(value, keys, label) {
   }
 }
 
+function assertAllowedKeys(value, requiredKeys, optionalKeys, label) {
+  const actual = Object.keys(value);
+  const allowed = new Set([...requiredKeys, ...optionalKeys]);
+  const unknown = actual.filter((key) => !allowed.has(key));
+  const missing = requiredKeys.filter((key) => !Object.hasOwn(value, key));
+  if (unknown.length > 0 || missing.length > 0) {
+    const suffix = [
+      missing.length > 0 ? `missing: ${missing.join(", ")}` : null,
+      unknown.length > 0 ? `unknown: ${unknown.join(", ")}` : null
+    ].filter(Boolean).join("; ");
+    throw new Error(`${label} has invalid keys (${suffix})`);
+  }
+}
+
 function nonempty(value, label) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`${label} must be a non-empty string`);
@@ -44,13 +58,18 @@ export function validateThemePack(value) {
   }
 
   assertRecord(value.statusLine, "theme.statusLine");
-  assertExactKeys(
+  assertAllowedKeys(
     value.statusLine,
     ["separator", "progressWidth", "filled", "empty", "colors"],
+    ["modelReasoningStyle"],
     "theme.statusLine"
   );
   if (!Number.isSafeInteger(value.statusLine.progressWidth) || value.statusLine.progressWidth < 4 || value.statusLine.progressWidth > 30) {
     throw new Error("theme.statusLine.progressWidth must be an integer from 4 to 30");
+  }
+  const modelReasoningStyle = value.statusLine.modelReasoningStyle ?? "spaced";
+  if (!["spaced", "bracketed"].includes(modelReasoningStyle)) {
+    throw new Error("theme.statusLine.modelReasoningStyle must be spaced or bracketed");
   }
   assertRecord(value.statusLine.colors, "theme.statusLine.colors");
   assertExactKeys(
@@ -77,6 +96,7 @@ export function validateThemePack(value) {
       progressWidth: value.statusLine.progressWidth,
       filled: nonempty(value.statusLine.filled, "theme.statusLine.filled"),
       empty: nonempty(value.statusLine.empty, "theme.statusLine.empty"),
+      modelReasoningStyle,
       colors: Object.fromEntries(
         Object.entries(value.statusLine.colors).map(([key, value]) => [
           key,

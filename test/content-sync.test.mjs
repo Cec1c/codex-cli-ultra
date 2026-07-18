@@ -36,6 +36,21 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
     await readFile(join(installRoot, "languages", "zh-CN", "messages.ftl"), "utf8"),
     /session-card-yolo-mode = YOLO 模式/
   );
+  const theme = JSON.parse(
+    await readFile(join(installRoot, "themes", "ccu.deepseek", "theme.json"), "utf8")
+  );
+  assert.equal(theme.statusLine.separator, " │ ");
+  assert.equal(theme.statusLine.modelReasoningStyle, "bracketed");
+  const quotaExample = JSON.parse(
+    await readFile(join(installRoot, "quota.example.json"), "utf8")
+  );
+  assert.deepEqual(
+    quotaExample.accounts.map(({ balance, currency }) => ({ balance, currency })),
+    [
+      { balance: 5.96, currency: "CNY" },
+      { balance: 12, currency: "CNY" }
+    ]
+  );
 });
 
 test("installer guards recursive content replacement with an absolute child-path check", async () => {

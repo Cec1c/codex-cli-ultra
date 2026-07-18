@@ -2,11 +2,15 @@
   "accounts": [
     {
       "plan": "plus",
-      "remainingPercent": 75
+      "remainingPercent": 75,
+      "balance": 5.96,
+      "currency": "CNY"
     },
     {
       "plan": "pro20x",
-      "remainingPercent": 50
+      "remainingPercent": 50,
+      "balance": 12,
+      "currency": "CNY"
     }
   ]
 }
