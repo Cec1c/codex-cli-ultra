@@ -1,12 +1,17 @@
+import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
 import { resolveInstallRoot } from "./config/constants.mjs";
 import { syncBundledContent } from "./content/sync.mjs";
 import { discoverOfficialCodex } from "./discovery/official-codex.mjs";
 import { installManagementBin } from "./installer/bin.mjs";
-import { installForkFromProvider } from "./installer/install.mjs";
+import {
+  installForkFromProvider,
+  pruneInactiveReleases
+} from "./installer/install.mjs";
 import {
   addUserPathEntry,
   removeUserPathEntry
@@ -48,6 +53,66 @@ async function readOptionalState(path, readStateImpl) {
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw error;
+  }
+}
+
+async function cleanupInstalledReleases(options) {
+  const state = await readOptionalState(
+    join(options.installRoot, "state.json"),
+    options.readState ?? readState
+  );
+  if (state?.active === null || state?.active === undefined) {
+    return { removedReleases: [], deferredReleases: [] };
+  }
+  return (options.pruneInactiveReleases ?? pruneInactiveReleases)(
+    options.installRoot,
+    state.active.releaseId,
+    options
+  );
+}
+
+export async function waitForInactiveReleaseCleanup(options) {
+  const sleep = options.delay ?? delay;
+  const intervalMs = options.cleanupIntervalMs ?? 5_000;
+  const maxAttempts = options.cleanupMaxAttempts ?? 17_280;
+  let cleanup = { removedReleases: [], deferredReleases: [] };
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    cleanup = await cleanupInstalledReleases(options);
+    if (cleanup.deferredReleases.length === 0) return cleanup;
+    await sleep(intervalMs);
+  }
+  return cleanup;
+}
+
+function scheduleDeferredReleaseCleanup(options) {
+  const spawnDetached = options.spawnDetached ?? spawn;
+  const managerPath = join(options.installRoot, "bin", "codex-ultra.mjs");
+  const child = spawnDetached(
+    options.execPath ?? process.execPath,
+    [managerPath, "__cleanup-releases"],
+    {
+      detached: true,
+      windowsHide: true,
+      stdio: "ignore",
+      env: {
+        ...options.env,
+        CODEX_ULTRA_HOME: options.installRoot
+      }
+    }
+  );
+  child.once?.("error", () => {});
+  child.unref?.();
+  return child.pid ?? null;
+}
+
+function scheduleCleanupIfNeeded(cleanup, options) {
+  if (cleanup.deferredReleases.length === 0) return false;
+  try {
+    const schedule =
+      options.scheduleDeferredCleanup ?? scheduleDeferredReleaseCleanup;
+    return schedule(options) !== false;
+  } catch {
+    return false;
   }
 }
 
@@ -216,6 +281,13 @@ export async function manageMain(options = {}) {
     githubToken: options.githubToken ?? env.GITHUB_TOKEN
   };
 
+  if (command === "__cleanup-releases") {
+    await (
+      options.waitForInactiveReleaseCleanup ?? waitForInactiveReleaseCleanup
+    )(context);
+    return 0;
+  }
+
   if (command === "content" && args[1] === "sync") {
     const managerSource = options.managerSource ?? resolve(process.argv[1]);
     const contentRoot = resolve(
@@ -257,26 +329,51 @@ export async function manageMain(options = {}) {
   if (command === "install" || command === "update") {
     const release = await resolveProvider(args.slice(1), context);
     const current = await collectStatus(context);
+    const managerSource = options.managerSource ?? resolve(process.argv[1]);
+    const launcherSource = options.launcherSource ?? join(
+      dirname(managerSource),
+      "launcher.mjs"
+    );
+    const prepareBin = options.prepareBin ?? (({ binDirectory }) =>
+      installManagementBin({
+        binDirectory,
+        managerSource,
+        launcherSource
+      }));
+    const contentRoot = resolve(
+      options.contentRoot ??
+        env.CODEX_CCU_CONTENT_ROOT ??
+        join(dirname(managerSource), "..")
+    );
     if (
       current.installedManifest !== null &&
       compareForkReleases(current.installedManifest, release.manifest) >= 0
     ) {
+      await prepareBin({
+        installRoot,
+        binDirectory: join(installRoot, "bin")
+      });
+      const content = await (options.syncBundledContent ?? syncBundledContent)({
+        contentRoot,
+        installRoot,
+        env
+      });
+      const cleanup = await cleanupInstalledReleases(context);
+      const cleanupScheduled = scheduleCleanupIfNeeded(cleanup, context);
       const report = {
         changed: false,
         releaseId: current.fork.releaseId,
         displayVersion: current.fork.displayVersion,
-        message: "installed fork is already current or newer"
+        message: "installed fork is already current or newer",
+        content,
+        ...cleanup,
+        cleanupScheduled
       };
       if (json) writeJson(stdout, report);
       else stdout.write(`${report.message}: ${report.displayVersion}\n`);
       return 0;
     }
 
-    const managerSource = options.managerSource ?? resolve(process.argv[1]);
-    const launcherSource = options.launcherSource ?? join(
-      dirname(managerSource),
-      "launcher.mjs"
-    );
     const result = await (options.installForkFromProvider ?? installForkFromProvider)({
       provider: release.provider,
       installRoot,
@@ -284,23 +381,18 @@ export async function manageMain(options = {}) {
       discoverOfficialCodex: options.discoverOfficialCodex,
       addPathEntry: options.addPathEntry ?? addUserPathEntry,
       removePathEntry: options.removePathEntry ?? removeUserPathEntry,
-      prepareBin: options.prepareBin ?? (({ binDirectory }) =>
-        installManagementBin({
-          binDirectory,
-          managerSource,
-          launcherSource
-        }))
+      prepareBin
     });
-    const contentRoot = resolve(
-      options.contentRoot ??
-        env.CODEX_CCU_CONTENT_ROOT ??
-        join(dirname(managerSource), "..")
-    );
     const content = await (options.syncBundledContent ?? syncBundledContent)({
       contentRoot,
       installRoot,
       env
     });
+    const cleanup = {
+      removedReleases: result.removedReleases ?? [],
+      deferredReleases: result.deferredReleases ?? []
+    };
+    const cleanupScheduled = scheduleCleanupIfNeeded(cleanup, context);
     const report = {
       changed: result.changed,
       releaseId: result.releaseId,
@@ -309,7 +401,9 @@ export async function manageMain(options = {}) {
       upstreamTag: result.manifest.upstreamTag,
       forkCommit: result.manifest.forkCommit,
       i18nApiVersion: result.manifest.i18nApiVersion,
-      content
+      content,
+      ...cleanup,
+      cleanupScheduled
     };
     if (json) writeJson(stdout, report);
     else {
@@ -317,6 +411,9 @@ export async function manageMain(options = {}) {
         `${result.changed ? "installed" : "verified"} fork ${report.displayVersion}\n`
       );
       stdout.write(`已启用 ${content.language.locale} 与 ${content.theme.displayName}\n`);
+      if (cleanup.deferredReleases.length > 0) {
+        stdout.write("旧 CCU 版本将在占用它的会话退出后自动清理。\n");
+      }
       stdout.write("Open a new terminal if codex-ultra is not yet on PATH.\n");
     }
     return 0;

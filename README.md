@@ -28,11 +28,11 @@ See the [progress checkpoint](docs/PLAN2_PROGRESS.md), the [CCU/fork/upstream re
 - 本仓库负责 FTL 语言包、官方版与 fork 共存、下载校验、安装更新、版本状态和后续界面预设。
 - fork Release 使用 `ccu-rust-vX.Y.Z-rN`，二进制显示为 `X.Y.Z-ccu.i18n.N`；同一上游版本的 fork 修复只递增 `N`。
 - GitHub Actions 每 6 小时轮询上游稳定 Release；冲突时停止并告警，不覆盖 fork 改动。
-- 安装后只保留两份 Codex：官方 npm 英文版备份，以及一个当前运行中的 CCU Release；旧 CCU Release 自动清理。
+- 安装后只保留两份 Codex：官方 npm 英文版备份，以及一个当前运行中的 CCU Release；旧 CCU Release 自动清理。若 Windows 正由旧会话占用二进制，安装器不会终止进程，而是在会话自然退出后由隐藏清理器删除旧版。
 - CCU shim 被写入用户 PATH，并排在官方 npm shim 前；因此新终端中的 `codex --yolo` 默认启动 CCU。
 - 用户安装只需要编译后的二进制、管理器和内容包，不需要下载完整 Codex Rust 源码。
 
-The Rust/TUI mechanism and compiled binaries live in `Cec1c/codex`; this repository manages FTL language packs, coexistence with official Codex, verified downloads, installation, updates, version status, and later UI presets. Users do not need the full Codex source tree.
+The Rust/TUI mechanism and compiled binaries live in `Cec1c/codex`; this repository manages FTL language packs, coexistence with official Codex, verified downloads, installation, updates, version status, and later UI presets. Users do not need the full Codex source tree. If Windows still has an old CCU binary open, the installer never kills that session; a hidden cleanup worker removes the stale release after it exits naturally.
 
 ## 安装与验证 / Install and verify
 
