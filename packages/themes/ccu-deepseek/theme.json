@@ -9,6 +9,7 @@
     "progressWidth": 10,
     "filled": "█",
     "empty": "░",
+    "modelReasoningStyle": "bracketed",
     "colors": {
       "model": "#5eead4",
       "usage": "#93c5fd",

@@ -94,6 +94,10 @@ Theme packs are intended to go beyond color replacement. The long-term vision in
 
 The first theme milestone is a highly customizable status line: theme authors should be able to compose segments, control order and priority, define formatting and styles, and degrade gracefully when terminal width is limited.
 
+内置 `ccu.deepseek` 当前采用紧凑模型标签、10 格上下文进度和分段降级，完整形态示例为：`deepseek-v4-pro[1m] │ 0/1.0M │ [░░░░░░░░░░] 0% │ ⏱ 1s ⚡0s │ 17.96 CNY`。真实余额优先显示；没有余额时，`quota.json` 会按账号权重聚合剩余百分比，其中 `pro20x` 默认按 20 个 `plus` 计算。可复制安装目录中的 `quota.example.json` 为 `quota.json` 后填写自己的数据。
+
+The bundled `ccu.deepseek` theme uses compact model labels, a ten-cell context bar, and segment-level width fallbacks. Real balances take priority; otherwise `quota.json` aggregates remaining percentages by account weight, with `pro20x` defaulting to twenty `plus` accounts.
+
 ## 运行与分发入口 / Runtime and distribution entry points
 
 v0.1.0 使用 PowerShell 7 安装器、Node.js 管理执行器和 Rust Ratatui 管理界面，优先支持 Windows 11。后续平台可以复用相同的 Release manifest、外部语言包和主题包合同。
