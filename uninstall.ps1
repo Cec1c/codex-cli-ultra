@@ -23,6 +23,7 @@ if (-not (Test-Path -LiteralPath $manager -PathType Leaf)) {
 
 $node = Get-Command node -CommandType Application -ErrorAction Stop | Select-Object -First 1
 $env:CODEX_ULTRA_HOME = $installRoot
+$env:CODEX_CCU_PWSH_EXECUTABLE = Join-Path $PSHOME 'pwsh.exe'
 & $node.Source $manager uninstall
 if ($LASTEXITCODE -ne 0) {
     throw "codex-ultra uninstall failed with exit code $LASTEXITCODE"

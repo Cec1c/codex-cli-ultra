@@ -474,12 +474,12 @@ fn draw_language(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &
 fn draw_theme(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
     let installed = PathBuf::from(&app.status.install_root)
         .join("themes")
-        .join("ccu.deepseek")
+        .join("ccu.hermes")
         .join("theme.json")
         .is_file();
     let lines = vec![
         Line::from(vec![
-            Span::styled("CCU DeepSeek：", Style::default().fg(MUTED)),
+            Span::styled("Hermes 风格：", Style::default().fg(MUTED)),
             Span::styled(
                 if installed { "已安装" } else { "缺失" },
                 Style::default().fg(if installed { SUCCESS } else { DANGER }),
@@ -487,18 +487,23 @@ fn draw_theme(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("gpt-5.6-sol xhigh", Style::default().fg(Color::LightCyan)),
-            Span::styled(" │ ", Style::default().fg(MUTED)),
-            Span::styled("0/1.0M", Style::default().fg(Color::LightBlue)),
-            Span::styled(" │ ", Style::default().fg(MUTED)),
-            Span::styled("[░░░░░░░░░░] 0%", Style::default().fg(Color::LightGreen)),
-            Span::styled(" │ ", Style::default().fg(MUTED)),
-            Span::styled("⏱ 1s ⚡0s", Style::default().fg(Color::Yellow)),
-            Span::styled(" │ ", Style::default().fg(MUTED)),
-            Span::styled("额度 100%", Style::default().fg(Color::LightMagenta)),
+            Span::styled(
+                "🦊 gpt-5.6-sol[xhigh]",
+                Style::default().fg(Color::Rgb(148, 226, 213)),
+            ),
+            Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
+            Span::styled("42.7K/353K", Style::default().fg(Color::Rgb(137, 220, 235))),
+            Span::styled(" │ ", Style::default().fg(Color::Rgb(245, 194, 231))),
+            Span::styled(
+                "[█░░░░░░░░░] 9%",
+                Style::default().fg(Color::Rgb(166, 227, 161)),
+            ),
+            Span::styled(" │ ", Style::default().fg(Color::Rgb(250, 179, 135))),
+            Span::styled("⏱ 1s ⚡0s", Style::default().fg(Color::Rgb(249, 226, 175))),
+            Span::styled(" │ ", Style::default().fg(Color::Rgb(242, 205, 205))),
         ]),
         Line::from(""),
-        Line::from("主题 schema 已预留状态栏分隔符、进度条字符、颜色组和欢迎页颜色。"),
+        Line::from("主题 schema 已支持随机模型 emoji、Hermes 调色板、进度条和欢迎页颜色。"),
         Line::from("后续主题包只需放入 themes/<id>/theme.json，并写入 ~/.codex/ui-theme。"),
     ];
     frame.render_widget(

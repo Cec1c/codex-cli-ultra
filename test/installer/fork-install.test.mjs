@@ -9,7 +9,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { installForkFromProvider } from "../../src/installer/install.mjs";
@@ -122,5 +122,35 @@ test("fork install defers cleanup when the running Codex locks the old release",
   assert.deepEqual(
     (await readdir(join(installRoot, "releases"))).sort(),
     ["0.144.5-ccu.i18n.1", "0.144.5-ccu.i18n.2"]
+  );
+});
+
+test("fork install quarantines a strict markerless release residue before reinstalling", async (t) => {
+  const installRoot = await mkdtemp(join(tmpdir(), "ccu-fork-residue-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const residueBinary = join(
+    installRoot,
+    "releases",
+    "0.144.5-ccu.i18n.1",
+    "x86_64-pc-windows-msvc",
+    "package",
+    "bin",
+    "codex.exe"
+  );
+  await mkdir(dirname(residueBinary), { recursive: true });
+  await writeFile(residueBinary, "partial uninstall residue", "utf8");
+
+  const installed = await installRevision(installRoot, 1);
+  assert.equal(installed.result.recoveredReleases.length, 1);
+  assert.match(
+    installed.result.recoveredReleases[0],
+    /^0\.144\.5-ccu\.i18n\.1\.recovered-[0-9a-f-]+$/
+  );
+  assert.deepEqual(await readdir(join(installRoot, "releases")), [
+    "0.144.5-ccu.i18n.1"
+  ]);
+  assert.deepEqual(
+    await readFile(installed.result.state.active.binaryPath),
+    installed.binaryBytes
   );
 });

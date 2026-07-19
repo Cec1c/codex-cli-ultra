@@ -12,6 +12,13 @@ import { basename, dirname, join, resolve } from "node:path";
 
 import { validateLanguagePack } from "../language/validate.mjs";
 import { validateThemePack } from "../theme/validate.mjs";
+import {
+  disableHermesStatusLineConfig,
+  enableHermesStatusLineConfig
+} from "./statusline-config.mjs";
+
+const HERMES_THEME_DIRECTORY = "ccu-hermes";
+const LEGACY_THEME_ID = "ccu.deepseek";
 
 async function exists(path, lstatImpl = lstat) {
   try {
@@ -97,7 +104,7 @@ async function resolveContentLayout(contentRoot) {
       language: repoLanguage,
       catalog: join(contentRoot, "research", "codex-0.144.5", "tui-messages.jsonl"),
       template: join(contentRoot, "templates", "languages", "messages.en-US.ftl"),
-      theme: join(contentRoot, "packages", "themes", "ccu-deepseek"),
+      theme: join(contentRoot, "packages", "themes", HERMES_THEME_DIRECTORY),
       quota: join(contentRoot, "packages", "quota.example.json")
     };
   }
@@ -105,7 +112,7 @@ async function resolveContentLayout(contentRoot) {
     language: packagedLanguage,
     catalog: join(contentRoot, "catalog", "tui-messages.jsonl"),
     template: join(contentRoot, "catalog", "messages.en-US.ftl"),
-    theme: join(contentRoot, "themes", "ccu-deepseek"),
+    theme: join(contentRoot, "themes", HERMES_THEME_DIRECTORY),
     quota: join(contentRoot, "quota.example.json")
   };
 }
@@ -210,30 +217,58 @@ export async function syncBundledContent(options) {
   if (!languagePreferenceExists || currentLanguage.toLowerCase() === "zh-hans") {
     await write(languagePreference, `${language.locale}\n`, "utf8");
   }
-  if (!(await exists(themePreference, statPath))) {
+  const themePreferenceExists = await exists(themePreference, statPath);
+  const currentTheme = themePreferenceExists
+    ? (await read(themePreference, "utf8")).trim()
+    : null;
+  if (!themePreferenceExists || currentTheme === LEGACY_THEME_ID) {
     await write(themePreference, `${theme.id}\n`, "utf8");
   }
+  const requestedStatusLinePreset =
+    options.statusLinePreset === LEGACY_THEME_ID
+      ? theme.id
+      : options.statusLinePreset;
   if (
-    options.statusLinePreset !== undefined &&
-    options.statusLinePreset !== null &&
-    options.statusLinePreset !== theme.id
+    requestedStatusLinePreset !== undefined &&
+    requestedStatusLinePreset !== null &&
+    requestedStatusLinePreset !== theme.id
   ) {
-    throw new Error(`unsupported status-line preset: ${options.statusLinePreset}`);
+    throw new Error(`unsupported status-line preset: ${requestedStatusLinePreset}`);
   }
-  if (options.statusLinePreset === theme.id) {
+  const statusLinePreferenceExists = await exists(statusLinePreference, statPath);
+  const currentStatusLinePreset = statusLinePreferenceExists
+    ? (await read(statusLinePreference, "utf8")).trim()
+    : null;
+  if (requestedStatusLinePreset === theme.id) {
     await write(statusLinePreference, `${theme.id}\n`, "utf8");
   } else if (
-    options.statusLinePreset === null &&
-    await exists(statusLinePreference, statPath)
+    requestedStatusLinePreset === null &&
+    statusLinePreferenceExists
   ) {
-    const currentPreset = (await read(statusLinePreference, "utf8")).trim();
-    if (currentPreset === theme.id) {
+    if ([theme.id, LEGACY_THEME_ID].includes(currentStatusLinePreset)) {
       await remove(statusLinePreference, { force: true });
     }
+  } else if (
+    requestedStatusLinePreset === undefined &&
+    currentStatusLinePreset === LEGACY_THEME_ID
+  ) {
+    await write(statusLinePreference, `${theme.id}\n`, "utf8");
   }
   const statusLinePresetEnabled =
     await exists(statusLinePreference, statPath) &&
     (await read(statusLinePreference, "utf8")).trim() === theme.id;
+  let statusLineConfig = null;
+  if (statusLinePresetEnabled) {
+    statusLineConfig = await enableHermesStatusLineConfig({
+      codexHome,
+      fsOps: options.fsOps
+    });
+  } else if (requestedStatusLinePreset === null) {
+    statusLineConfig = await disableHermesStatusLineConfig({
+      codexHome,
+      fsOps: options.fsOps
+    });
+  }
 
   if (await exists(layout.quota, statPath)) {
     await write(
@@ -251,7 +286,8 @@ export async function syncBundledContent(options) {
     theme: {
       id: theme.id,
       displayName: theme.displayName,
-      statusLinePresetEnabled
+      statusLinePresetEnabled,
+      statusLineConfig
     },
     codexHome,
     contentRoot: cachedContentRoot

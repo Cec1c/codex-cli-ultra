@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { renameSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -67,7 +69,7 @@ function resolveStatusLinePreset(args) {
   if (enable && disable) {
     throw new Error("choose only one of --enable-statusline and --disable-statusline");
   }
-  if (enable) return "ccu.deepseek";
+  if (enable) return "ccu.hermes";
   if (disable) return null;
   return undefined;
 }
@@ -155,19 +157,52 @@ function scheduleCleanupIfNeeded(cleanup, options) {
 const INSTALL_ROOT_CLEANUP_SCRIPT = String.raw`
 $ErrorActionPreference = 'SilentlyContinue'
 $root = [System.IO.Path]::GetFullPath($env:CCU_INSTALL_ROOT)
-for ($attempt = 0; $attempt -lt 120; $attempt += 1) {
-  Start-Sleep -Milliseconds 500
-  if (-not (Test-Path -LiteralPath $root)) { exit 0 }
-  try { Remove-Item -LiteralPath $root -Recurse -Force }
+$tombstone = [System.IO.Path]::GetFullPath($env:CCU_TOMBSTONE_ROOT)
+for ($attempt = 0; $attempt -lt 240; $attempt += 1) {
+  if (-not (Test-Path -LiteralPath $root)) { break }
+  try {
+    [System.IO.Directory]::Move($root, $tombstone)
+    break
+  }
   catch {}
+  Start-Sleep -Milliseconds 250
+}
+if (Test-Path -LiteralPath $root) { exit 1 }
+if (-not (Test-Path -LiteralPath $tombstone)) { exit 0 }
+for ($attempt = 0; $attempt -lt 172800; $attempt += 1) {
+  try { Remove-Item -LiteralPath $tombstone -Recurse -Force -ErrorAction Stop }
+  catch {}
+  if (-not (Test-Path -LiteralPath $tombstone)) { exit 0 }
+  Start-Sleep -Milliseconds 500
 }
 exit 1
 `;
 
 function scheduleInstallRootCleanup(options) {
   const spawnDetached = options.spawnDetached ?? spawn;
+  const tombstoneRoot = join(
+    dirname(options.installRoot),
+    `.codex-cli-ultra-uninstall-${randomUUID()}`
+  );
+  const renameInstallRoot = options.renameInstallRoot ?? renameSync;
+  const removeTombstone = options.removeTombstone ?? ((path) => {
+    rmSync(path, { recursive: true, force: true });
+  });
+  let movedToTombstone = false;
+  try {
+    renameInstallRoot(options.installRoot, tombstoneRoot);
+    movedToTombstone = true;
+  } catch {}
+  if (movedToTombstone) {
+    try {
+      removeTombstone(tombstoneRoot);
+      return true;
+    } catch {}
+  }
   const child = spawnDetached(
-    options.pwshExecutable ?? "pwsh.exe",
+    options.pwshExecutable ??
+      options.env?.CODEX_CCU_PWSH_EXECUTABLE ??
+      "pwsh.exe",
     [
       "-NoLogo",
       "-NoProfile",
@@ -178,17 +213,19 @@ function scheduleInstallRootCleanup(options) {
       INSTALL_ROOT_CLEANUP_SCRIPT
     ],
     {
+      detached: true,
       windowsHide: true,
       stdio: "ignore",
       env: {
         ...options.env,
-        CCU_INSTALL_ROOT: options.installRoot
+        CCU_INSTALL_ROOT: options.installRoot,
+        CCU_TOMBSTONE_ROOT: tombstoneRoot
       }
     }
   );
   child.once?.("error", () => {});
   child.unref?.();
-  return child.pid ?? null;
+  return Number.isInteger(child.pid) && child.pid > 0;
 }
 
 function installedManifestPath(active) {

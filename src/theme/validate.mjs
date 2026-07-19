@@ -61,7 +61,7 @@ export function validateThemePack(value) {
   assertAllowedKeys(
     value.statusLine,
     ["separator", "progressWidth", "filled", "empty", "colors"],
-    ["modelReasoningStyle"],
+    ["modelReasoningStyle", "modelEmojis", "palette"],
     "theme.statusLine"
   );
   if (!Number.isSafeInteger(value.statusLine.progressWidth) || value.statusLine.progressWidth < 4 || value.statusLine.progressWidth > 30) {
@@ -70,6 +70,23 @@ export function validateThemePack(value) {
   const modelReasoningStyle = value.statusLine.modelReasoningStyle ?? "spaced";
   if (!["spaced", "bracketed"].includes(modelReasoningStyle)) {
     throw new Error("theme.statusLine.modelReasoningStyle must be spaced or bracketed");
+  }
+  const modelEmojis = value.statusLine.modelEmojis ?? [];
+  if (
+    !Array.isArray(modelEmojis) ||
+    modelEmojis.length > 64 ||
+    modelEmojis.some((emoji) =>
+      typeof emoji !== "string" ||
+      emoji.length === 0 ||
+      [...emoji].length > 8 ||
+      /[\u0000-\u001f\u007f]/.test(emoji)
+    )
+  ) {
+    throw new Error("theme.statusLine.modelEmojis must contain up to 64 short strings");
+  }
+  const palette = value.statusLine.palette ?? [];
+  if (!Array.isArray(palette) || palette.length > 32) {
+    throw new Error("theme.statusLine.palette must contain up to 32 colors");
   }
   assertRecord(value.statusLine.colors, "theme.statusLine.colors");
   assertExactKeys(
@@ -96,6 +113,10 @@ export function validateThemePack(value) {
       progressWidth: value.statusLine.progressWidth,
       filled: nonempty(value.statusLine.filled, "theme.statusLine.filled"),
       empty: nonempty(value.statusLine.empty, "theme.statusLine.empty"),
+      modelEmojis: modelEmojis.map((emoji) => emoji),
+      palette: palette.map((value, index) =>
+        color(value, `theme.statusLine.palette[${index}]`)
+      ),
       modelReasoningStyle,
       colors: Object.fromEntries(
         Object.entries(value.statusLine.colors).map(([key, value]) => [

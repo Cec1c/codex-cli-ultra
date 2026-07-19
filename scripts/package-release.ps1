@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = '0.1.1',
+    [string]$Version = '0.1.2',
     [string]$OutputDirectory = $(Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts'),
     [string]$ForkReleaseDir = $env:CCU_FORK_RELEASE_DIR
 )
@@ -80,7 +80,7 @@ Copy-Item -LiteralPath (Join-Path $root 'dist\codex-ultra.mjs') -Destination (Jo
 Copy-Item -LiteralPath (Join-Path $root 'dist\launcher.mjs') -Destination (Join-Path $stage 'bin')
 Copy-Item -LiteralPath (Join-Path $root 'tui\target\release\ccu-manager.exe') -Destination (Join-Path $stage 'bin')
 Copy-Item -LiteralPath (Join-Path $root 'packages\languages\zh-CN') -Destination (Join-Path $stage 'content\languages\zh-CN') -Recurse
-Copy-Item -LiteralPath (Join-Path $root 'packages\themes\ccu-deepseek') -Destination (Join-Path $stage 'content\themes\ccu-deepseek') -Recurse
+Copy-Item -LiteralPath (Join-Path $root 'packages\themes\ccu-hermes') -Destination (Join-Path $stage 'content\themes\ccu-hermes') -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'research\codex-0.144.5\tui-messages.jsonl') -Destination (Join-Path $stage 'content\catalog\tui-messages.jsonl')
 Copy-Item -LiteralPath (Join-Path $root 'templates\languages\messages.en-US.ftl') -Destination (Join-Path $stage 'content\catalog\messages.en-US.ftl')
 Copy-Item -LiteralPath (Join-Path $root 'packages\quota.example.json') -Destination (Join-Path $stage 'content\quota.example.json')

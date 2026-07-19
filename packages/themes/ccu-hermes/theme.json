@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "type": "theme",
+  "id": "ccu.hermes",
+  "displayName": "Hermes 风格",
+  "version": "0.1.0",
+  "statusLine": {
+    "separator": " │ ",
+    "progressWidth": 10,
+    "filled": "█",
+    "empty": "░",
+    "modelEmojis": [
+      "🦊",
+      "🐱",
+      "🐶",
+      "🐼",
+      "🐨",
+      "🐰",
+      "🦁",
+      "🐯",
+      "🐸",
+      "🐵",
+      "🦄",
+      "🐙",
+      "🦋",
+      "🌟",
+      "🔥",
+      "💎",
+      "🎯",
+      "🚀",
+      "⚡",
+      "🌈"
+    ],
+    "palette": [
+      "#F5E0DC",
+      "#F2CDCD",
+      "#F5C2E7",
+      "#FAB387",
+      "#F9E2AF",
+      "#A6E3A1",
+      "#94E2D5",
+      "#89DCEB",
+      "#74C7EC",
+      "#CBA6F7"
+    ],
+    "modelReasoningStyle": "bracketed",
+    "colors": {
+      "model": "#94E2D5",
+      "usage": "#89DCEB",
+      "progress": "#A6E3A1",
+      "time": "#F9E2AF",
+      "quota": "#F5C2E7",
+      "separator": "#CBA6F7"
+    }
+  },
+  "welcome": {
+    "title": "#94E2D5",
+    "version": "#F5E0DC",
+    "label": "#CBA6F7",
+    "model": "#F2CDCD",
+    "path": "#A6E3A1",
+    "permissions": "#FAB387"
+  }
+}

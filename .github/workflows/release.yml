@@ -57,5 +57,5 @@ jobs:
           $tag = '${{ inputs.tag || github.ref_name }}'
           gh release create $tag artifacts/*.zip artifacts/*.sha256 `
             --title "Codex CLI Ultra $tag" `
-            --notes "自包含 Windows 安装包：内置已验证的 CCU i18n fork、1334 条简体中文 FTL、可选状态栏主题和一键卸载回退；运行 install.cmd 后，新终端中的 codex 即为中文版本。" `
+            --notes "自包含 Windows 安装包：内置已验证的 CCU i18n fork、1396 条简体中文 FTL、可选 Hermes 状态栏和一键卸载回退；运行 install.cmd 后，新终端中的 codex 即为中文版本。" `
             --latest
