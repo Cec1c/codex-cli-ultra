@@ -2,23 +2,23 @@
   "schemaVersion": 1,
   "channel": "stable",
   "source": "Cec1c/codex",
-  "syncedAt": "2026-07-19T14:10:38.303Z",
+  "syncedAt": "2026-07-19T14:48:20.249Z",
   "release": {
     "schemaVersion": 1,
     "type": "codex-ccu-i18n-build",
-    "releaseTag": "ccu-rust-v0.144.6-r1",
-    "displayVersion": "0.144.6-ccu.i18n.1",
+    "releaseTag": "ccu-rust-v0.144.6-r2",
+    "displayVersion": "0.144.6-ccu.i18n.2",
     "upstreamVersion": "0.144.6",
     "upstreamTag": "rust-v0.144.6",
     "upstreamCommit": "5d1fbf26c43abc65a203928b2e31561cb039e06d",
-    "forkCommit": "ea269dd8b6bf142ae1aa17c088714e4c070543f6",
-    "ultraRevision": 1,
+    "forkCommit": "c6717fc4f7e892c4cb8a3c2935b4dc956faea7e5",
+    "ultraRevision": 2,
     "i18nApiVersion": 1,
     "platform": "x86_64-pc-windows-msvc",
     "asset": {
-      "name": "codex-ccu-i18n-0.144.6-r1-x86_64-pc-windows-msvc.zip",
-      "size": 119920664,
-      "sha256": "sha256:3e7708e45c08d9df95d6902a4796586e2c25d9ce0288ed61346502a777049223"
+      "name": "codex-ccu-i18n-0.144.6-r2-x86_64-pc-windows-msvc.zip",
+      "size": 119251119,
+      "sha256": "sha256:5112ca5e8c422fe6f305792bbad5931a325d2121ff0fb244b91744102521da89"
     }
   }
 }
