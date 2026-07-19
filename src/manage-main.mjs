@@ -16,6 +16,7 @@ import {
   addUserPathEntry,
   removeUserPathEntry
 } from "./installer/windows-path.mjs";
+import { uninstallCcu } from "./installer/uninstall.mjs";
 import {
   FORK_MANIFEST_NAME,
   compareForkReleases,
@@ -33,10 +34,23 @@ const USAGE = [
   "Usage:",
   "  codex-ultra version [--json]",
   "  codex-ultra status [--check] [--json]",
-  "  codex-ultra install [--manifest-url URL | --release-dir PATH] [--json]",
-  "  codex-ultra update [--manifest-url URL | --release-dir PATH] [--json]",
+  "  codex-ultra install [--manifest-url URL | --release-dir PATH] [--enable-statusline | --disable-statusline] [--json]",
+  "  codex-ultra update [--manifest-url URL | --release-dir PATH] [--enable-statusline | --disable-statusline] [--json]",
+  "  codex-ultra uninstall [--json]",
   "  codex-ultra content sync [--source PATH] [--json]"
 ].join("\n");
+
+const INSTALL_STAGE_LABELS = Object.freeze({
+  manifest: "读取 fork Release 清单",
+  "download-fork": "读取内置 Codex 安装包",
+  "verify-fork": "校验文件大小与 SHA-256",
+  "extract-fork": "解压翻译版 Codex",
+  "smoke-version": "验证 Codex 版本",
+  "move-release": "安装当前 CCU 版本",
+  "prepare-bin": "安装 codex 与 codex-ultra 命令",
+  "path-add": "把 CCU 命令加入用户 PATH",
+  "state-switch": "切换到已验证版本"
+});
 
 function optionValue(args, name) {
   const index = args.indexOf(name);
@@ -45,6 +59,28 @@ function optionValue(args, name) {
     throw new Error(`${name} requires a value`);
   }
   return args[index + 1];
+}
+
+function resolveStatusLinePreset(args) {
+  const enable = args.includes("--enable-statusline");
+  const disable = args.includes("--disable-statusline");
+  if (enable && disable) {
+    throw new Error("choose only one of --enable-statusline and --disable-statusline");
+  }
+  if (enable) return "ccu.deepseek";
+  if (disable) return null;
+  return undefined;
+}
+
+function createInstallStageReporter(stdout) {
+  let completed = 0;
+  const total = Object.keys(INSTALL_STAGE_LABELS).length;
+  return async (name) => {
+    completed += 1;
+    stdout.write(
+      `[${completed}/${total}] ${INSTALL_STAGE_LABELS[name] ?? name}\n`
+    );
+  };
 }
 
 async function readOptionalState(path, readStateImpl) {
@@ -114,6 +150,45 @@ function scheduleCleanupIfNeeded(cleanup, options) {
   } catch {
     return false;
   }
+}
+
+const INSTALL_ROOT_CLEANUP_SCRIPT = String.raw`
+$ErrorActionPreference = 'SilentlyContinue'
+$root = [System.IO.Path]::GetFullPath($env:CCU_INSTALL_ROOT)
+for ($attempt = 0; $attempt -lt 120; $attempt += 1) {
+  Start-Sleep -Milliseconds 500
+  if (-not (Test-Path -LiteralPath $root)) { exit 0 }
+  try { Remove-Item -LiteralPath $root -Recurse -Force }
+  catch {}
+}
+exit 1
+`;
+
+function scheduleInstallRootCleanup(options) {
+  const spawnDetached = options.spawnDetached ?? spawn;
+  const child = spawnDetached(
+    options.pwshExecutable ?? "pwsh.exe",
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-WindowStyle",
+      "Hidden",
+      "-Command",
+      INSTALL_ROOT_CLEANUP_SCRIPT
+    ],
+    {
+      windowsHide: true,
+      stdio: "ignore",
+      env: {
+        ...options.env,
+        CCU_INSTALL_ROOT: options.installRoot
+      }
+    }
+  );
+  child.once?.("error", () => {});
+  child.unref?.();
+  return child.pid ?? null;
 }
 
 function installedManifestPath(active) {
@@ -300,12 +375,46 @@ export async function manageMain(options = {}) {
     const content = await (options.syncBundledContent ?? syncBundledContent)({
       contentRoot,
       installRoot,
+      statusLinePreset: resolveStatusLinePreset(args.slice(2)),
       env
     });
     if (json) writeJson(stdout, content);
     else {
       stdout.write(`语言包 ${content.language.locale} 已同步（${content.language.messages} 条消息）\n`);
       stdout.write(`主题 ${content.theme.displayName} 已同步\n`);
+      stdout.write(
+        content.theme.statusLinePresetEnabled
+          ? "CCU 状态栏预设已启用\n"
+          : "CCU 状态栏预设未启用\n"
+      );
+    }
+    return 0;
+  }
+
+  if (command === "uninstall") {
+    const result = await (options.uninstallCcu ?? uninstallCcu)({
+      installRoot,
+      env,
+      removePathEntry: options.removePathEntry ?? removeUserPathEntry
+    });
+    const schedule =
+      options.scheduleInstallRootCleanup ?? scheduleInstallRootCleanup;
+    let cleanupScheduled = false;
+    try {
+      cleanupScheduled = schedule(context) !== false;
+    } catch {
+      cleanupScheduled = false;
+    }
+    const report = { ...result, cleanupScheduled };
+    if (json) writeJson(stdout, report);
+    else {
+      stdout.write("已从用户 PATH 移除 CCU，codex 将回退到官方英文版。\n");
+      stdout.write(
+        cleanupScheduled
+          ? "CCU 文件将在当前命令退出后自动删除。\n"
+          : `请稍后手动删除 ${installRoot}\n`
+      );
+      stdout.write("无需结束当前正在运行的 Codex。\n");
     }
     return 0;
   }
@@ -345,6 +454,7 @@ export async function manageMain(options = {}) {
         env.CODEX_CCU_CONTENT_ROOT ??
         join(dirname(managerSource), "..")
     );
+    const statusLinePreset = resolveStatusLinePreset(args.slice(1));
     if (
       current.installedManifest !== null &&
       compareForkReleases(current.installedManifest, release.manifest) >= 0
@@ -356,6 +466,7 @@ export async function manageMain(options = {}) {
       const content = await (options.syncBundledContent ?? syncBundledContent)({
         contentRoot,
         installRoot,
+        statusLinePreset,
         env
       });
       const cleanup = await cleanupInstalledReleases(context);
@@ -381,11 +492,15 @@ export async function manageMain(options = {}) {
       discoverOfficialCodex: options.discoverOfficialCodex,
       addPathEntry: options.addPathEntry ?? addUserPathEntry,
       removePathEntry: options.removePathEntry ?? removeUserPathEntry,
-      prepareBin
+      prepareBin,
+      onStage:
+        options.onStage ??
+        (json ? undefined : createInstallStageReporter(stdout))
     });
     const content = await (options.syncBundledContent ?? syncBundledContent)({
       contentRoot,
       installRoot,
+      statusLinePreset,
       env
     });
     const cleanup = {
@@ -410,11 +525,16 @@ export async function manageMain(options = {}) {
       stdout.write(
         `${result.changed ? "installed" : "verified"} fork ${report.displayVersion}\n`
       );
-      stdout.write(`已启用 ${content.language.locale} 与 ${content.theme.displayName}\n`);
+      stdout.write(`已启用 ${content.language.locale} 中文语言包\n`);
+      stdout.write(
+        content.theme.statusLinePresetEnabled
+          ? `已启用 ${content.theme.displayName} 状态栏预设\n`
+          : `已安装 ${content.theme.displayName} 主题，状态栏预设保持关闭\n`
+      );
       if (cleanup.deferredReleases.length > 0) {
         stdout.write("旧 CCU 版本将在占用它的会话退出后自动清理。\n");
       }
-      stdout.write("Open a new terminal if codex-ultra is not yet on PATH.\n");
+      stdout.write("请打开新终端，然后运行 codex --yolo。\n");
     }
     return 0;
   }

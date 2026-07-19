@@ -1,6 +1,6 @@
 {
   "name": "codex-cli-ultra",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "packageManager": "npm@11.12.1",
@@ -11,8 +11,9 @@
     "build": "node scripts/build-executor.mjs",
     "test": "node --test",
     "text:audit": "node scripts/audit-visible-text.mjs",
+    "ftl:audit": "node scripts/audit-ftl-contract.mjs",
     "catalog:extract": "node src/cli.mjs catalog extract",
-    "language:validate": "node src/cli.mjs language validate",
+    "language:validate": "node src/cli.mjs language validate --pack packages/languages/zh-CN --catalog research/codex-0.144.5/tui-messages.jsonl --template templates/languages/messages.en-US.ftl",
     "adapter:apply": "node src/cli.mjs adapter apply",
     "adapter:revert": "node src/cli.mjs adapter revert",
     "doctor": "node src/cli.mjs doctor"

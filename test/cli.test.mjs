@@ -35,7 +35,9 @@ test("language validate reports the expanded wired catalog", async () => {
       "--pack",
       "packages/languages/zh-CN",
       "--catalog",
-      "research/codex-0.144.4/tui-messages.jsonl"
+      "research/codex-0.144.5/tui-messages.jsonl",
+      "--template",
+      "templates/languages/messages.en-US.ftl"
     ],
     {
       cwd: PROJECT_ROOT,
@@ -45,7 +47,7 @@ test("language validate reports the expanded wired catalog", async () => {
 
   assert.equal(result.command, "language validate");
   assert.equal(result.locale, "zh-CN");
-  assert.equal(result.messages, 129);
+  assert.equal(result.messages, 1334);
   assert.match(result.sourceHash, /^sha256:[a-f0-9]{64}$/);
   assert.deepEqual(JSON.parse(output), result);
 });

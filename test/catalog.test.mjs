@@ -58,10 +58,10 @@ test("extractCatalog returns stable records with real line numbers and fingerpri
   assert.equal(records[1].source.line, 3);
   assert.deepEqual(records[0].source.lines, [2]);
   assert.match(records[0].source.fingerprint, /^sha256:[a-f0-9]{64}$/);
-  assert.equal(records[0].source.release, "rust-v0.144.4");
+  assert.equal(records[0].source.release, "rust-v0.144.5");
   assert.equal(
     records[0].source.commit,
-    "8c68d4c87dc54d38861f5114e920c3de2efa5876"
+    "87db9bc18ba5bc82c1cb4e4381b44f693ee35623"
   );
   assert.equal(records[0].catalogVersion, 1);
   assert.deepEqual(records[0].args, []);
@@ -152,7 +152,7 @@ test("writeCatalogArtifacts emits deterministic JSONL and a Chinese-first report
   const markdown = await readFile(markdownPath, "utf8");
   assert.equal(jsonl.split("\n").filter(Boolean).length, 2);
   assert.equal(JSON.parse(jsonl.split("\n")[0]).id, "tui.sample.alpha");
-  assert.match(markdown, /^# Codex CLI 0\.144\.4 TUI 文本目录/m);
+  assert.match(markdown, /^# Codex CLI 0\.144\.5 TUI 文本目录/m);
   assert.match(markdown, /## 已接入 MVP \/ Wired in MVP/);
   assert.match(markdown, /tui\.sample\.beta/);
   assert.equal(markdown.endsWith("\n\n"), false);

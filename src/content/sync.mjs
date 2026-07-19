@@ -8,7 +8,7 @@ import {
   rm,
   writeFile
 } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import { validateLanguagePack } from "../language/validate.mjs";
 import { validateThemePack } from "../theme/validate.mjs";
@@ -56,21 +56,100 @@ async function replaceDirectoryAtomic(source, destination, fsOps = {}) {
   }
 }
 
+async function replaceFileAtomic(source, destination, fsOps = {}) {
+  const makeDirectory = fsOps.mkdir ?? mkdir;
+  const read = fsOps.readFile ?? readFile;
+  const write = fsOps.writeFile ?? writeFile;
+  const move = fsOps.rename ?? rename;
+  const remove = fsOps.rm ?? rm;
+  const statPath = fsOps.lstat ?? lstat;
+  const token = randomUUID();
+  const staged = `${destination}.staged-${token}`;
+  const backup = `${destination}.backup-${token}`;
+  let movedExisting = false;
+  await makeDirectory(dirname(destination), { recursive: true });
+  try {
+    await write(staged, await read(source), { flag: "wx" });
+    if (await exists(destination, statPath)) {
+      await move(destination, backup);
+      movedExisting = true;
+    }
+    await move(staged, destination);
+    if (movedExisting) {
+      await remove(backup, { force: true });
+    }
+  } catch (error) {
+    await remove(staged, { force: true }).catch(() => {});
+    if (movedExisting && !(await exists(destination, statPath))) {
+      await move(backup, destination).catch(() => {});
+    }
+    throw error;
+  } finally {
+    await remove(backup, { force: true }).catch(() => {});
+  }
+}
+
 async function resolveContentLayout(contentRoot) {
   const repoLanguage = join(contentRoot, "packages", "languages", "zh-CN");
   const packagedLanguage = join(contentRoot, "languages", "zh-CN");
   if (await exists(repoLanguage)) {
     return {
       language: repoLanguage,
-      catalog: join(contentRoot, "research", "codex-0.144.4", "tui-messages.jsonl"),
-      theme: join(contentRoot, "packages", "themes", "ccu-deepseek")
+      catalog: join(contentRoot, "research", "codex-0.144.5", "tui-messages.jsonl"),
+      template: join(contentRoot, "templates", "languages", "messages.en-US.ftl"),
+      theme: join(contentRoot, "packages", "themes", "ccu-deepseek"),
+      quota: join(contentRoot, "packages", "quota.example.json")
     };
   }
   return {
     language: packagedLanguage,
     catalog: join(contentRoot, "catalog", "tui-messages.jsonl"),
-    theme: join(contentRoot, "themes", "ccu-deepseek")
+    template: join(contentRoot, "catalog", "messages.en-US.ftl"),
+    theme: join(contentRoot, "themes", "ccu-deepseek"),
+    quota: join(contentRoot, "quota.example.json")
   };
+}
+
+async function cacheBundledContent({
+  contentRoot,
+  installRoot,
+  layout,
+  language,
+  theme,
+  fsOps
+}) {
+  const cacheRoot = join(installRoot, "content");
+  if (resolve(contentRoot).toLowerCase() === resolve(cacheRoot).toLowerCase()) {
+    return cacheRoot;
+  }
+  await replaceDirectoryAtomic(
+    layout.language,
+    join(cacheRoot, "languages", language.locale),
+    fsOps
+  );
+  await replaceDirectoryAtomic(
+    layout.theme,
+    join(cacheRoot, "themes", basename(layout.theme)),
+    fsOps
+  );
+  await replaceFileAtomic(
+    layout.catalog,
+    join(cacheRoot, "catalog", "tui-messages.jsonl"),
+    fsOps
+  );
+  await replaceFileAtomic(
+    layout.template,
+    join(cacheRoot, "catalog", "messages.en-US.ftl"),
+    fsOps
+  );
+  if (await exists(layout.quota, fsOps?.lstat ?? lstat)) {
+    await replaceFileAtomic(
+      layout.quota,
+      join(cacheRoot, "quota.example.json"),
+      fsOps
+    );
+  }
+  return cacheRoot;
 }
 
 export function resolveCodexHome(env = process.env) {
@@ -89,11 +168,20 @@ export async function syncBundledContent(options) {
   const layout = await resolveContentLayout(contentRoot);
   const language = await validateLanguagePack({
     packRoot: layout.language,
-    catalogPath: layout.catalog
+    catalogPath: layout.catalog,
+    templatePath: layout.template
   });
   const theme = validateThemePack(
     JSON.parse(await (options.readFile ?? readFile)(join(layout.theme, "theme.json"), "utf8"))
   );
+  const cachedContentRoot = await cacheBundledContent({
+    contentRoot,
+    installRoot,
+    layout,
+    language,
+    theme,
+    fsOps: options.fsOps
+  });
 
   await replaceDirectoryAtomic(
     layout.language,
@@ -109,10 +197,12 @@ export async function syncBundledContent(options) {
   const makeDirectory = options.fsOps?.mkdir ?? mkdir;
   const read = options.readFile ?? readFile;
   const write = options.fsOps?.writeFile ?? writeFile;
+  const remove = options.fsOps?.rm ?? rm;
   const statPath = options.fsOps?.lstat ?? lstat;
   await makeDirectory(codexHome, { recursive: true });
   const languagePreference = join(codexHome, "ui-language");
   const themePreference = join(codexHome, "ui-theme");
+  const statusLinePreference = join(codexHome, "ui-statusline-preset");
   const languagePreferenceExists = await exists(languagePreference, statPath);
   const currentLanguage = languagePreferenceExists
     ? (await read(languagePreference, "utf8")).trim()
@@ -123,16 +213,32 @@ export async function syncBundledContent(options) {
   if (!(await exists(themePreference, statPath))) {
     await write(themePreference, `${theme.id}\n`, "utf8");
   }
+  if (
+    options.statusLinePreset !== undefined &&
+    options.statusLinePreset !== null &&
+    options.statusLinePreset !== theme.id
+  ) {
+    throw new Error(`unsupported status-line preset: ${options.statusLinePreset}`);
+  }
+  if (options.statusLinePreset === theme.id) {
+    await write(statusLinePreference, `${theme.id}\n`, "utf8");
+  } else if (
+    options.statusLinePreset === null &&
+    await exists(statusLinePreference, statPath)
+  ) {
+    const currentPreset = (await read(statusLinePreference, "utf8")).trim();
+    if (currentPreset === theme.id) {
+      await remove(statusLinePreference, { force: true });
+    }
+  }
+  const statusLinePresetEnabled =
+    await exists(statusLinePreference, statPath) &&
+    (await read(statusLinePreference, "utf8")).trim() === theme.id;
 
-  const quotaExampleSource = join(contentRoot, "packages", "quota.example.json");
-  const packagedQuotaExample = join(contentRoot, "quota.example.json");
-  const quotaSource = await exists(quotaExampleSource, statPath)
-    ? quotaExampleSource
-    : packagedQuotaExample;
-  if (await exists(quotaSource, statPath)) {
+  if (await exists(layout.quota, statPath)) {
     await write(
       join(installRoot, "quota.example.json"),
-      await read(quotaSource),
+      await read(layout.quota),
       { flag: "w" }
     );
   }
@@ -140,9 +246,14 @@ export async function syncBundledContent(options) {
   return {
     language: {
       locale: language.locale,
-      messages: Object.keys(language.messages).length
+      messages: language.messageCount
     },
-    theme: { id: theme.id, displayName: theme.displayName },
-    codexHome
+    theme: {
+      id: theme.id,
+      displayName: theme.displayName,
+      statusLinePresetEnabled
+    },
+    codexHome,
+    contentRoot: cachedContentRoot
   };
 }

@@ -173,11 +173,11 @@ function assertValidFtl(ftl) {
   throw new Error(`FTL parse error: ${details || "invalid syntax"}`);
 }
 
-function decodeFtl(buffer) {
+function decodeFtl(buffer, label = "messages.ftl") {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
   } catch (error) {
-    throw new Error("messages.ftl must be valid UTF-8", { cause: error });
+    throw new Error(`${label} must be valid UTF-8`, { cause: error });
   }
 }
 
@@ -224,16 +224,108 @@ function sampleArguments(record) {
   return samples;
 }
 
+function resourceEntriesById(resource, label) {
+  const entries = new Map();
+  for (const entry of resource.body) {
+    if (typeof entry.id !== "string" || !FLUENT_ID_PATTERN.test(entry.id)) {
+      throw new Error(
+        `${label} contains invalid message id ${entry.id ?? "<missing>"}`
+      );
+    }
+    if (entries.has(entry.id)) {
+      throw new Error(`${label} contains duplicate message id ${entry.id}`);
+    }
+    if (entry.value == null) {
+      throw new Error(`${label} message ${entry.id} must have a value`);
+    }
+    if (Object.keys(entry.attributes ?? {}).length > 0) {
+      throw new Error(`${label} message ${entry.id} must not declare attributes`);
+    }
+    entries.set(entry.id, entry);
+  }
+  if (entries.size === 0) {
+    throw new Error(`${label} must contain at least one message`);
+  }
+  return entries;
+}
+
+function sortedVariables(entry) {
+  return [...collectVariables(entry.value)].sort();
+}
+
+function validateTemplateContract({
+  templateSource,
+  translationEntries,
+  translationBundle
+}) {
+  assertValidFtl(templateSource);
+  const templateResource = new FluentResource(templateSource);
+  const templateBundle = new FluentBundle("en-US", { useIsolating: false });
+  const templateErrors = templateBundle.addResource(templateResource);
+  if (templateErrors.length > 0) {
+    throw new Error(
+      `FTL template resource error: ${templateErrors
+        .map((error) => error.message)
+        .join("; ")}`
+    );
+  }
+  const templateEntries = resourceEntriesById(templateResource, "FTL template");
+
+  for (const [id, templateEntry] of templateEntries) {
+    const translationEntry = translationEntries.get(id);
+    if (!translationEntry) {
+      throw new Error(`translation is missing template key ${id}`);
+    }
+    const expectedVariables = sortedVariables(templateEntry);
+    const actualVariables = sortedVariables(translationEntry);
+    if (expectedVariables.join("\0") !== actualVariables.join("\0")) {
+      throw new Error(
+        `translation ${id} variables must be [${expectedVariables.join(", ")}], ` +
+          `found [${actualVariables.join(", ")}]`
+      );
+    }
+    const message = translationBundle.getMessage(id);
+    const samples = Object.fromEntries(
+      expectedVariables.map((name) => [name, `sample-${name}`])
+    );
+    const formatErrors = [];
+    const value = translationBundle
+      .formatPattern(message.value, samples, formatErrors)
+      .trim();
+    if (formatErrors.length > 0) {
+      throw new Error(
+        `failed to format template translation ${id}: ${formatErrors
+          .map((error) => error.message)
+          .join("; ")}`
+      );
+    }
+    if (!value) {
+      throw new Error(`empty template translation for ${id}`);
+    }
+  }
+
+  for (const id of translationEntries.keys()) {
+    if (!templateEntries.has(id)) {
+      throw new Error(`translation contains key not declared by template: ${id}`);
+    }
+  }
+
+  return templateEntries.size;
+}
+
 export async function validateLanguagePack({
   packRoot,
   catalogPath,
+  templatePath,
   verifyHashes = true
 }) {
-  const [catalogSource, manifestSource, ftlBuffer] = await Promise.all([
-    readFile(catalogPath, "utf8"),
-    readFile(join(packRoot, "manifest.json"), "utf8"),
-    readFile(join(packRoot, "messages.ftl"))
-  ]);
+  const [catalogSource, manifestSource, ftlBuffer, templateBuffer] =
+    await Promise.all([
+      readFile(catalogPath, "utf8"),
+      readFile(join(packRoot, "manifest.json"), "utf8"),
+      readFile(join(packRoot, "messages.ftl")),
+      templatePath ? readFile(templatePath) : Promise.resolve(null)
+    ]);
   const manifest = parseJson(
     manifestSource,
     "invalid language pack manifest JSON"
@@ -261,9 +353,18 @@ export async function validateLanguagePack({
     );
   }
 
-  const resourceEntries = new Map(
-    fluentResource.body.map((entry) => [entry.id, entry])
+  const resourceEntries = resourceEntriesById(
+    fluentResource,
+    "translation resource"
   );
+  const messageCount =
+    templateBuffer === null
+      ? resourceEntries.size
+      : validateTemplateContract({
+          templateSource: decodeFtl(templateBuffer, "FTL template"),
+          translationEntries: resourceEntries,
+          translationBundle: bundle
+        });
   const messages = {};
   for (const record of wiredRecords) {
     const message = bundle.getMessage(record.ftlKey);
@@ -297,13 +398,21 @@ export async function validateLanguagePack({
     messages[record.id] = value;
   }
 
-  const sourceHash = createHash("sha256")
+  const sourceHasher = createHash("sha256")
     .update(catalogSource)
     .update("\0")
     .update(manifestSource)
     .update("\0")
-    .update(ftlBuffer)
-    .digest("hex");
+    .update(ftlBuffer);
+  if (templateBuffer !== null) {
+    sourceHasher.update("\0").update(templateBuffer);
+  }
+  const sourceHash = sourceHasher.digest("hex");
 
-  return { locale, messages, sourceHash: `sha256:${sourceHash}` };
+  return {
+    locale,
+    messages,
+    messageCount,
+    sourceHash: `sha256:${sourceHash}`
+  };
 }

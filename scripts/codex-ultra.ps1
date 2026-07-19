@@ -6,9 +6,11 @@ param(
 
     [string]$CodexSource,
 
-    [string]$SourceCatalog = "research/codex-0.144.4/tui-messages.jsonl",
+    [string]$SourceCatalog = "research/codex-0.144.5/tui-messages.jsonl",
 
     [string]$Pack = "packages/languages/zh-CN",
+
+    [string]$Template = "templates/languages/messages.en-US.ftl",
 
     [string]$CodexBinary,
 
@@ -115,13 +117,16 @@ switch ($Action) {
     "Validate" {
         $catalogPath = Resolve-ProjectPath -Path $SourceCatalog
         $packPath = Resolve-ProjectPath -Path $Pack
+        $templatePath = Resolve-ProjectPath -Path $Template
         Invoke-NodeCli -Arguments @(
             "language",
             "validate",
             "--catalog",
             $catalogPath,
             "--pack",
-            $packPath
+            $packPath,
+            "--template",
+            $templatePath
         )
     }
     "Plan" {
@@ -139,6 +144,7 @@ switch ($Action) {
         $source = Resolve-ProjectPath -Path $CodexSource
         $catalogPath = Resolve-ProjectPath -Path $SourceCatalog
         $packPath = Resolve-ProjectPath -Path $Pack
+        $templatePath = Resolve-ProjectPath -Path $Template
         Invoke-NodeCli -Arguments @(
             "doctor",
             "--source",
@@ -146,7 +152,9 @@ switch ($Action) {
             "--pack",
             $packPath,
             "--catalog",
-            $catalogPath
+            $catalogPath,
+            "--template",
+            $templatePath
         )
     }
     "Revert" {
@@ -158,6 +166,7 @@ switch ($Action) {
         Require-Value -Name "CodexBinary" -Value $CodexBinary
         $packPath = Resolve-ProjectPath -Path $Pack
         $catalogPath = Resolve-ProjectPath -Path $SourceCatalog
+        $templatePath = Resolve-ProjectPath -Path $Template
         $languagePath = Resolve-ProjectPath -Path (Join-Path $packPath "messages.ftl")
 
         $validationJson = Invoke-NodeCliCaptured -Arguments @(
@@ -166,7 +175,9 @@ switch ($Action) {
             "--catalog",
             $catalogPath,
             "--pack",
-            $packPath
+            $packPath,
+            "--template",
+            $templatePath
         )
         try {
             $validation = $validationJson | ConvertFrom-Json -ErrorAction Stop

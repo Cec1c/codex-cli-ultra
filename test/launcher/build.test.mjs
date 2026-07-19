@@ -51,5 +51,5 @@ test("build emits independent launcher and management bundles", async () => {
       windowsHide: true
     }
   );
-  assert.match(management.stdout, /codex-cli-ultra 0\.1\.0/);
+  assert.match(management.stdout, /codex-cli-ultra 0\.1\.1/);
 });

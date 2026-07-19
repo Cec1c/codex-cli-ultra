@@ -13,6 +13,7 @@ $PinnedCommit = "8c68d4c87dc54d38861f5114e920c3de2efa5876"
 $RequiredCargoVersion = "1.95.0"
 $CatalogPath = Join-Path $ProjectRoot "research/codex-0.144.4/tui-messages.jsonl"
 $PackRoot = Join-Path $ProjectRoot "packages/languages/zh-CN"
+$TemplatePath = Join-Path $ProjectRoot "templates/languages/messages.en-US.ftl"
 $FtlPath = Join-Path $PackRoot "messages.ftl"
 $CliPath = Join-Path $ProjectRoot "src/cli.mjs"
 
@@ -215,7 +216,9 @@ Invoke-CheckedCommand `
         "--pack",
         $PackRoot,
         "--catalog",
-        $CatalogPath
+        $CatalogPath,
+        "--template",
+        $TemplatePath
     ) `
     -WorkingDirectory $ProjectRoot
 
@@ -230,7 +233,9 @@ $doctorJson = Invoke-CapturedCommand `
         "--pack",
         $PackRoot,
         "--catalog",
-        $CatalogPath
+        $CatalogPath,
+        "--template",
+        $TemplatePath
     ) `
     -WorkingDirectory $ProjectRoot
 Write-Host $doctorJson
