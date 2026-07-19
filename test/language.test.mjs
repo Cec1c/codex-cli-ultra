@@ -77,6 +77,21 @@ const VALID_FTL = [
   ""
 ].join("\n");
 
+const VALID_TEMPLATE_FTL = [
+  "status-line-use-theme-colors = Use theme colors",
+  "status-line-apply-theme-colors = Apply colors from the active /theme",
+  "status-line-configure-title = Configure Status Line",
+  "status-line-select-items-description = Select which items to display in the status line.",
+  "onboarding-paid-plan-intro = Sign in with ChatGPT to use Codex as part of your paid plan",
+  "onboarding-api-key-billing-intro = or connect an API key for usage-based billing",
+  "onboarding-sign-in-chatgpt = Sign in with ChatGPT",
+  "onboarding-provide-api-key = Provide your own API key",
+  "onboarding-pay-for-usage = Pay for what you use",
+  "onboarding-api-key-disabled-workspace = API key login is disabled by this workspace.",
+  "history-worked-for = Worked for { $duration }",
+  ""
+].join("\n");
+
 function createManifest(ftl) {
   const hash = createHash("sha256").update(ftl).digest("hex");
   return {
@@ -98,11 +113,15 @@ async function createPackFixture({
   ftl = VALID_FTL,
   ftlBytes,
   records = ALL_RECORDS,
+  templateFtl,
   mutateManifest
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "codex-ultra-language-"));
   const packRoot = join(root, "pack");
   const catalogPath = join(root, "catalog.jsonl");
+  const templatePath = templateFtl === undefined
+    ? undefined
+    : join(root, "messages.en-US.ftl");
   await mkdir(packRoot, { recursive: true });
   const ftlSource = ftlBytes ?? ftl;
   const manifest = createManifest(ftlSource);
@@ -118,7 +137,10 @@ async function createPackFixture({
     "utf8"
   );
   await writeFile(join(packRoot, "messages.ftl"), ftlSource);
-  return { packRoot, catalogPath };
+  if (templatePath) {
+    await writeFile(templatePath, templateFtl, "utf8");
+  }
+  return { packRoot, catalogPath, templatePath };
 }
 
 test("validateLanguagePack formats all eleven wired messages with catalog samples", async () => {
@@ -133,6 +155,50 @@ test("validateLanguagePack formats all eleven wired messages with catalog sample
     "登录 ChatGPT"
   );
   assert.match(result.sourceHash, /^sha256:[a-f0-9]{64}$/);
+});
+
+test("validateLanguagePack enforces an exact translator template contract", async () => {
+  const { packRoot, catalogPath, templatePath } = await createPackFixture({
+    templateFtl: VALID_TEMPLATE_FTL
+  });
+
+  const result = await validateLanguagePack({ packRoot, catalogPath, templatePath });
+  assert.equal(result.messageCount, 11);
+});
+
+test("validateLanguagePack rejects a key missing from the translation template", async () => {
+  const { packRoot, catalogPath, templatePath } = await createPackFixture({
+    templateFtl: `${VALID_TEMPLATE_FTL}template-only = Template only\n`
+  });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath, templatePath }),
+    /translation is missing template key template-only/
+  );
+});
+
+test("validateLanguagePack rejects a translation key outside the template", async () => {
+  const { packRoot, catalogPath, templatePath } = await createPackFixture({
+    ftl: `${VALID_FTL}translation-only = 仅翻译包存在\n`,
+    templateFtl: VALID_TEMPLATE_FTL
+  });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath, templatePath }),
+    /translation contains key not declared by template: translation-only/
+  );
+});
+
+test("validateLanguagePack requires the same variables as the template", async () => {
+  const { packRoot, catalogPath, templatePath } = await createPackFixture({
+    ftl: `${VALID_FTL}template-variable = 已用 { $actual }\n`,
+    templateFtl: `${VALID_TEMPLATE_FTL}template-variable = Used { $expected }\n`
+  });
+
+  await assert.rejects(
+    validateLanguagePack({ packRoot, catalogPath, templatePath }),
+    /translation template-variable variables must be \[expected\], found \[actual\]/
+  );
 });
 
 test("validateLanguagePack rejects a missing wired key", async () => {

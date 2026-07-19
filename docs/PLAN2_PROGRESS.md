@@ -1,14 +1,14 @@
 # Codex CLI Ultra 进度检查点
 
-更新时间：2026-07-18 +08:00
+更新时间：2026-07-19 +08:00
 
 ## 战略调整
 
-当前主线已从 i18n 演示 MVP 进入 `v0.1.0` 全链路交付：fork 自动追踪上游、CCU 自动同步 fork Release、本机安装后由 `codex --yolo` 启动中文 CCU。
+当前主线已进入 `v0.1.1` 自包含安装交付：fork 自动追踪上游、CCU 自动同步并内置 fork Release、本机安装后由 `codex --yolo` 启动中文 CCU，并可一键卸载回退英文原版。
 
 - fork 自动发布、CCU Release channel、事务更新、PATH 优先级和旧版本清理均已实现。
-- Rust TUI 管理器、外部主题包、DeepSeek 风格状态栏、欢迎页颜色角色和多账号额度聚合均已实现。
-- 交付完成标准是：双仓 PR 合并、fork Release 与 CCU `v0.1.0` Release 发布、本机在线安装和真实 TUI 验证通过。
+- Rust TUI 管理器、外部主题包、可选 DeepSeek 风格状态栏、欢迎页颜色角色和多账号额度聚合均已实现。
+- 交付完成标准是：双仓 PR 合并、fork `0.144.6-ccu.i18n.1` 与 CCU `v0.1.1` Release 发布、本机自包含安装、卸载回退和真实 TUI 验证通过。
 
 2026-07-17 用户确认保留 fork 作为长期二开基础，因此近期主线恢复阶段 B/C，但职责边界已经调整：Rust 机制和自动构建进入 `Cec1c/codex`，CCU 只管理语言包、二进制共存、更新和后续界面预设。
 
@@ -23,11 +23,10 @@
 
 ## 当前分支
 
-- 工作树：`D:\codex-cli-ultra\.worktrees\i18n-launcher-installer`
-- 分支：`feat/i18n-launcher-installer`
-- 已推送检查点：`36eac19 feat: 打通 fork Release 同步与安装链路`，随后合并 `origin/main` 为 `65ff28f`。
-- Rust Fluent 运行时 PR #2 已于 2026-07-15 合并到 `main`。
-- 当前 CCU 与 fork 的 v0.1.0 收口改动尚待最终提交、推送和 PR。
+- 工作树：`D:\codex-cli-ultra\.worktrees\ftl-template-coverage`
+- 分支：`feat/ftl-template-coverage`
+- 基线：`origin/main` / `fd88a4e`；当前工作树同时收口 1334 条 FTL、自包含 Release、可选状态栏和一键卸载。
+- fork main 集成分支已提交 `daa4556fe6` 与 `2c8af5e42a`；`0.144.6` 冲突发布分支已提交到 `ea269dd8b6`，尚未推送或发布。
 
 ## i18n 演示 MVP 已完成
 
@@ -54,10 +53,21 @@
 - 仅保留官方 npm 英文备份与一个当前 CCU Release；launcher PATH 优先级保证 `codex` 默认进入 CCU。
 - Rust 管理器提供状态、语言包、主题包页面；内容同步会把历史 `zh-Hans` 偏好迁移为 `zh-CN`。
 
+## FTL 模板与中文包收口
+
+- 新增 `templates/languages/messages.en-US.ftl`，作为不安装到运行时的英文翻译模板。
+- 英文模板与 `zh-CN` 包统一为 1334 个实际使用的消息键，校验器要求键集合、Fluent 变量集合和资源 SHA256 完全一致。
+- 129 条上游源码消息目录已在原始 `rust-v0.144.5` / `87db9bc18ba5bc82c1cb4e4381b44f693ee35623` 上重新提取，保留真实源码行号和指纹。
+- CCU 内容同步与 Release 内容包会携带模板，并在写入安装目录前校验全部 1334 个键；目录级 smoke test 保留上游可追溯消息证据。
+- `/model`、Tips、命令列表和二级界面的调用点已进入 fork 分支；仅修改既有 FTL 文案时仍无需重新编译 Codex。
+- 自包含安装已实现：CCU ZIP 内置 fork manifest/资产、安装/卸载脚本、FTL、模板、主题和管理器。
+- 状态栏 `ContextTokens` 已从 session 累计令牌改为 `last_token_usage.tokens_in_context_window()`；`11.6M/353K` 回归为 `42.7K/353K`，百分比仍为 9%。
+- `ccu.deepseek` 五段式状态栏改为安装时可选，默认关闭；显式 `[tui].status_line` 配置优先。
+
 ## 已完成验证
 
 - 全新 Codex `0.144.4` 上游工作树重放：adapter `plan/apply` 成功，共 29 个受控文件；相对 0.144.1 未出现 i18n 调用点锚点漂移。
-- Node 全量测试：`208/208` 通过；新增内容迁移与安装路径保护测试通过。
+- Node 全量测试：当前新增可选状态栏、卸载、自包含打包测试；最终计数待本轮收口后更新。
 - Rust i18n 聚焦测试：`15/15` 通过。
 - Rust slash command 聚焦测试：`5/5` 通过；command popup 测试：`15/15` 通过。
 - `npm run build` 成功生成 launcher 与管理 bundle。
@@ -69,7 +79,7 @@
 - Rust 定向验证：i18n `15/15`、status line `61/61`、footer `6/6`、session header `5 passed / 1 Windows-only ignored`、theme `2/2`；`cargo fmt --all -- --check` 通过。
 - Rust `codex-tui` 全量验证：`3092/3092` 通过；状态栏时长改为整秒后，803 项界面/状态测试连续两轮全绿。
 - 两轮可见文本审计完全一致：8 个关键文件、394 个候选；welcome 44、tips/help 18、secondary 43、commands 53；SHA256 `80afdd17aab18cf0db840f1da976b76e24aa724ee1b367ef933f7920cf7a4e7f`。
-- CCU v0.1.0 ZIP 已本地组装并校验，包含安装器、双 Node bundle、Rust 管理器、语言包、主题包、catalog 与 quota 示例。
+- 旧 CCU v0.1.0 ZIP 已本地组装并校验；v0.1.1 新包将额外包含 `fork-release`、`install.cmd`、`uninstall.ps1/cmd`。
 - `git diff --check` 通过。
 - 0.144.4 全新工作树首次 Rust 测试编译约 8 分 49 秒，随后 Debug `codex.exe` 构建约 4 分 6 秒；缓存完成后的单组聚焦测试约 4 至 6 秒。
 
@@ -89,10 +99,10 @@ $env:HTTP_PROXY = 'http://127.0.0.1:7890'
 ## 发布收口顺序
 
 1. 提交并推送 fork，创建并合并到 `Cec1c/codex:main` 的 PR。
-2. 触发 `rust-v0.144.5 / r1`，验证 `ccu-rust-v0.144.5-r1` Release 与 manifest/ZIP/SHA256。
+2. 发布 `ccu-rust-v0.144.6-r1`，验证 manifest/ZIP/SHA256。
 3. 用真实 fork Release 运行 CCU 安装与更新，检查 PATH、版本、中文 TUI 和“两份保留”合同。
 4. 提交并推送 CCU，创建并合并到 `main` 的 PR。
-5. 创建 `v0.1.0` tag 和 CCU Release，验证安装 ZIP、SHA256 与 stable channel。
+5. 创建 `v0.1.1` tag 和 CCU Release，验证自包含安装 ZIP、SHA256、卸载回退与 stable channel。
 
 ## 保护事项
 

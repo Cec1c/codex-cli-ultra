@@ -30,11 +30,25 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
   });
 
   assert.equal(result.language.locale, "zh-CN");
+  assert.equal(result.language.messages, 1334);
+  assert.equal(result.contentRoot, join(installRoot, "content"));
   assert.equal(await readFile(join(codexHome, "ui-language"), "utf8"), "zh-CN\n");
   assert.equal(await readFile(join(codexHome, "ui-theme"), "utf8"), "my.custom.theme\n");
+  await assert.rejects(
+    readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
+    (error) => error?.code === "ENOENT"
+  );
   assert.match(
     await readFile(join(installRoot, "languages", "zh-CN", "messages.ftl"), "utf8"),
     /session-card-yolo-mode = YOLO 模式/
+  );
+  assert.equal(
+    await readFile(join(installRoot, "content", "languages", "zh-CN", "messages.ftl"), "utf8"),
+    await readFile(join(installRoot, "languages", "zh-CN", "messages.ftl"), "utf8")
+  );
+  assert.match(
+    await readFile(join(installRoot, "content", "catalog", "messages.en-US.ftl"), "utf8"),
+    /status-line-item-context-tokens-description = Current tokens used/
   );
   const theme = JSON.parse(
     await readFile(join(installRoot, "themes", "ccu.deepseek", "theme.json"), "utf8")
@@ -51,6 +65,38 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
       { balance: 12, currency: "CNY" }
     ]
   );
+
+  const cachedResult = await syncBundledContent({
+    contentRoot: join(installRoot, "content"),
+    installRoot,
+    env: { CODEX_HOME: codexHome }
+  });
+  assert.equal(cachedResult.language.messages, 1334);
+  assert.equal(cachedResult.contentRoot, join(installRoot, "content"));
+
+  const themedResult = await syncBundledContent({
+    contentRoot: join(installRoot, "content"),
+    installRoot,
+    statusLinePreset: "ccu.deepseek",
+    env: { CODEX_HOME: codexHome }
+  });
+  assert.equal(themedResult.theme.statusLinePresetEnabled, true);
+  assert.equal(
+    await readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
+    "ccu.deepseek\n"
+  );
+
+  const disabledResult = await syncBundledContent({
+    contentRoot: join(installRoot, "content"),
+    installRoot,
+    statusLinePreset: null,
+    env: { CODEX_HOME: codexHome }
+  });
+  assert.equal(disabledResult.theme.statusLinePresetEnabled, false);
+  await assert.rejects(
+    readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
+    (error) => error?.code === "ENOENT"
+  );
 });
 
 test("installer guards recursive content replacement with an absolute child-path check", async () => {
@@ -61,6 +107,14 @@ test("installer guards recursive content replacement with an absolute child-path
   assert.match(source, /InstallRoot must not be the installer source directory/);
   assert.match(packager, /Release staging directory/);
   assert.match(packager, /Release ZIP/);
+  assert.match(source, /messages\.en-US\.ftl/);
+  assert.match(packager, /messages\.en-US\.ftl/);
+  assert.match(source, /fork-release/);
+  assert.match(source, /--enable-statusline/);
+  assert.match(source, /--disable-statusline/);
+  assert.match(packager, /ForkReleaseDir is required/);
+  assert.match(packager, /ccu-fork-manifest\.json/);
+  assert.match(packager, /uninstall\.cmd/);
 });
 
 test("PowerShell installer lets the core claim ownership before copying local payloads", async () => {

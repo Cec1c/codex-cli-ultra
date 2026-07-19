@@ -30,12 +30,20 @@ jobs:
           toolchain: "1.96.1"
       - run: npm ci
       - run: npm test
+      - name: Download and verify latest fork Release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/download-fork-release.mjs --output artifacts/fork-release
       - name: Build release package
         shell: pwsh
         run: |
           $tag = '${{ inputs.tag || github.ref_name }}'
           if ($tag -notmatch '^v(.+)$') { throw "invalid release tag: $tag" }
-          .\scripts\package-release.ps1 -Version $Matches[1] -OutputDirectory artifacts
+          .\scripts\package-release.ps1 `
+            -Version $Matches[1] `
+            -OutputDirectory artifacts `
+            -ForkReleaseDir artifacts/fork-release
       - uses: actions/upload-artifact@v4
         with:
           name: codex-cli-ultra-windows
@@ -49,5 +57,5 @@ jobs:
           $tag = '${{ inputs.tag || github.ref_name }}'
           gh release create $tag artifacts/*.zip artifacts/*.sha256 `
             --title "Codex CLI Ultra $tag" `
-            --notes "首个可运行版本：自动安装 CCU i18n fork、简体中文 FTL、Rust 管理 TUI、状态栏与欢迎页主题，并保留官方英文版作为唯一备份。" `
+            --notes "自包含 Windows 安装包：内置已验证的 CCU i18n fork、1334 条简体中文 FTL、可选状态栏主题和一键卸载回退；运行 install.cmd 后，新终端中的 codex 即为中文版本。" `
             --latest

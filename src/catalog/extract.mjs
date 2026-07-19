@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-const UPSTREAM_COMMIT = "8c68d4c87dc54d38861f5114e920c3de2efa5876";
+const UPSTREAM_VERSION = "0.144.5";
+const UPSTREAM_COMMIT = "87db9bc18ba5bc82c1cb4e4381b44f693ee35623";
 
 function findAllIndexes(source, anchor) {
   const indexes = [];
@@ -66,7 +67,7 @@ export async function extractCatalog(sourceRoot, specs) {
       mvpStatus: spec.mvpStatus,
       source: {
         repository: "openai/codex",
-        release: "rust-v0.144.4",
+        release: `rust-v${UPSTREAM_VERSION}`,
         commit: UPSTREAM_COMMIT,
         path: spec.path,
         symbol: spec.symbol,
@@ -75,7 +76,7 @@ export async function extractCatalog(sourceRoot, specs) {
         fingerprint: `sha256:${fingerprint}`
       },
       firstSeen: "0.144.1",
-      lastVerified: "0.144.4"
+      lastVerified: UPSTREAM_VERSION
     });
   }
   return records.sort(compareIds);
@@ -102,7 +103,7 @@ export async function writeCatalogArtifacts(
   await writeFile(jsonlPath, jsonl, "utf8");
 
   const lines = [
-    "# Codex CLI 0.144.4 TUI 文本目录 / TUI Text Inventory",
+    `# Codex CLI ${UPSTREAM_VERSION} TUI 文本目录 / TUI Text Inventory`,
     "",
     "> 本文件由机器目录生成，请勿手工维护重复字段。",
     "> This file is generated from the machine catalog; do not maintain duplicate fields manually.",

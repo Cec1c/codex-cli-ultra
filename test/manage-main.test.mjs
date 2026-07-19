@@ -61,7 +61,7 @@ test("management version reports both CCU and the installed fork build", async (
     stdout: { write(chunk) { output += chunk; } }
   });
   assert.equal(code, 0);
-  assert.match(output, /codex-cli-ultra 0\.1\.0/);
+  assert.match(output, /codex-cli-ultra 0\.1\.1/);
   assert.match(output, /fork 0\.144\.5-ccu\.i18n\.1/);
   assert.match(output, /i18n API 1/);
 });
@@ -201,4 +201,97 @@ test("hidden cleanup command waits for inactive releases without user output", a
 
   assert.equal(code, 0);
   assert.equal(called, true);
+});
+
+test("install forwards the optional CCU status-line selection", async () => {
+  let contentOptions;
+  let installerOptions;
+  const latest = manifest(2);
+  const code = await manageMain({
+    args: ["install", "--enable-statusline", "--json"],
+    installRoot,
+    managerSource: "C:\\bundle\\codex-ultra.mjs",
+    launcherSource: "C:\\bundle\\launcher.mjs",
+    readState: async () => ({ ...state, active: null }),
+    readFile: async () => {
+      throw Object.assign(new Error("missing"), { code: "ENOENT" });
+    },
+    resolveLatestForkRelease: async () => ({
+      manifest: latest,
+      provider: { materializeAsset: async () => {} }
+    }),
+    installForkFromProvider: async (options) => {
+      installerOptions = options;
+      return {
+        changed: true,
+        releaseId: latest.displayVersion,
+        manifest: latest,
+        removedReleases: [],
+        deferredReleases: []
+      };
+    },
+    syncBundledContent: async (options) => {
+      contentOptions = options;
+      return {
+        language: { locale: "zh-CN", messages: 1334 },
+        theme: {
+          id: "ccu.deepseek",
+          displayName: "CCU DeepSeek",
+          statusLinePresetEnabled: true
+        },
+        codexHome: "C:\\Users\\me\\.codex"
+      };
+    },
+    stdout: { write() {} }
+  });
+
+  assert.equal(code, 0);
+  assert.equal(contentOptions.statusLinePreset, "ccu.deepseek");
+  assert.equal(typeof installerOptions.onStage, "undefined");
+});
+
+test("uninstall removes CCU and schedules install-root cleanup", async () => {
+  let uninstallOptions;
+  let cleanupProcess;
+  let output = "";
+  const code = await manageMain({
+    args: ["uninstall", "--json"],
+    installRoot,
+    uninstallCcu: async (options) => {
+      uninstallOptions = options;
+      return {
+        changed: true,
+        installRoot,
+        official: state.official,
+        pathRemoved: true,
+        stateChanged: true,
+        removedPreferences: ["ui-language", "ui-theme"]
+      };
+    },
+    spawnDetached: (executable, args, options) => {
+      cleanupProcess = { executable, args, options };
+      return {
+        pid: 1234,
+        once() {},
+        unref() {}
+      };
+    },
+    stdout: { write(chunk) { output += chunk; } }
+  });
+
+  assert.equal(code, 0);
+  assert.equal(uninstallOptions.installRoot, installRoot);
+  assert.equal(cleanupProcess.executable, "pwsh.exe");
+  assert.deepEqual(cleanupProcess.args.slice(0, 5), [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-WindowStyle",
+    "Hidden"
+  ]);
+  assert.equal(cleanupProcess.options.detached, undefined);
+  assert.equal(cleanupProcess.options.windowsHide, true);
+  assert.equal(cleanupProcess.options.stdio, "ignore");
+  assert.equal(cleanupProcess.options.env.CCU_INSTALL_ROOT, installRoot);
+  assert.equal(JSON.parse(output).cleanupScheduled, true);
 });

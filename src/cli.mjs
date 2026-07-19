@@ -17,11 +17,11 @@ import {
 const USAGE = [
   "Usage:",
   "  node src/cli.mjs catalog extract --source PATH",
-  "  node src/cli.mjs language validate --pack PATH --catalog PATH",
+  "  node src/cli.mjs language validate --pack PATH --catalog PATH [--template PATH]",
   "  node src/cli.mjs adapter plan --source PATH",
   "  node src/cli.mjs adapter apply --source PATH",
   "  node src/cli.mjs adapter revert --source PATH",
-  "  node src/cli.mjs doctor --source PATH --pack PATH --catalog PATH"
+  "  node src/cli.mjs doctor --source PATH --pack PATH --catalog PATH [--template PATH]"
 ].join("\n");
 
 function optionValue(args, name) {
@@ -50,11 +50,11 @@ export async function runCli(
     await writeCatalogArtifacts(records, {
       jsonlPath: resolve(
         cwd,
-        "research/codex-0.144.4/tui-messages.jsonl"
+        "research/codex-0.144.5/tui-messages.jsonl"
       ),
       markdownPath: resolve(
         cwd,
-        "docs/i18n/codex-0.144.4-text-inventory.md"
+        "docs/i18n/codex-0.144.5-text-inventory.md"
       )
     });
     return { command: "catalog extract", records: records.length };
@@ -62,17 +62,19 @@ export async function runCli(
   if (group === "language" && action === "validate") {
     const catalog = optionValue(args, "--catalog");
     const pack = optionValue(args, "--pack");
+    const template = optionValue(args, "--template");
     if (!pack || !catalog) {
       throw new Error("language validate requires --pack PATH --catalog PATH");
     }
     const language = await validateLanguagePack({
       catalogPath: resolve(cwd, catalog),
-      packRoot: resolve(cwd, pack)
+      packRoot: resolve(cwd, pack),
+      templatePath: template ? resolve(cwd, template) : undefined
     });
     const report = {
       command: "language validate",
       locale: language.locale,
-      messages: Object.keys(language.messages).length,
+      messages: language.messageCount,
       sourceHash: language.sourceHash
     };
     stdout.write(JSON.stringify(report, null, 2) + "\n");
@@ -112,6 +114,7 @@ export async function runCli(
     const source = optionValue(args, "--source");
     const pack = optionValue(args, "--pack");
     const catalog = optionValue(args, "--catalog");
+    const template = optionValue(args, "--template");
     if (!source || !pack || !catalog) {
       throw new Error(
         "doctor requires --source PATH --pack PATH --catalog PATH"
@@ -121,13 +124,14 @@ export async function runCli(
       doctorCodexPatch(resolve(cwd, source)),
       validateLanguagePack({
         packRoot: resolve(cwd, pack),
-        catalogPath: resolve(cwd, catalog)
+        catalogPath: resolve(cwd, catalog),
+        templatePath: template ? resolve(cwd, template) : undefined
       })
     ]);
     const report = {
       ...adapter,
       locale: language.locale,
-      messages: Object.keys(language.messages).length,
+      messages: language.messageCount,
       sourceHash: language.sourceHash
     };
     stdout.write(JSON.stringify(report, null, 2) + "\n");
