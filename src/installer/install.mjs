@@ -86,6 +86,85 @@ const DEFERRED_RELEASE_CLEANUP_CODES = new Set([
   "EPERM"
 ]);
 
+const RECOVERABLE_ROOT_DIRECTORIES = new Set([
+  "bin",
+  "cache",
+  "content",
+  "languages",
+  "releases",
+  "themes"
+]);
+const RECOVERABLE_ROOT_FILES = new Set([
+  "quota.example.json",
+  "state.json"
+]);
+const CCU_RELEASE_ID = /^\d+\.\d+\.\d+-ccu\.i18n\.\d+$/;
+
+async function isRecoverableCcuInstallRoot(installRoot, entries) {
+  let releasesEntry = null;
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) return false;
+    if (RECOVERABLE_ROOT_DIRECTORIES.has(entry.name)) {
+      if (!entry.isDirectory()) return false;
+      if (entry.name === "releases") releasesEntry = entry;
+      continue;
+    }
+    if (RECOVERABLE_ROOT_FILES.has(entry.name)) {
+      if (!entry.isFile()) return false;
+      continue;
+    }
+    return false;
+  }
+  if (releasesEntry === null) return false;
+
+  const releaseEntries = await readdir(join(installRoot, "releases"), {
+    withFileTypes: true
+  });
+  if (releaseEntries.length === 0) return false;
+  for (const release of releaseEntries) {
+    if (
+      release.isSymbolicLink() ||
+      !release.isDirectory() ||
+      !CCU_RELEASE_ID.test(release.name)
+    ) {
+      return false;
+    }
+    const binaryPath = join(
+      installRoot,
+      "releases",
+      release.name,
+      PLATFORM,
+      "package",
+      "bin",
+      "codex.exe"
+    );
+    const metadata = await pathExists(binaryPath);
+    if (!metadata?.isFile() || metadata.isSymbolicLink()) return false;
+  }
+  return true;
+}
+
+export async function quarantineOrphanedCcuReleases(installRoot, options = {}) {
+  const list = options.readdir ?? readdir;
+  const move = options.rename ?? rename;
+  const releasesRoot = join(installRoot, "releases");
+  let entries;
+  try {
+    entries = await list(releasesRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const recoveredReleases = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !CCU_RELEASE_ID.test(entry.name)) continue;
+    const recoveredName = `${entry.name}.recovered-${randomUUID()}`;
+    await move(join(releasesRoot, entry.name), join(releasesRoot, recoveredName));
+    recoveredReleases.push(recoveredName);
+  }
+  return recoveredReleases;
+}
+
 export async function pruneInactiveReleases(
   installRoot,
   activeReleaseId,
@@ -289,7 +368,11 @@ export async function ensureOwnershipMarker(installRoot) {
     }
     return markerPath;
   }
-  if ((await readdir(installRoot)).length !== 0) {
+  const rootEntries = await readdir(installRoot, { withFileTypes: true });
+  if (
+    rootEntries.length !== 0 &&
+    !(await isRecoverableCcuInstallRoot(installRoot, rootEntries))
+  ) {
     throw new Error("install root is not empty and has no ownership marker");
   }
   const handle = await open(markerPath, "wx");
@@ -673,6 +756,9 @@ export async function installForkFromProvider(options) {
     const manifest = validateManifest(rawManifest, { platform: PLATFORM });
 
     await ensureOwnershipMarker(installRoot);
+    const recoveredReleases = oldState === null
+      ? await quarantineOrphanedCcuReleases(installRoot, options)
+      : [];
     stagingRoot = join(installRoot, "cache", `fork-install-${randomUUID()}`);
     await mkdir(stagingRoot, { recursive: true });
     const forkZip = join(stagingRoot, manifest.asset.name);
@@ -773,6 +859,7 @@ export async function installForkFromProvider(options) {
       releaseId,
       manifest,
       state: nextState,
+      recoveredReleases,
       ...cleanup
     };
   } catch (error) {

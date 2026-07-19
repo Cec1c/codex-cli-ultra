@@ -47,7 +47,7 @@ test("language validate reports the expanded wired catalog", async () => {
 
   assert.equal(result.command, "language validate");
   assert.equal(result.locale, "zh-CN");
-  assert.equal(result.messages, 1334);
+  assert.equal(result.messages, 1396);
   assert.match(result.sourceHash, /^sha256:[a-f0-9]{64}$/);
   assert.deepEqual(JSON.parse(output), result);
 });

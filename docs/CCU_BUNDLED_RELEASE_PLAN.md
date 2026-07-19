@@ -7,7 +7,7 @@
 ## 目标包结构
 
 ```text
-codex-cli-ultra-v0.1.1-windows-x64/
+codex-cli-ultra-v0.1.2-windows-x64/
 ├─ install.ps1
 ├─ install.cmd
 ├─ uninstall.ps1
@@ -23,7 +23,7 @@ codex-cli-ultra-v0.1.1-windows-x64/
 │  ├─ languages/zh-CN/
 │  ├─ catalog/tui-messages.jsonl
 │  ├─ catalog/messages.en-US.ftl
-│  ├─ themes/ccu-deepseek/
+│  ├─ themes/ccu-hermes/
 │  └─ quota.example.json
 ├─ README.md
 └─ LICENSE
@@ -39,14 +39,14 @@ codex-cli-ultra-v0.1.1-windows-x64/
 4. 即使没有预装官方 npm Codex，也允许 CCU 二进制完成首次安装；是否额外打包官方英文二进制作为离线备份，在下一期实现前单独确认。
 5. 原子写入 CCU 安装目录和状态文件，安装 `codex`、`codex-ultra`、`ccu-manager` shim。
 6. 把 CCU `bin` 放到用户 PATH 中官方 npm shim 之前；不修改系统级 PATH。
-7. 安装时询问是否启用 `ccu.deepseek` 五段式状态栏，默认关闭；用户显式 `[tui].status_line` 始终优先。
+7. 安装时询问是否启用 `ccu.hermes` 四段式状态栏，默认关闭；启用时备份并原子更新 `[tui].status_line` 与 `status_line_use_colors`，禁用时仅恢复仍由 CCU 管理的值。
 8. 不结束运行中的 Codex。旧 CCU 版本被占用时由隐藏清理器等待会话自然退出后删除。
 
 ## 卸载行为
 
 1. `uninstall.cmd` 或 `codex-ultra uninstall` 先从用户 PATH 移除 CCU `bin`。
-2. 将活动 CCU 版本清空，删除由 CCU 管理的语言、主题和状态栏偏好。
-3. 当前命令退出后由隐藏 PowerShell 清理器删除安装目录；若仍被占用则稍后重试。
+2. 将活动 CCU 版本清空，删除由 CCU 管理的语言、主题和状态栏偏好，并安全恢复状态栏配置备份。
+3. 无文件锁时，管理器先将安装根原子重命名为 tombstone 并立即删除；存在运行中会话锁时，再由隐藏 PowerShell 清理器等待锁释放后完成同一原子流程。调度失败不会误报成功，也不会部分删除原目录。
 4. 不删除、不修改官方 npm Codex，也不结束当前正在运行的 Codex。
 
 ## 本机验收
@@ -70,4 +70,4 @@ ccu-manager --print-status
 - 重复运行安装脚本结果幂等；
 - 正常稳定状态只保留当前 CCU 与一份官方英文备份。
 
-本期 FTL 收口不构建或发布这个安装包，只把模板、内容布局和校验链准备到可被该包直接复用的状态。
+v0.1.2 已按此合同完成本机自包含打包、幂等安装、可选 Hermes 配置、卸载回退和安装根清理验证。

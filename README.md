@@ -1,8 +1,8 @@
 # Codex CLI Ultra
 
-> **v0.1.1：** 这是一个非官方的 Windows x64 社区发行版。它提供内置 fork 二进制、1334 条简体中文 FTL、可选主题状态栏和一键卸载回退，同时保留 npm 安装的官方英文 Codex。
+> **v0.1.2：** 这是一个非官方的 Windows x64 社区发行版。它提供内置 fork 二进制、1396 条简体中文 FTL、可选 Hermes 状态栏和一键卸载回退，同时保留 npm 安装的官方英文 Codex。
 >
-> **v0.1.1:** This unofficial Windows x64 community distribution bundles the verified fork binary, 1,336 Simplified Chinese FTL messages, an optional themed status line, and one-click fallback to the retained official npm Codex.
+> **v0.1.2:** This unofficial Windows x64 community distribution bundles the verified fork binary, 1,396 Simplified Chinese FTL messages, an optional Hermes status line, and one-click fallback to the retained official npm Codex.
 
 Codex CLI Ultra 通过职责分离的长期 fork 和轻量管理器，为 Codex CLI 探索可持续维护的本地化与界面扩展能力。
 
@@ -10,9 +10,9 @@ Codex CLI Ultra explores maintainable localization and interface extension capab
 
 ## 当前 MVP / Current MVP
 
-当前发布候选基于 Codex CLI 0.144.6，显示版本为 `0.144.6-ccu.i18n.1`。简体中文 FTL 与英文模板已扩展为 1334 个实际使用键，覆盖 `/model`、本地启动 Tips、命令列表与二级界面。状态栏的令牌分子使用当前上下文窗口，而不是 session 累计消耗；主题状态栏只有在安装时明确选择后才启用。语言包缺失、损坏、缺键、变量不匹配或翻译为空时逐条回退到二进制内置英文。
+当前发布候选基于 Codex CLI 0.144.6，显示版本为 `0.144.6-ccu.i18n.2`。简体中文 FTL 与英文模板已扩展为 1396 个实际使用键，覆盖 `/model`、`/fast`、`/feedback`、`/mention`、`@`、本地启动 Tips、命令列表与二级界面。状态栏的令牌分子使用当前上下文窗口，而不是 session 累计消耗；Hermes 状态栏只有在安装时明确选择后才启用。语言包缺失、损坏、缺键、变量不匹配或翻译为空时逐条回退到二进制内置英文。
 
-The current release candidate is based on Codex CLI 0.144.6 and reports `0.144.6-ccu.i18n.1`. The Simplified Chinese FTL and English template contain 1,336 actively used messages, including `/model`, local Tips, command lists, and secondary screens. Context-token status uses the current context window rather than session-total usage, and the themed status line is opt-in. Invalid or incomplete translations fall back per message to compiled English.
+The current release candidate is based on Codex CLI 0.144.6 and reports `0.144.6-ccu.i18n.2`. The Simplified Chinese FTL and English template contain 1,396 actively used messages, including `/model`, `/fast`, `/feedback`, `/mention`, `@`, local Tips, command lists, and secondary screens. Context-token status uses the current context window rather than session-total usage, and the Hermes status line is opt-in. Invalid or incomplete translations fall back per message to compiled English.
 
 fork 每 6 小时检查一次上游稳定 Release，从对应 `rust-vX.Y.Z` tag 建立发布分支并重放 CCU 提交；冲突时创建告警 Issue 并停止。CCU 自动读取 fork Release channel、校验 manifest/大小/SHA256、事务安装并清理旧 CCU 版本。
 
@@ -43,7 +43,7 @@ cd D:\codex-cli-ultra
 .\install.ps1 -ForkReleaseDir <解压后的-fork-Release-目录>
 ```
 
-从 GitHub Release 安装：下载 `codex-cli-ultra-v0.1.1-windows-x64.zip` 和同名 `.sha256`，核对 SHA256，解压后双击 `install.cmd`。ZIP 已内置 fork Release，不需要再次下载 Codex。安装器会说明每一步并询问是否启用五段式状态栏，默认不启用。
+从 GitHub Release 安装：下载 `codex-cli-ultra-v0.1.2-windows-x64.zip` 和同名 `.sha256`，核对 SHA256，解压后双击 `install.cmd`。ZIP 已内置 fork Release，不需要再次下载 Codex。安装器会说明每一步并询问是否启用 Hermes 四段式状态栏，默认不启用。
 
 ```powershell
 codex-ultra version
@@ -53,7 +53,7 @@ codex --yolo
 ccu-manager
 ```
 
-预期 `codex --version` 包含 `0.144.6-ccu.i18n.1`；`codex --yolo` 显示中文欢迎页和 `YOLO 模式`。若安装时选择主题状态栏，则会额外显示五段式上下文状态。官方备份路径可由 `codex-ultra status --json` 查看。
+预期 `codex --version` 包含 `0.144.6-ccu.i18n.2`；`codex --yolo` 显示中文欢迎页和 `YOLO 模式`。若安装时选择 Hermes 状态栏，安装器会备份并更新 `~/.codex/config.toml` 中的状态栏字段；禁用或卸载时仅恢复仍由 CCU 管理的值。官方备份路径可由 `codex-ultra status --json` 查看。
 
 The GitHub Release ZIP is self-contained. Verify the adjacent SHA256 file, extract it, and run `install.cmd`. A new terminal resolves `codex` to CCU, while `uninstall.cmd` removes CCU from PATH and returns `codex` to the retained official English build.
 
@@ -99,15 +99,15 @@ Theme packs are intended to go beyond color replacement. The long-term vision in
 
 The first theme milestone is a highly customizable status line: theme authors should be able to compose segments, control order and priority, define formatting and styles, and degrade gracefully when terminal width is limited.
 
-内置 `ccu.deepseek` 当前采用紧凑模型标签、10 格上下文进度和分段降级，完整形态示例为：`deepseek-v4-pro[1m] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s │ 17.96 CNY`。其中 `42.7K` 是当前上下文窗口已用令牌，不是 session 累计令牌。真实余额优先显示；没有余额时，`quota.json` 会按账号权重聚合剩余百分比，其中 `pro20x` 默认按 20 个 `plus` 计算。可复制安装目录中的 `quota.example.json` 为 `quota.json` 后填写自己的数据。
+内置 `ccu.hermes` 采用随机模型 emoji、Hermes 调色板、紧凑模型标签、10 格上下文进度和分段降级，完整形态示例为：`🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s │`。其中 `42.7K` 是当前上下文窗口已用令牌，不是 session 累计令牌；默认方案不显示余额。
 
-The bundled `ccu.deepseek` theme uses compact model labels, a ten-cell context bar, and segment-level width fallbacks. Real balances take priority; otherwise `quota.json` aggregates remaining percentages by account weight, with `pro20x` defaulting to twenty `plus` accounts.
+The bundled `ccu.hermes` theme uses a random model emoji, a shuffled Hermes palette, compact model labels, a ten-cell context bar, and segment-level width fallbacks. Its default four-segment layout does not display account balances.
 
 ## 运行与分发入口 / Runtime and distribution entry points
 
-v0.1.1 使用 PowerShell 7 安装/卸载器、Node.js 管理执行器和 Rust Ratatui 管理界面，优先支持 Windows 11。后续平台可以复用相同的 Release manifest、外部语言包和主题包合同。
+v0.1.2 使用 PowerShell 7 安装/卸载器、Node.js 管理执行器和 Rust Ratatui 管理界面，优先支持 Windows 11。后续平台可以复用相同的 Release manifest、外部语言包和主题包合同。
 
-v0.1.1 uses PowerShell 7 install/uninstall scripts, a Node.js management executor, and a Rust Ratatui manager, with Windows 11 as the first supported platform. Future platforms can reuse the same Release manifest, external language-pack, and theme-pack contracts.
+v0.1.2 uses PowerShell 7 install/uninstall scripts, a Node.js management executor, and a Rust Ratatui manager, with Windows 11 as the first supported platform. Future platforms can reuse the same Release manifest, external language-pack, and theme-pack contracts.
 
 部分适配设计会参考 [Codex 的开源代码](https://github.com/openai/codex)，用于理解现有字符串、TUI 渲染和配置入口。兼容层应保持轻量、可验证，并对 Codex 版本变化明确失败，而不是静默破坏用户安装。
 

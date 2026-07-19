@@ -30,7 +30,7 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
   });
 
   assert.equal(result.language.locale, "zh-CN");
-  assert.equal(result.language.messages, 1334);
+  assert.equal(result.language.messages, 1396);
   assert.equal(result.contentRoot, join(installRoot, "content"));
   assert.equal(await readFile(join(codexHome, "ui-language"), "utf8"), "zh-CN\n");
   assert.equal(await readFile(join(codexHome, "ui-theme"), "utf8"), "my.custom.theme\n");
@@ -51,10 +51,12 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
     /status-line-item-context-tokens-description = Current tokens used/
   );
   const theme = JSON.parse(
-    await readFile(join(installRoot, "themes", "ccu.deepseek", "theme.json"), "utf8")
+    await readFile(join(installRoot, "themes", "ccu.hermes", "theme.json"), "utf8")
   );
   assert.equal(theme.statusLine.separator, " │ ");
   assert.equal(theme.statusLine.modelReasoningStyle, "bracketed");
+  assert.equal(theme.statusLine.modelEmojis.length, 20);
+  assert.equal(theme.statusLine.palette.length, 10);
   const quotaExample = JSON.parse(
     await readFile(join(installRoot, "quota.example.json"), "utf8")
   );
@@ -71,19 +73,35 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
     installRoot,
     env: { CODEX_HOME: codexHome }
   });
-  assert.equal(cachedResult.language.messages, 1334);
+  assert.equal(cachedResult.language.messages, 1396);
   assert.equal(cachedResult.contentRoot, join(installRoot, "content"));
 
+  const originalConfig = [
+    "[tui]",
+    "status_line = []",
+    "status_line_use_colors = false",
+    "theme = \"catppuccin-macchiato\"",
+    ""
+  ].join("\n");
+  await writeFile(join(codexHome, "config.toml"), originalConfig, "utf8");
   const themedResult = await syncBundledContent({
     contentRoot: join(installRoot, "content"),
     installRoot,
-    statusLinePreset: "ccu.deepseek",
+    statusLinePreset: "ccu.hermes",
     env: { CODEX_HOME: codexHome }
   });
   assert.equal(themedResult.theme.statusLinePresetEnabled, true);
   assert.equal(
     await readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
-    "ccu.deepseek\n"
+    "ccu.hermes\n"
+  );
+  assert.match(
+    await readFile(join(codexHome, "config.toml"), "utf8"),
+    /status_line = \[\n  "model-with-reasoning",[\s\S]*"session-timing",\n\]/
+  );
+  assert.match(
+    await readFile(join(codexHome, "config.toml"), "utf8"),
+    /status_line_use_colors = true/
   );
 
   const disabledResult = await syncBundledContent({
@@ -97,6 +115,7 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
     readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
     (error) => error?.code === "ENOENT"
   );
+  assert.equal(await readFile(join(codexHome, "config.toml"), "utf8"), originalConfig);
 });
 
 test("installer guards recursive content replacement with an absolute child-path check", async () => {
@@ -115,6 +134,40 @@ test("installer guards recursive content replacement with an absolute child-path
   assert.match(packager, /ForkReleaseDir is required/);
   assert.match(packager, /ccu-fork-manifest\.json/);
   assert.match(packager, /uninstall\.cmd/);
+});
+
+test("content sync migrates the legacy DeepSeek preset and applies Hermes config", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "ccu-content-legacy-theme-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const codexHome = join(root, "codex-home");
+  const installRoot = join(root, "install");
+  await writeFile(join(root, "placeholder"), "", "utf8");
+  await syncBundledContent({
+    contentRoot: projectRoot,
+    installRoot,
+    env: { CODEX_HOME: codexHome }
+  });
+  await Promise.all([
+    writeFile(join(codexHome, "ui-theme"), "ccu.deepseek\n", "utf8"),
+    writeFile(join(codexHome, "ui-statusline-preset"), "ccu.deepseek\n", "utf8"),
+    writeFile(join(codexHome, "config.toml"), "[tui]\nstatus_line = []\n", "utf8")
+  ]);
+
+  const result = await syncBundledContent({
+    contentRoot: join(installRoot, "content"),
+    installRoot,
+    env: { CODEX_HOME: codexHome }
+  });
+  assert.equal(await readFile(join(codexHome, "ui-theme"), "utf8"), "ccu.hermes\n");
+  assert.equal(
+    await readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
+    "ccu.hermes\n"
+  );
+  assert.equal(result.theme.statusLinePresetEnabled, true);
+  assert.match(
+    await readFile(join(codexHome, "config.toml"), "utf8"),
+    /"context-progress"/
+  );
 });
 
 test("PowerShell installer lets the core claim ownership before copying local payloads", async () => {

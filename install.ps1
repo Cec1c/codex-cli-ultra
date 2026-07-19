@@ -82,8 +82,8 @@ elseif ($DisableStatusLine) {
 }
 elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
     Write-Host ''
-    Write-Host '可选状态栏示例：deepseek-v4-pro[1m] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s │ 17.96 CNY'
-    $answer = Read-Host '是否启用 CCU 五段式状态栏？[y/N]'
+    Write-Host '可选 Hermes 状态栏：🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s │'
+    $answer = Read-Host '是否启用 CCU Hermes 四段式状态栏？[y/N]'
     $answer -match '^(?i:y|yes|是)$'
 }
 else {
@@ -122,7 +122,7 @@ else {
     New-Item -ItemType Directory -Path (Join-Path $temporaryContent 'themes') -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $temporaryContent 'catalog') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\languages\zh-CN') -Destination (Join-Path $temporaryContent 'languages\zh-CN') -Recurse
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\themes\ccu-deepseek') -Destination (Join-Path $temporaryContent 'themes\ccu-deepseek') -Recurse
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\themes\ccu-hermes') -Destination (Join-Path $temporaryContent 'themes\ccu-hermes') -Recurse
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'research\codex-0.144.5\tui-messages.jsonl') -Destination (Join-Path $temporaryContent 'catalog\tui-messages.jsonl')
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'templates\languages\messages.en-US.ftl') -Destination (Join-Path $temporaryContent 'catalog\messages.en-US.ftl')
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\quota.example.json') -Destination (Join-Path $temporaryContent 'quota.example.json')

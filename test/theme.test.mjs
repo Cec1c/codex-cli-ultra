@@ -46,6 +46,15 @@ test("theme validator accepts bracketed model reasoning labels", () => {
   assert.equal(validated.statusLine.modelReasoningStyle, "bracketed");
 });
 
+test("theme validator accepts Hermes emoji and palette metadata", () => {
+  const validated = validateThemePack(themePack({
+    modelEmojis: ["🦊", "🚀"],
+    palette: ["#F5E0DC", "#94E2D5"]
+  }));
+  assert.deepEqual(validated.statusLine.modelEmojis, ["🦊", "🚀"]);
+  assert.deepEqual(validated.statusLine.palette, ["#f5e0dc", "#94e2d5"]);
+});
+
 test("theme validator rejects unknown model reasoning formats", () => {
   assert.throws(
     () => validateThemePack(themePack({ modelReasoningStyle: "template" })),

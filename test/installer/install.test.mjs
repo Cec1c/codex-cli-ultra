@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  rm,
   stat,
   writeFile
 } from "node:fs/promises";
@@ -15,6 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   INSTALL_STAGES,
+  ensureOwnershipMarker,
   installFromProvider,
   runBinarySmokeChecks
 } from "../../src/installer/install.mjs";
@@ -314,6 +316,51 @@ test("installer refuses to claim a non-empty directory without an ownership mark
   await assert.rejects(
     readFile(join(harness.installRoot, ".codex-cli-ultra-owned")),
     /ENOENT/
+  );
+});
+
+test("installer recovers only a strict CCU release residue left by an interrupted uninstall", async (t) => {
+  const installRoot = await mkdtemp(join(tmpdir(), "codex-ultra-residue-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const binaryPath = join(
+    installRoot,
+    "releases",
+    "0.144.6-ccu.i18n.1",
+    "x86_64-pc-windows-msvc",
+    "package",
+    "bin",
+    "codex.exe"
+  );
+  await mkdir(dirname(binaryPath), { recursive: true });
+  await writeFile(binaryPath, "locked binary residue", "utf8");
+
+  const markerPath = await ensureOwnershipMarker(installRoot);
+  assert.equal(markerPath, join(installRoot, ".codex-cli-ultra-owned"));
+  assert.equal(
+    JSON.parse(await readFile(markerPath, "utf8")).root,
+    installRoot
+  );
+  assert.equal(await ensureOwnershipMarker(installRoot), markerPath);
+});
+
+test("installer rejects a release-like residue unless every release path is strict", async (t) => {
+  const installRoot = await mkdtemp(join(tmpdir(), "codex-ultra-bad-residue-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const binaryPath = join(
+    installRoot,
+    "releases",
+    "current",
+    "x86_64-pc-windows-msvc",
+    "package",
+    "bin",
+    "codex.exe"
+  );
+  await mkdir(dirname(binaryPath), { recursive: true });
+  await writeFile(binaryPath, "not a CCU release", "utf8");
+
+  await assert.rejects(
+    ensureOwnershipMarker(installRoot),
+    /install root is not empty and has no ownership marker/
   );
 });
 
