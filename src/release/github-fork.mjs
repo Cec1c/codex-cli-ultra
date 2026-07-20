@@ -47,7 +47,12 @@ export async function resolveLatestForkRelease(options = {}) {
   }
   const response = await (options.fetchImpl ?? fetch)(
     releaseApiUrl(repository),
-    { method: "GET", headers, redirect: "error" }
+    {
+      method: "GET",
+      headers,
+      redirect: "error",
+      signal: options.signal ?? AbortSignal.timeout(options.timeoutMs ?? 15_000)
+    }
   );
   if (!response.ok) {
     throw new Error(`GitHub latest release request failed with HTTP ${response.status}`);

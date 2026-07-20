@@ -26,6 +26,11 @@ import {
 } from "./release/fork-manifest.mjs";
 import { resolveLatestForkRelease } from "./release/github-fork.mjs";
 import {
+  compareStableVersions,
+  resolveLatestCcuRelease,
+  resolveLatestUpstreamRelease
+} from "./release/github-version.mjs";
+import {
   DirectoryReleaseProvider,
   HttpReleaseProvider
 } from "./release/provider.mjs";
@@ -297,8 +302,68 @@ async function collectStatus(options) {
           binaryPath: state.active.binaryPath,
           manifestValid: installedManifest !== null
         },
-    installedManifest
+    installedManifest,
+    latest: null,
+    updateAvailable: false,
+    latestCcu: null,
+    ccuUpdateAvailable: false,
+    latestUpstream: null,
+    upstreamUpdateAvailable: false,
+    onlineErrors: []
   };
+}
+
+function remoteError(channel, result) {
+  return {
+    channel,
+    message:
+      result.reason instanceof Error
+        ? result.reason.message
+        : String(result.reason)
+  };
+}
+
+async function collectRemoteStatus(status, options) {
+  const remoteOptions = {
+    fetchImpl: options.fetchImpl,
+    token: options.githubToken
+  };
+  const [forkResult, ccuResult, upstreamResult] = await Promise.allSettled([
+    (options.resolveLatestForkRelease ?? resolveLatestForkRelease)(remoteOptions),
+    (options.resolveLatestCcuRelease ?? resolveLatestCcuRelease)(remoteOptions),
+    (options.resolveLatestUpstreamRelease ?? resolveLatestUpstreamRelease)(remoteOptions)
+  ]);
+
+  if (forkResult.status === "fulfilled") {
+    status.latest = forkResult.value.manifest;
+    status.updateAvailable = status.installedManifest === null
+      ? true
+      : compareForkReleases(status.installedManifest, status.latest) < 0;
+  } else {
+    status.onlineErrors.push(remoteError("ccu-i18n", forkResult));
+  }
+
+  if (ccuResult.status === "fulfilled") {
+    status.latestCcu = ccuResult.value;
+    status.ccuUpdateAvailable =
+      compareStableVersions(CCU_VERSION, ccuResult.value.version) < 0;
+  } else {
+    status.onlineErrors.push(remoteError("ccu", ccuResult));
+  }
+
+  if (upstreamResult.status === "fulfilled") {
+    status.latestUpstream = upstreamResult.value;
+    const localUpstream = status.official.installed
+      ? status.official.version
+      : status.fork.upstreamVersion;
+    status.upstreamUpdateAvailable =
+      typeof localUpstream === "string" &&
+      /^[0-9]+\.[0-9]+\.[0-9]+$/.test(localUpstream) &&
+      compareStableVersions(localUpstream, upstreamResult.value.version) < 0;
+  } else {
+    status.onlineErrors.push(remoteError("codex-upstream", upstreamResult));
+  }
+  return status;
 }
 
 function writeJson(stdout, value) {
@@ -459,11 +524,7 @@ export async function manageMain(options = {}) {
   if (command === "version" || command === "status") {
     const status = await collectStatus(context);
     if (command === "status" && args.includes("--check")) {
-      const latest = await resolveProvider([], context);
-      status.latest = latest.manifest;
-      status.updateAvailable = status.installedManifest === null
-        ? true
-        : compareForkReleases(status.installedManifest, latest.manifest) < 0;
+      await collectRemoteStatus(status, context);
     }
     delete status.installedManifest;
     if (json) writeJson(stdout, status);

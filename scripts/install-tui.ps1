@@ -14,7 +14,12 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $target = Join-Path $repoRoot 'tui\target\release\ccu-manager.exe'
 if ($Build -or -not (Test-Path -LiteralPath $target -PathType Leaf)) {
     Push-Location (Join-Path $repoRoot 'tui')
-    try { cargo build --release }
+    try {
+        cargo build --release --locked
+        if ($LASTEXITCODE -ne 0) {
+            throw "CCU Rust TUI build failed with exit code $LASTEXITCODE"
+        }
+    }
     finally { Pop-Location }
 }
 

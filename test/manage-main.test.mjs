@@ -78,12 +78,62 @@ test("status check reports a newer fork revision", async () => {
       manifest: latest,
       provider: { materializeAsset: async () => {} }
     }),
+    resolveLatestCcuRelease: async () => ({
+      repository: "Cec1c/codex-cli-ultra",
+      tag: "v0.1.3",
+      version: "0.1.3",
+      url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.3"
+    }),
+    resolveLatestUpstreamRelease: async () => ({
+      repository: "openai/codex",
+      tag: "rust-v0.144.6",
+      version: "0.144.6",
+      url: "https://github.com/openai/codex/releases/tag/rust-v0.144.6"
+    }),
     stdout: { write(chunk) { output += chunk; } }
   });
   assert.equal(code, 0);
   const report = JSON.parse(output);
   assert.equal(report.updateAvailable, true);
   assert.equal(report.latest.displayVersion, latest.displayVersion);
+  assert.equal(report.latestCcu.version, "0.1.3");
+  assert.equal(report.ccuUpdateAvailable, true);
+  assert.equal(report.latestUpstream.version, "0.144.6");
+  assert.equal(report.upstreamUpdateAvailable, true);
+  assert.deepEqual(report.onlineErrors, []);
+});
+
+test("status check preserves local state when remote sources partially fail", async () => {
+  let output = "";
+  const code = await manageMain({
+    args: ["status", "--check", "--json"],
+    installRoot,
+    readState: async () => state,
+    readFile: async () => JSON.stringify(manifest(1)),
+    resolveLatestForkRelease: async () => {
+      throw new Error("fetch failed");
+    },
+    resolveLatestCcuRelease: async () => ({
+      repository: "Cec1c/codex-cli-ultra",
+      tag: "v0.1.2",
+      version: "0.1.2",
+      url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.2"
+    }),
+    resolveLatestUpstreamRelease: async () => {
+      throw new Error("request timeout");
+    },
+    stdout: { write(chunk) { output += chunk; } }
+  });
+
+  assert.equal(code, 0);
+  const report = JSON.parse(output);
+  assert.equal(report.fork.displayVersion, "0.144.5-ccu.i18n.1");
+  assert.equal(report.latest, null);
+  assert.equal(report.latestCcu.version, "0.1.2");
+  assert.deepEqual(report.onlineErrors, [
+    { channel: "ccu-i18n", message: "fetch failed" },
+    { channel: "codex-upstream", message: "request timeout" }
+  ]);
 });
 
 test("update passes the latest validated fork release to the installer", async () => {

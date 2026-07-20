@@ -159,10 +159,18 @@ export class DirectoryReleaseProvider {
 }
 
 export class HttpReleaseProvider {
-  constructor({ manifestUrl, fetchImpl = fetch, headers = {} }) {
+  constructor({
+    manifestUrl,
+    fetchImpl = fetch,
+    headers = {},
+    manifestTimeoutMs = 15_000,
+    assetTimeoutMs = 300_000
+  }) {
     this.manifestUrl = validateHttpsGitHubUrl(manifestUrl, "manifest URL");
     this.fetchImpl = fetchImpl;
     this.headers = new Headers(headers);
+    this.manifestTimeoutMs = manifestTimeoutMs;
+    this.assetTimeoutMs = assetTimeoutMs;
   }
 
   #requestHeaders(url) {
@@ -173,13 +181,14 @@ export class HttpReleaseProvider {
     return headers;
   }
 
-  async #fetch(url) {
+  async #fetch(url, timeoutMs) {
     let current = validateHttpsGitHubUrl(url, "request URL");
     for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
       const response = await this.fetchImpl(current, {
         method: "GET",
         headers: this.#requestHeaders(current),
-        redirect: "manual"
+        redirect: "manual",
+        signal: AbortSignal.timeout(timeoutMs)
       });
       if (REDIRECT_STATUSES.has(response.status)) {
         if (redirectCount === MAX_REDIRECTS) {
@@ -218,7 +227,7 @@ export class HttpReleaseProvider {
   }
 
   async readManifest() {
-    const response = await this.#fetch(this.manifestUrl);
+    const response = await this.#fetch(this.manifestUrl, this.manifestTimeoutMs);
     const declaredLength = Number(response.headers.get("content-length"));
     if (Number.isFinite(declaredLength) && declaredLength > MAX_MANIFEST_BYTES) {
       throw new Error("release manifest exceeds the manifest size limit");
@@ -235,7 +244,7 @@ export class HttpReleaseProvider {
       encodeURIComponent(basename),
       new URL(".", this.manifestUrl)
     );
-    const response = await this.#fetch(assetUrl);
+    const response = await this.#fetch(assetUrl, this.assetTimeoutMs);
     if (response.body === null) {
       throw new Error("HTTP response has no body");
     }

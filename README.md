@@ -40,8 +40,12 @@ PowerShell 7 本地源码安装：
 
 ```powershell
 cd D:\codex-cli-ultra
+.\install.ps1
+# 或完全离线使用已解压的 fork Release：
 .\install.ps1 -ForkReleaseDir <解压后的-fork-Release-目录>
 ```
+
+源码安装只构建 CCU 管理器；没有本地 `fork-release` 时会尝试读取 `Cec1c/codex` 最新稳定 Release。网络不可用时安装器会停止并引导下载完整的 CCU Release ZIP。受限网络环境优先使用下方自包含安装包。
 
 从 GitHub Release 安装：下载 `codex-cli-ultra-v0.1.2-windows-x64.zip` 和同名 `.sha256`，核对 SHA256，解压后双击 `install.cmd`。ZIP 已内置 fork Release，不需要再次下载 Codex。安装器会说明每一步并询问是否启用 Hermes 四段式状态栏，默认不启用。
 
@@ -69,7 +73,7 @@ codex-ultra content sync
 ccu-manager
 ```
 
-Rust 管理器有“状态、语言包、主题包”三个页面，支持刷新、在线检查、更新和本地 FTL/主题同步；主题包接口已为后续布局与配色扩展预留。
+Rust 管理器有“状态/安装、语言包、主题包”三个页面。耗时操作在后台线程执行并显示任务进度，不再阻塞键盘和绘制循环。状态页同时显示 CCU 本体、CCU-I18N fork 与 OpenAI Codex 上游的本地/远端版本；`i` 从检测到的本地 fork Release 安装，`u` 在线更新 CCU-I18N，`x` 二次确认卸载，`c` 同步三路远端版本，`f` 原子同步 FTL 与主题。CCU 本体发现新版时前往 Release 下载完整包更新。
 
 详细版本与自动发布契约见 [CCU、Codex i18n fork 与上游跟踪实施计划](docs/CCU_I18N_FORK_PLAN.md)。
 

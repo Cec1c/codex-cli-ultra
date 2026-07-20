@@ -131,6 +131,19 @@ test("installer guards recursive content replacement with an absolute child-path
   assert.match(source, /fork-release/);
   assert.match(source, /--enable-statusline/);
   assert.match(source, /--disable-statusline/);
+  assert.match(source, /function Invoke-CheckedCommand/);
+  assert.match(source, /function Invoke-CcuInstall/);
+  assert.match(source, /function Test-NetworkFailureText/);
+  assert.match(source, /function Test-NodeDependencies/);
+  assert.match(source, /Node 依赖缺失或与 package\.json 不一致/);
+  assert.match(source, /CCU Node dependency installation failed/);
+  assert.match(source, /CCU Node manager build failed/);
+  assert.match(source, /CCU Rust manager build failed/);
+  assert.match(source, /'build', '--release', '--locked'/);
+  assert.match(source, /Required build output was not created/);
+  assert.match(source, /你的网络跳起来没够到墙/);
+  assert.match(source, /codex-cli-ultra\/releases/);
+  assert.match(source, /安装程序提桶跑路/);
   assert.match(packager, /ForkReleaseDir is required/);
   assert.match(packager, /ccu-fork-manifest\.json/);
   assert.match(packager, /uninstall\.cmd/);
@@ -172,7 +185,7 @@ test("content sync migrates the legacy DeepSeek preset and applies Hermes config
 
 test("PowerShell installer lets the core claim ownership before copying local payloads", async () => {
   const source = await readFile(join(projectRoot, "install.ps1"), "utf8");
-  const installCall = source.indexOf("& node @arguments");
+  const installCall = source.lastIndexOf("Invoke-CcuInstall");
   const managerCopy = source.indexOf("Copy-Item -LiteralPath $managerExecutable");
   const contentCopy = source.indexOf("Copy-Item -LiteralPath $contentSource -Destination $content -Recurse");
 
