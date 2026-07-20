@@ -1,8 +1,8 @@
 # Codex CLI Ultra
 
-> **v0.1.2：** 这是一个非官方的 Windows x64 社区发行版。它提供内置 fork 二进制、1396 条简体中文 FTL、可选 Hermes 状态栏和一键卸载回退，同时保留 npm 安装的官方英文 Codex。
+> **v0.1.3：** 这是一个非官方的 Windows x64 社区发行版。它提供内置 fork 二进制、1396 条简体中文 FTL、可选 Hermes 状态栏、后台管理任务、本地 Release 安装与一键卸载回退，同时保留 npm 安装的官方英文 Codex。
 >
-> **v0.1.2:** This unofficial Windows x64 community distribution bundles the verified fork binary, 1,396 Simplified Chinese FTL messages, an optional Hermes status line, and one-click fallback to the retained official npm Codex.
+> **v0.1.3:** This unofficial Windows x64 community distribution bundles the verified fork binary, 1,396 Simplified Chinese FTL messages, an optional Hermes status line, background management tasks, local Release installation, and one-click fallback to the retained official npm Codex.
 
 Codex CLI Ultra 通过职责分离的长期 fork 和轻量管理器，为 Codex CLI 探索可持续维护的本地化与界面扩展能力。
 
@@ -47,7 +47,7 @@ cd D:\codex-cli-ultra
 
 源码安装只构建 CCU 管理器；没有本地 `fork-release` 时会尝试读取 `Cec1c/codex` 最新稳定 Release。网络不可用时安装器会停止并引导下载完整的 CCU Release ZIP。受限网络环境优先使用下方自包含安装包。
 
-从 GitHub Release 安装：下载 `codex-cli-ultra-v0.1.2-windows-x64.zip` 和同名 `.sha256`，核对 SHA256，解压后双击 `install.cmd`。ZIP 已内置 fork Release，不需要再次下载 Codex。安装器会说明每一步并询问是否启用 Hermes 四段式状态栏，默认不启用。
+从 GitHub Release 安装：下载 `codex-cli-ultra-v0.1.3-windows-x64.zip` 和同名 `.sha256`，核对 SHA256，解压后双击 `install.cmd`。ZIP 已内置 fork Release，不需要再次下载 Codex。安装器会说明每一步并询问是否启用 Hermes 四段式状态栏，默认不启用。
 
 ```powershell
 codex-ultra version
@@ -109,9 +109,9 @@ The bundled `ccu.hermes` theme uses a random model emoji, a shuffled Hermes pale
 
 ## 运行与分发入口 / Runtime and distribution entry points
 
-v0.1.2 使用 PowerShell 7 安装/卸载器、Node.js 管理执行器和 Rust Ratatui 管理界面，优先支持 Windows 11。后续平台可以复用相同的 Release manifest、外部语言包和主题包合同。
+v0.1.3 使用 PowerShell 7 安装/卸载器、Node.js 管理执行器和 Rust Ratatui 管理界面，优先支持 Windows 11。后续平台可以复用相同的 Release manifest、外部语言包和主题包合同。
 
-v0.1.2 uses PowerShell 7 install/uninstall scripts, a Node.js management executor, and a Rust Ratatui manager, with Windows 11 as the first supported platform. Future platforms can reuse the same Release manifest, external language-pack, and theme-pack contracts.
+v0.1.3 uses PowerShell 7 install/uninstall scripts, a Node.js management executor, and a Rust Ratatui manager, with Windows 11 as the first supported platform. Future platforms can reuse the same Release manifest, external language-pack, and theme-pack contracts.
 
 部分适配设计会参考 [Codex 的开源代码](https://github.com/openai/codex)，用于理解现有字符串、TUI 渲染和配置入口。兼容层应保持轻量、可验证，并对 Codex 版本变化明确失败，而不是静默破坏用户安装。
 

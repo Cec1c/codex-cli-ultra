@@ -61,7 +61,7 @@ test("management version reports both CCU and the installed fork build", async (
     stdout: { write(chunk) { output += chunk; } }
   });
   assert.equal(code, 0);
-  assert.match(output, /codex-cli-ultra 0\.1\.2/);
+  assert.match(output, /codex-cli-ultra 0\.1\.3/);
   assert.match(output, /fork 0\.144\.5-ccu\.i18n\.1/);
   assert.match(output, /i18n API 1/);
 });
@@ -80,9 +80,9 @@ test("status check reports a newer fork revision", async () => {
     }),
     resolveLatestCcuRelease: async () => ({
       repository: "Cec1c/codex-cli-ultra",
-      tag: "v0.1.3",
-      version: "0.1.3",
-      url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.3"
+      tag: "v0.1.4",
+      version: "0.1.4",
+      url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.4"
     }),
     resolveLatestUpstreamRelease: async () => ({
       repository: "openai/codex",
@@ -96,7 +96,7 @@ test("status check reports a newer fork revision", async () => {
   const report = JSON.parse(output);
   assert.equal(report.updateAvailable, true);
   assert.equal(report.latest.displayVersion, latest.displayVersion);
-  assert.equal(report.latestCcu.version, "0.1.3");
+  assert.equal(report.latestCcu.version, "0.1.4");
   assert.equal(report.ccuUpdateAvailable, true);
   assert.equal(report.latestUpstream.version, "0.144.6");
   assert.equal(report.upstreamUpdateAvailable, true);
