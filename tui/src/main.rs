@@ -297,7 +297,7 @@ impl App {
             started: Instant::now(),
             receiver,
         });
-        self.notice = format!("{}已转入后台，界面仍可响应", kind.label());
+        self.notice = format!("{}你知道吗？", kind.label());
         self.failed = false;
     }
 
@@ -719,7 +719,7 @@ fn draw_progress(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &
                 .gauge_style(Style::default().fg(ACCENT).bg(Color::Black))
                 .percent(percent)
                 .label(format!(
-                    "{} · {:.1}s · 界面保持响应",
+                    "{} · {:.1}s · 进度条完全不能反映进度",
                     active.kind.label(),
                     active.started.elapsed().as_secs_f32()
                 )),
