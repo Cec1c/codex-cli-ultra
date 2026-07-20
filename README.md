@@ -8,7 +8,7 @@
 
 Codex-Cli-Ultra（CCU）为 Codex CLI 提供外部 FTL 语言包、Windows 安装管理和可选的界面扩展。当前参考实现为简体中文。
 
-[最新 Release](https://github.com/Cec1c/codex-cli-ultra/releases/latest) · [贡献指南](CONTRIBUTING.md) · [Codex i18n fork](https://github.com/Cec1c/codex)
+[最新 Release](https://github.com/Cec1c/codex-cli-ultra/releases/latest) · [贡献指南](CONTRIBUTING.md) · [Codex i18n fork](https://github.com/Cec1c/codex) · [LinuxDo](https://linux.do)
 
 ## 项目目标
 
