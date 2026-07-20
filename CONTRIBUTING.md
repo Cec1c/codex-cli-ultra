@@ -1,25 +1,62 @@
-# 贡献指南 / Contributing
+# Contributing / 贡献指南
 
-## 中文
+> Contributing a non-Chinese locale? English is enough. Start from the English template; no Chinese knowledge is required.
 
-Codex CLI Ultra 把机制和内容分开维护：
+## Add a language pack
 
-- Rust/TUI 扩展接口进入 `Cec1c/codex` fork。
-- FTL 翻译、主题包、安装器、管理 TUI 和更新策略进入本仓库。
-- 翻译必须与 `templates/languages/messages.en-US.ftl` 保持完全相同的消息键和 Fluent 参数名。
-- 新增可见文本时，请同时更新英文模板、语言包、源码目录和对应测试；不要只增加 FTL 而不接调用点。
-- 提交前至少运行 `npm run language:validate` 和 `npm test`。核对当前 fork 调用点时运行 `npm run ftl:audit -- <Codex 源码目录>`；修改管理执行器时再运行 `npm run build`；扩展可见文本调查时运行 `npm run text:audit -- <Codex 源码目录>`；修改管理 TUI 时运行 `cargo test --locked`（`tui/`）。
+1. Create `packages/languages/<locale>/`.
+2. Copy `templates/languages/messages.en-US.ftl` to `messages.ftl`.
+3. Translate message values. Keep every message key and Fluent variable such as `{ $error }` unchanged.
+4. Add `manifest.json` with the locale, display names, license, supported i18n API range, and the SHA256 of `messages.ftl`.
+5. Validate the pack:
 
-提交信息优先使用简洁中文，例如：`feat: 添加日语语言包`。
+```powershell
+node src/cli.mjs language validate `
+  --pack packages/languages/<locale> `
+  --catalog research/codex-0.144.5/tui-messages.jsonl `
+  --template templates/languages/messages.en-US.ftl
+```
 
-## English
+The Simplified Chinese pack at `packages/languages/zh-CN/` is the reference implementation.
 
-Codex CLI Ultra keeps mechanisms and content separate:
+## Repository boundaries
 
-- Rust/TUI extension points belong in the `Cec1c/codex` fork.
-- FTL translations, theme packs, installers, the manager TUI, and update policy belong here.
-- Translations must use exactly the same message keys and Fluent variables as `templates/languages/messages.en-US.ftl`.
-- When adding visible text, update the English template, language pack, source catalog, and tests together.
-- Before submitting, run at least `npm run language:validate` and `npm test`. Use `npm run ftl:audit -- <Codex source directory>` to verify current fork call sites, `npm run build` for manager changes, `npm run text:audit -- <Codex source directory>` for broader visible-text research, and `cargo test --locked` from `tui/` for manager TUI changes.
+- Rust/TUI i18n interfaces and compiled Codex behavior belong in [`Cec1c/codex`](https://github.com/Cec1c/codex).
+- FTL language packs, themes, installers, the manager TUI, and update policy belong in this repository.
+- When adding a new visible Codex message, update the English template, source catalog, language packs, and tests together.
 
-Keep commits focused and describe the user-visible result.
+## Checks
+
+Run the checks that match your change:
+
+```powershell
+# Node manager, installer, language packs
+npm test
+npm run build
+
+# Manager TUI
+cd tui
+cargo fmt --all -- --check
+cargo test --locked
+```
+
+For fork call-site work, use:
+
+```powershell
+npm run ftl:audit -- <Codex-source-directory>
+npm run text:audit -- <Codex-source-directory>
+```
+
+## Pull requests
+
+- Keep the change focused.
+- State the tested Codex, CCU, and i18n API versions when compatibility is relevant.
+- Include a screenshot for visible UI changes.
+- English Issues, pull requests, documentation, and commit messages are welcome.
+
+## 中文说明
+
+- 新语言包请从英文模板开始，不需要先翻译或理解中文语言包。
+- 不要修改消息键和 Fluent 变量名；只翻译等号右侧的内容。
+- 新增 Codex 可见文本时，请同时更新英文模板、消息目录、相关语言包和测试。
+- 提交前运行对应的 Node 或 Rust 检查；界面改动请附截图。

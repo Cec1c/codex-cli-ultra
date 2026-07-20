@@ -4,3 +4,5 @@ dist/
 node_modules/
 artifacts/
 tui/target/
+README.backup-*.md
+README.en.backup-*.md
