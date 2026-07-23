@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { manageMain } from "../src/manage-main.mjs";
+import { nextPatchVersion } from "../src/release/ccu-version.mjs";
+import { CCU_VERSION } from "../src/version.mjs";
 
 function manifest(revision = 1) {
   return {
@@ -61,7 +63,10 @@ test("management version reports both CCU and the installed fork build", async (
     stdout: { write(chunk) { output += chunk; } }
   });
   assert.equal(code, 0);
-  assert.match(output, /codex-cli-ultra 0\.1\.3/);
+  assert.match(
+    output,
+    new RegExp(`codex-cli-ultra ${CCU_VERSION.replaceAll(".", "\\.")}`)
+  );
   assert.match(output, /fork 0\.144\.5-ccu\.i18n\.1/);
   assert.match(output, /i18n API 1/);
 });
@@ -69,6 +74,7 @@ test("management version reports both CCU and the installed fork build", async (
 test("status check reports a newer fork revision", async () => {
   let output = "";
   const latest = manifest(2);
+  const latestCcuVersion = nextPatchVersion(CCU_VERSION);
   const code = await manageMain({
     args: ["status", "--check", "--json"],
     installRoot,
@@ -80,9 +86,9 @@ test("status check reports a newer fork revision", async () => {
     }),
     resolveLatestCcuRelease: async () => ({
       repository: "Cec1c/codex-cli-ultra",
-      tag: "v0.1.4",
-      version: "0.1.4",
-      url: "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.4"
+      tag: `v${latestCcuVersion}`,
+      version: latestCcuVersion,
+      url: `https://github.com/Cec1c/codex-cli-ultra/releases/tag/v${latestCcuVersion}`
     }),
     resolveLatestUpstreamRelease: async () => ({
       repository: "openai/codex",
@@ -96,7 +102,7 @@ test("status check reports a newer fork revision", async () => {
   const report = JSON.parse(output);
   assert.equal(report.updateAvailable, true);
   assert.equal(report.latest.displayVersion, latest.displayVersion);
-  assert.equal(report.latestCcu.version, "0.1.4");
+  assert.equal(report.latestCcu.version, latestCcuVersion);
   assert.equal(report.ccuUpdateAvailable, true);
   assert.equal(report.latestUpstream.version, "0.144.6");
   assert.equal(report.upstreamUpdateAvailable, true);

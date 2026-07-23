@@ -7,6 +7,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import { buildExecutors } from "../../scripts/build-executor.mjs";
+import { CCU_VERSION } from "../../src/version.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -51,5 +52,8 @@ test("build emits independent launcher and management bundles", async () => {
       windowsHide: true
     }
   );
-  assert.match(management.stdout, /codex-cli-ultra 0\.1\.3/);
+  assert.equal(
+    management.stdout.split(/\r?\n/, 1)[0],
+    `codex-cli-ultra ${CCU_VERSION}`
+  );
 });
