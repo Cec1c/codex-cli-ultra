@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ccu-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -55,7 +59,64 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ inputs.tag || github.ref_name }}'
-          gh release create $tag artifacts/*.zip artifacts/*.sha256 `
-            --title "Codex CLI Ultra $tag" `
-            --notes "自包含 Windows 安装包：内置已验证的 CCU i18n fork、1396 条简体中文 FTL 和 Hermes 状态栏；新版管理器支持后台任务进度、本地 fork Release 安装与二次确认卸载，并同步显示 CCU、CCU-I18N 和 OpenAI Codex 三路版本。安装器在网络失败时提供直接下载指引。" `
-            --latest
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "invalid release tag: $tag"
+          }
+
+          $zipFiles = @(Get-ChildItem -LiteralPath artifacts -Filter '*.zip' -File)
+          if ($zipFiles.Count -ne 1) {
+            throw "expected exactly one release ZIP; found $($zipFiles.Count)"
+          }
+          $zip = $zipFiles[0]
+          $sidecar = Get-Item -LiteralPath "$($zip.FullName).sha256"
+          $sidecarLine = (Get-Content -LiteralPath $sidecar.FullName -Raw).Trim()
+          if ($sidecarLine -notmatch '^([0-9a-fA-F]{64})\s{2}(.+)$') {
+            throw "invalid SHA256 sidecar: $($sidecar.Name)"
+          }
+          if ($Matches[2] -ne $zip.Name) {
+            throw "SHA256 sidecar names '$($Matches[2])', expected '$($zip.Name)'"
+          }
+          $actualHash = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $Matches[1].ToLowerInvariant()) {
+            throw "local release ZIP SHA256 mismatch"
+          }
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag $zip.FullName $sidecar.FullName `
+              --repo $env:GITHUB_REPOSITORY `
+              --verify-tag `
+              --title "Codex CLI Ultra $tag" `
+              --notes "自包含 Windows 安装包：内置已验证的 CCU i18n fork、1396 条简体中文 FTL 和 Hermes 状态栏；新版管理器支持后台任务进度、本地 fork Release 安装与二次确认卸载，并同步显示 CCU、CCU-I18N 和 OpenAI Codex 三路版本。安装器在网络失败时提供直接下载指引。" `
+              --latest
+          }
+
+          $release = gh release view $tag --repo $env:GITHUB_REPOSITORY `
+            --json isDraft,isPrerelease,assets | ConvertFrom-Json
+          if ($release.isDraft -or $release.isPrerelease) {
+            throw "published release must be stable and non-draft"
+          }
+          $assetNames = @($release.assets | ForEach-Object name)
+          foreach ($expected in @($zip.Name, $sidecar.Name)) {
+            if ($expected -notin $assetNames) {
+              throw "published release is missing asset: $expected"
+            }
+          }
+
+          $verifyDir = Join-Path $env:RUNNER_TEMP 'ccu-release-verify'
+          New-Item -ItemType Directory -Path $verifyDir -Force | Out-Null
+          gh release download $tag --repo $env:GITHUB_REPOSITORY `
+            --pattern $zip.Name `
+            --pattern $sidecar.Name `
+            --dir $verifyDir `
+            --clobber
+          $remoteZip = Join-Path $verifyDir $zip.Name
+          $remoteSidecar = Join-Path $verifyDir $sidecar.Name
+          $remoteLine = (Get-Content -LiteralPath $remoteSidecar -Raw).Trim()
+          if ($remoteLine -notmatch '^([0-9a-fA-F]{64})\s{2}(.+)$') {
+            throw "downloaded SHA256 sidecar is invalid"
+          }
+          $remoteHash = (Get-FileHash -LiteralPath $remoteZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($remoteHash -ne $Matches[1].ToLowerInvariant() -or $Matches[2] -ne $zip.Name) {
+            throw "downloaded release asset failed SHA256 verification"
+          }

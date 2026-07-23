@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
@@ -17,24 +18,126 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - name: Recover a pending CCU Release before syncing a newer fork
+        id: pending
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          head_commit="$(git rev-parse HEAD)"
+          remote_tag_commit="$(
+            git ls-remote origin "refs/tags/$tag" | awk '{print $1}'
+          )"
+          if [[ -z "$remote_tag_commit" ]]; then
+            subject="$(git log -1 --pretty=%s)"
+            if [[ "$subject" != "chore: 准备 CCU $tag "* ]]; then
+              echo "Package version $version has no Release, but HEAD is not an automation release commit." >&2
+              exit 1
+            fi
+            git tag "$tag" "$head_commit"
+            git push origin "refs/tags/$tag"
+          elif [[ "$remote_tag_commit" != "$head_commit" ]]; then
+            echo "Pending tag $tag does not point to current HEAD; refusing to move it." >&2
+            exit 1
+          fi
+
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" \
+            --ref "$DEFAULT_BRANCH" \
+            -f "tag=$tag"
+          echo "Re-dispatched pending Release $tag; fork channel sync is deferred."
+          echo "pending=true" >> "$GITHUB_OUTPUT"
       - name: Resolve and validate latest CCU fork release
+        if: steps.pending.outputs.pending != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/sync-fork-channel.mjs --write
-      - name: Commit channel update
+      - name: Detect channel update
+        if: steps.pending.outputs.pending != 'true'
+        id: channel
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "$(git status --short -- release-channels/stable.json)" ]]; then
+          current_tag="v$(node -p "require('./package.json').version")"
+          if [[ -z "$(git status --short -- release-channels/stable.json)" ]] && \
+             git diff --quiet "$current_tag..HEAD" -- release-channels/stable.json; then
+            echo "updated=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "updated=true" >> "$GITHUB_OUTPUT"
+      - name: Prepare next CCU patch version
+        if: steps.channel.outputs.updated == 'true'
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current_version="$(node -p "require('./package.json').version")"
+          current_tag="v$current_version"
+          latest_release_tag="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name
+          )"
+          if [[ "$latest_release_tag" != "$current_tag" ]]; then
+            echo "package.json is $current_tag but latest published Release is $latest_release_tag" >&2
+            exit 1
+          fi
+
+          release_json="$(node scripts/prepare-ccu-release.mjs)"
+          tag="$(jq -r .tag <<<"$release_json")"
+          version="$(jq -r .nextVersion <<<"$release_json")"
+          fork_tag="$(jq -r .release.releaseTag release-channels/stable.json)"
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "fork_tag=$fork_tag"
+          } >> "$GITHUB_OUTPUT"
+      - name: Commit channel and version contract
+        if: steps.channel.outputs.updated == 'true'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          FORK_TAG: ${{ steps.release.outputs.fork_tag }}
+        run: |
+          set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add release-channels/stable.json
-          git commit -m "chore: 同步最新 fork Release 通道"
+          git add \
+            README.md \
+            README.en.md \
+            package.json \
+            package-lock.json \
+            release-channels/stable.json \
+            scripts/package-release.ps1 \
+            src/version.mjs
+          git commit -m "chore: 准备 CCU $RELEASE_TAG for $FORK_TAG"
           git push
+          git tag "$RELEASE_TAG"
+          git push origin "refs/tags/$RELEASE_TAG"
+      - name: Dispatch deterministic CCU Release
+        if: steps.channel.outputs.updated == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" \
+            --ref "$DEFAULT_BRANCH" \
+            -f "tag=$RELEASE_TAG"
