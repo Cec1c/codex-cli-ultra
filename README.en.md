@@ -196,7 +196,7 @@ node src/cli.mjs language validate `
 
 | Channel | Current example | Updated when |
 | --- | --- | --- |
-| CCU | `v0.1.3` | Installer, manager, content, or documentation changes |
+| CCU | `v0.1.4` | Installer, manager, content, or documentation changes |
 | CCU-I18N fork | `0.144.6-ccu.i18n.2` | Codex source or the i18n interface changes |
 | OpenAI Codex | `0.144.6` | A new official stable version is released |
 
@@ -207,7 +207,7 @@ Automation checks upstream stable Releases every six hours. A CCU-only update do
 | Item | Status |
 | --- | --- |
 | Supported platform | Windows x64 |
-| CCU | `v0.1.3` |
+| CCU | `v0.1.4` |
 | CCU-I18N | `0.144.6-ccu.i18n.2` |
 | Reference locale | Simplified Chinese (`zh-CN`) |
 | FTL coverage | 1,396 actively used message keys |

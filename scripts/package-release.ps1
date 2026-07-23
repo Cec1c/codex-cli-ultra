@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = '0.1.3',
+    [string]$Version = '0.1.4',
     [string]$OutputDirectory = $(Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts'),
     [string]$ForkReleaseDir = $env:CCU_FORK_RELEASE_DIR
 )

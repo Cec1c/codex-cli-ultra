@@ -1,6 +1,6 @@
 {
   "name": "codex-cli-ultra",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "packageManager": "npm@11.12.1",

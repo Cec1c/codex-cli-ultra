@@ -198,7 +198,7 @@ node src/cli.mjs language validate `
 
 | 通道 | 当前版本示例 | 更新条件 |
 | --- | --- | --- |
-| CCU | `v0.1.3` | 安装器、管理器、内容包或文档发生变化 |
+| CCU | `v0.1.4` | 安装器、管理器、内容包或文档发生变化 |
 | CCU-I18N fork | `0.144.6-ccu.i18n.2` | Codex 源码或 i18n 接口发生变化 |
 | OpenAI Codex | `0.144.6` | 官方发布新的稳定版本 |
 
@@ -209,7 +209,7 @@ node src/cli.mjs language validate `
 | 项目 | 状态 |
 | --- | --- |
 | 支持平台 | Windows x64 |
-| CCU | `v0.1.3` |
+| CCU | `v0.1.4` |
 | CCU-I18N | `0.144.6-ccu.i18n.2` |
 | 参考语言包 | 简体中文 `zh-CN` |
 | FTL 覆盖 | 1,396 个实际使用的消息键 |
