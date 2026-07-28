@@ -13,6 +13,11 @@ const MANAGED_ENV_KEYS = new Set([
   "codex_ccu_language_pack_root",
   "codex_ccu_theme_pack_root",
   "codex_ccu_quota_path",
+  "codex_ccu_managed",
+  "codex_ccu_manager_path",
+  "codex_ccu_manager_version",
+  "codex_ccu_update_cache_path",
+  "codex_ccu_update_dismissals_dir",
   "codex_ultra_locale",
   "codex_ultra_ftl_path",
   "codex_ultra_language_preference_path"

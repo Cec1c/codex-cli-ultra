@@ -430,3 +430,50 @@ test("uninstall reports cleanup as unscheduled when the helper has no pid", asyn
   assert.equal(code, 0);
   assert.equal(JSON.parse(output).cleanupScheduled, false);
 });
+
+test("upgrade streams JSONL events and forwards the selected target", async () => {
+  let upgradeOptions;
+  let output = "";
+  const code = await manageMain({
+    args: [
+      "upgrade",
+      "--target",
+      "v0.1.6",
+      "--manager-pid",
+      "4321",
+      "--events",
+      "jsonl"
+    ],
+    installRoot,
+    upgradeCcu: async (options) => {
+      upgradeOptions = options;
+      options.onStage({ stage: "download", detail: "ccu.zip" });
+      options.onProgress({
+        transferredBytes: 5,
+        totalBytes: 10,
+        percent: 50,
+        instantBytesPerSecond: 2,
+        averageBytesPerSecond: 1,
+        etaSeconds: 5
+      });
+      return {
+        changed: true,
+        manifest: { ccuVersion: "0.1.6" },
+        handoff: { scheduled: true }
+      };
+    },
+    stdout: { write(chunk) { output += chunk; } }
+  });
+
+  assert.equal(code, 0);
+  assert.equal(upgradeOptions.targetVersion, "0.1.6");
+  assert.equal(upgradeOptions.managerPid, 4321);
+  const events = output.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+  assert.deepEqual(events.map((event) => event.type), [
+    "stage",
+    "progress",
+    "result"
+  ]);
+  assert.equal(events[1].percent, 50);
+  assert.equal(events[2].result.handoff.scheduled, true);
+});

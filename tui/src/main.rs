@@ -1,14 +1,14 @@
 use std::fs;
-use std::io;
+use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::process::{Command, Stdio};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -40,6 +40,15 @@ struct Args {
     release_dir: Option<PathBuf>,
     #[arg(long)]
     print_status: bool,
+    /// 打开完整 CCU 升级流程。
+    #[arg(long)]
+    upgrade: bool,
+    /// 指定由升级提示发现的目标 CCU 版本。
+    #[arg(long, requires = "upgrade")]
+    target: Option<String>,
+    /// 打开 Manager 后立即开始升级。
+    #[arg(long, requires = "upgrade")]
+    auto_start: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -47,6 +56,8 @@ struct Args {
 struct StatusSnapshot {
     ccu_version: String,
     install_root: String,
+    #[serde(default)]
+    network: NetworkSettings,
     official: InstallTarget,
     fork: ForkTarget,
     #[serde(default)]
@@ -63,6 +74,22 @@ struct StatusSnapshot {
     upstream_update_available: bool,
     #[serde(default)]
     online_errors: Vec<OnlineError>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NetworkSettings {
+    proxy_enabled: bool,
+    proxy_url: String,
+}
+
+impl Default for NetworkSettings {
+    fn default() -> Self {
+        Self {
+            proxy_enabled: false,
+            proxy_url: "http://127.0.0.1:7890".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -156,7 +183,9 @@ enum TaskKind {
     RefreshLocal,
     CheckOnline,
     InstallLocal,
-    UpdateFork,
+    UpgradeCcu,
+    ToggleProxy,
+    SetProxy,
     SyncContent,
     Uninstall,
 }
@@ -167,7 +196,9 @@ impl TaskKind {
             Self::RefreshLocal => "刷新本地状态",
             Self::CheckOnline => "同步三路远程版本",
             Self::InstallLocal => "安装本地 fork Release",
-            Self::UpdateFork => "更新 CCU-I18N",
+            Self::UpgradeCcu => "升级完整 CCU",
+            Self::ToggleProxy => "切换 Manager 代理",
+            Self::SetProxy => "保存 Manager 代理地址",
             Self::SyncContent => "同步语言包与主题",
             Self::Uninstall => "卸载 CCU",
         }
@@ -178,7 +209,9 @@ impl TaskKind {
             Self::RefreshLocal => "已刷新本地状态",
             Self::CheckOnline => "已同步 CCU、CCU-I18N 与 Codex 上游版本",
             Self::InstallLocal => "已从本地 fork Release 完成安装",
-            Self::UpdateFork => "CCU-I18N 更新完成",
+            Self::UpgradeCcu => "CCU 升级包已准备完成",
+            Self::ToggleProxy => "Manager 代理开关已保存",
+            Self::SetProxy => "Manager 代理地址已保存",
             Self::SyncContent => "语言包与主题包已原子同步",
             Self::Uninstall => "卸载已提交；退出 TUI 后后台清理会继续完成",
         }
@@ -188,12 +221,69 @@ impl TaskKind {
 struct TaskCompletion {
     kind: TaskKind,
     result: std::result::Result<Option<StatusSnapshot>, String>,
+    exit_after_handoff: bool,
+    success_notice: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadProgress {
+    transferred_bytes: u64,
+    total_bytes: Option<u64>,
+    percent: Option<f64>,
+    instant_bytes_per_second: Option<f64>,
+    average_bytes_per_second: Option<f64>,
+    eta_seconds: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum ManagerEvent {
+    Stage {
+        stage: String,
+        #[serde(default)]
+        detail: Option<String>,
+    },
+    Progress {
+        #[serde(flatten)]
+        progress: DownloadProgress,
+    },
+    Result {
+        result: UpgradeResult,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpgradeResult {
+    #[serde(default)]
+    changed: bool,
+    #[serde(default)]
+    handoff: Option<UpgradeHandoff>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpgradeHandoff {
+    #[serde(default)]
+    scheduled: bool,
+}
+
+enum TaskMessage {
+    Stage {
+        stage: String,
+        detail: Option<String>,
+    },
+    Progress(DownloadProgress),
+    Completion(TaskCompletion),
 }
 
 struct ActiveTask {
     kind: TaskKind,
     started: Instant,
-    receiver: Receiver<TaskCompletion>,
+    receiver: Receiver<TaskMessage>,
+    stage: Option<String>,
+    stage_detail: Option<String>,
+    progress: Option<DownloadProgress>,
 }
 
 struct App {
@@ -207,6 +297,9 @@ struct App {
     failed: bool,
     active_task: Option<ActiveTask>,
     uninstall_armed: bool,
+    proxy_input: Option<String>,
+    upgrade_target: Option<String>,
+    exit_requested: bool,
 }
 
 impl App {
@@ -224,6 +317,9 @@ impl App {
             failed: false,
             active_task: None,
             uninstall_armed: false,
+            proxy_input: None,
+            upgrade_target: None,
+            exit_requested: false,
         }
     }
 
@@ -290,29 +386,151 @@ impl App {
         thread::spawn(move || {
             let result = run_task(&manager, content_root.as_deref(), kind, &args)
                 .map_err(|error| friendly_error(&error.to_string()));
-            let _ = sender.send(TaskCompletion { kind, result });
+            let _ = sender.send(TaskMessage::Completion(TaskCompletion {
+                kind,
+                result,
+                exit_after_handoff: false,
+                success_notice: None,
+            }));
         });
         self.active_task = Some(ActiveTask {
             kind,
             started: Instant::now(),
             receiver,
+            stage: None,
+            stage_detail: None,
+            progress: None,
         });
-        self.notice = format!("{}你知道吗？", kind.label());
+        self.notice = format!("已在后台开始{}", kind.label());
         self.failed = false;
     }
 
-    fn poll_task(&mut self) {
-        let completion = match self.active_task.as_ref() {
-            Some(active) => match active.receiver.try_recv() {
-                Ok(value) => Some(value),
-                Err(TryRecvError::Empty) => None,
-                Err(TryRecvError::Disconnected) => Some(TaskCompletion {
-                    kind: active.kind,
-                    result: Err("后台任务线程意外退出".to_string()),
-                }),
-            },
-            None => None,
+    fn start_ccu_upgrade(&mut self) {
+        if let Some(active) = &self.active_task {
+            self.notice = format!("{}仍在后台运行，请稍候", active.kind.label());
+            self.failed = false;
+            return;
+        }
+        self.uninstall_armed = false;
+        let manager = self.manager.clone();
+        let content_root = self.content_root.clone();
+        let target = self.upgrade_target.clone();
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let result = run_upgrade_task(
+                &manager,
+                content_root.as_deref(),
+                target.as_deref(),
+                &sender,
+            )
+            .map_err(|error| friendly_error(&error.to_string()));
+            let exit_after_handoff = result.as_ref().copied().unwrap_or(false);
+            let _ = sender.send(TaskMessage::Completion(TaskCompletion {
+                kind: TaskKind::UpgradeCcu,
+                result: result.map(|_| None),
+                exit_after_handoff,
+                success_notice: (!exit_after_handoff).then(|| "当前 CCU 已是最新版本".to_string()),
+            }));
+        });
+        self.active_task = Some(ActiveTask {
+            kind: TaskKind::UpgradeCcu,
+            started: Instant::now(),
+            receiver,
+            stage: Some("check".to_string()),
+            stage_detail: self.upgrade_target.clone(),
+            progress: None,
+        });
+        self.notice = self.upgrade_target.as_ref().map_or_else(
+            || "正在检查并准备完整 CCU 升级".to_string(),
+            |version| format!("正在准备升级到 CCU {version}"),
+        );
+        self.failed = false;
+    }
+
+    fn begin_proxy_edit(&mut self) {
+        if self.active_task.is_some() {
+            self.notice = "后台任务运行中，暂不能修改代理地址".to_string();
+            return;
+        }
+        self.proxy_input = Some(self.status.network.proxy_url.clone());
+        self.notice = "输入代理地址，Enter 保存，Esc 取消".to_string();
+        self.failed = false;
+    }
+
+    fn handle_proxy_input(&mut self, code: KeyCode) -> bool {
+        let Some(input) = self.proxy_input.as_mut() else {
+            return false;
         };
+        match code {
+            KeyCode::Esc => {
+                self.proxy_input = None;
+                self.notice = "已取消修改代理地址".to_string();
+            }
+            KeyCode::Enter => {
+                let value = input.trim().to_string();
+                self.proxy_input = None;
+                if value.is_empty() {
+                    self.notice = "代理地址不能为空".to_string();
+                    self.failed = true;
+                } else {
+                    self.start_task(
+                        TaskKind::SetProxy,
+                        vec![
+                            "proxy".to_string(),
+                            "set".to_string(),
+                            value,
+                            "--json".to_string(),
+                        ],
+                    );
+                }
+            }
+            KeyCode::Backspace => {
+                input.pop();
+            }
+            KeyCode::Char(character) => input.push(character),
+            _ => {}
+        }
+        true
+    }
+
+    fn poll_task(&mut self) {
+        let Some(active) = self.active_task.as_ref() else {
+            return;
+        };
+        let kind = active.kind;
+        let mut messages = Vec::new();
+        let disconnected = loop {
+            match active.receiver.try_recv() {
+                Ok(message) => messages.push(message),
+                Err(TryRecvError::Empty) => break false,
+                Err(TryRecvError::Disconnected) => break true,
+            }
+        };
+        let mut completion = None;
+        for message in messages {
+            match message {
+                TaskMessage::Stage { stage, detail } => {
+                    if let Some(active) = self.active_task.as_mut() {
+                        active.stage = Some(stage);
+                        active.stage_detail = detail;
+                    }
+                }
+                TaskMessage::Progress(progress) => {
+                    if let Some(active) = self.active_task.as_mut() {
+                        active.progress = Some(progress);
+                    }
+                }
+                TaskMessage::Completion(value) => completion = Some(value),
+            }
+        }
+        if completion.is_none() && disconnected {
+            completion = Some(TaskCompletion {
+                kind,
+                result: Err("后台任务线程意外退出".to_string()),
+                exit_after_handoff: false,
+                success_notice: None,
+            });
+        }
         let Some(completion) = completion else {
             return;
         };
@@ -322,12 +540,11 @@ impl App {
                 if let Some(status) = status {
                     self.apply_status(status, completion.kind == TaskKind::CheckOnline);
                 }
-                if matches!(
-                    completion.kind,
-                    TaskKind::InstallLocal | TaskKind::UpdateFork
-                ) && self.status.latest.as_ref().is_some_and(|latest| {
-                    latest.display_version == self.status.fork.display_version
-                }) {
+                if matches!(completion.kind, TaskKind::InstallLocal)
+                    && self.status.latest.as_ref().is_some_and(|latest| {
+                        latest.display_version == self.status.fork.display_version
+                    })
+                {
                     self.status.update_available = false;
                 }
                 if completion.kind == TaskKind::Uninstall {
@@ -335,8 +552,14 @@ impl App {
                     self.status.update_available = false;
                 }
                 self.refresh_local_release();
-                self.notice = completion.kind.success_notice().to_string();
+                self.notice = completion
+                    .success_notice
+                    .unwrap_or_else(|| completion.kind.success_notice().to_string());
                 self.failed = false;
+                if completion.exit_after_handoff {
+                    self.notice = "升级包已校验完成；正在退出 Manager 并接力安装".to_string();
+                    self.exit_requested = true;
+                }
                 if completion.kind == TaskKind::CheckOnline && !self.status.online_errors.is_empty()
                 {
                     self.notice = format_online_errors(&self.status.online_errors);
@@ -435,6 +658,72 @@ fn run_task(
     Ok(Some(
         serde_json::from_str(&status).context("安装后的状态 JSON 无效")?,
     ))
+}
+
+fn run_upgrade_task(
+    manager: &Path,
+    content_root: Option<&Path>,
+    target: Option<&str>,
+    sender: &Sender<TaskMessage>,
+) -> Result<bool> {
+    let mut command = Command::new("node");
+    command
+        .arg(manager)
+        .arg("upgrade")
+        .arg("--manager-pid")
+        .arg(std::process::id().to_string())
+        .arg("--events")
+        .arg("jsonl")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(target) = target {
+        command.arg("--target").arg(target);
+    }
+    if let Some(content_root) = content_root {
+        command.env("CODEX_CCU_CONTENT_ROOT", content_root);
+    }
+    let mut child = command.spawn().context("无法启动 CCU 升级进程")?;
+    let stdout = child.stdout.take().context("无法读取 CCU 升级事件")?;
+    let mut stderr = child.stderr.take().context("无法读取 CCU 升级错误")?;
+    let stderr_reader = thread::spawn(move || {
+        let mut text = String::new();
+        let _ = stderr.read_to_string(&mut text);
+        text
+    });
+    let mut final_result = None;
+    for line in BufReader::new(stdout).lines() {
+        let line = line.context("读取 CCU 升级事件失败")?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let event: ManagerEvent = serde_json::from_str(&line)
+            .with_context(|| format!("CCU 升级事件 JSON 无效：{line}"))?;
+        match event {
+            ManagerEvent::Stage { stage, detail } => {
+                let _ = sender.send(TaskMessage::Stage { stage, detail });
+            }
+            ManagerEvent::Progress { progress } => {
+                let _ = sender.send(TaskMessage::Progress(progress));
+            }
+            ManagerEvent::Result { result } => final_result = Some(result),
+        }
+    }
+    let status = child.wait().context("等待 CCU 升级进程失败")?;
+    let stderr = stderr_reader.join().unwrap_or_default().trim().to_string();
+    if !status.success() {
+        if stderr.is_empty() {
+            bail!("CCU 升级进程退出码 {status}");
+        }
+        bail!("{stderr}");
+    }
+    let result = final_result.context("CCU 升级进程没有返回最终结果")?;
+    if !result.changed {
+        return Ok(false);
+    }
+    if !result.handoff.is_some_and(|handoff| handoff.scheduled) {
+        bail!("CCU 升级包已准备，但安装接力未能启动");
+    }
+    Ok(true)
 }
 
 fn friendly_error(source: &str) -> String {
@@ -542,6 +831,15 @@ fn main() -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&app.status)?);
         return Ok(());
     }
+    if args.upgrade {
+        app.upgrade_target = args
+            .target
+            .map(|target| target.trim_start_matches('v').to_string());
+        app.notice = "完整 CCU 升级已就绪；按 u 开始".to_string();
+        if args.auto_start {
+            app.start_ccu_upgrade();
+        }
+    }
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -558,6 +856,9 @@ fn main() -> Result<()> {
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
     loop {
         app.poll_task();
+        if app.exit_requested {
+            return Ok(());
+        }
         terminal.draw(|frame| draw(frame, app))?;
         if !event::poll(Duration::from_millis(100))? {
             continue;
@@ -566,6 +867,9 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
             continue;
         };
         if key.kind != KeyEventKind::Press {
+            continue;
+        }
+        if app.handle_proxy_input(key.code) {
             continue;
         }
         if !matches!(key.code, KeyCode::Char('x')) {
@@ -600,9 +904,18 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
                 ],
             ),
             KeyCode::Char('i') => app.install_local(),
-            KeyCode::Char('u') => app.start_task(
-                TaskKind::UpdateFork,
-                vec!["update".to_string(), "--json".to_string()],
+            KeyCode::Char('u') => app.start_ccu_upgrade(),
+            KeyCode::Char('P') => app.begin_proxy_edit(),
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                app.begin_proxy_edit();
+            }
+            KeyCode::Char('p') => app.start_task(
+                TaskKind::ToggleProxy,
+                vec![
+                    "proxy".to_string(),
+                    "toggle".to_string(),
+                    "--json".to_string(),
+                ],
             ),
             KeyCode::Char('f') => app.start_task(
                 TaskKind::SyncContent,
@@ -690,7 +1003,7 @@ fn draw(frame: &mut ratatui::Frame, app: &App) {
                 ),
             ]),
             Line::from(Span::styled(
-                "Tab/1-3 切换  r 本地刷新  c 同步版本  i 本地安装  u 更新I18N  f 同步内容  x 卸载  q 退出",
+                "Tab/1-3 切换  r 刷新  c 检查版本  u 升级完整CCU  p 代理开关  Shift+P 配置  q 退出",
                 Style::default().fg(MUTED),
             )),
         ])
@@ -706,8 +1019,45 @@ fn draw(frame: &mut ratatui::Frame, app: &App) {
 
 fn draw_progress(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
     if let Some(active) = &app.active_task {
+        if let Some(progress) = &active.progress {
+            let percent = progress.percent.unwrap_or(0.0).clamp(0.0, 100.0);
+            let stage = active
+                .stage
+                .as_deref()
+                .map(stage_label)
+                .unwrap_or("下载 CCU 安装包");
+            let transferred = format_bytes(progress.transferred_bytes as f64);
+            let total = progress
+                .total_bytes
+                .map(|bytes| format_bytes(bytes as f64))
+                .unwrap_or_else(|| "未知".to_string());
+            let current_speed = format_speed(progress.instant_bytes_per_second);
+            let average_speed = format_speed(progress.average_bytes_per_second);
+            let eta = format_eta(progress.eta_seconds);
+            frame.render_widget(
+                Gauge::default()
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title(" 真实下载进度 ")
+                            .border_style(Style::default().fg(ACCENT)),
+                    )
+                    .gauge_style(Style::default().fg(ACCENT).bg(Color::Black))
+                    .percent(percent.round() as u16)
+                    .label(format!(
+                        "{stage} {percent:.1}% · {transferred}/{total} · 当前 {current_speed} · 平均 {average_speed} · 剩余 {eta}"
+                    )),
+                area,
+            );
+            return;
+        }
         let cycle = (active.started.elapsed().as_millis() / 35) % 200;
         let percent = if cycle <= 100 { cycle } else { 200 - cycle } as u16;
+        let detail = active
+            .stage
+            .as_deref()
+            .map(stage_label)
+            .unwrap_or_else(|| active.kind.label());
         frame.render_widget(
             Gauge::default()
                 .block(
@@ -719,8 +1069,8 @@ fn draw_progress(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &
                 .gauge_style(Style::default().fg(ACCENT).bg(Color::Black))
                 .percent(percent)
                 .label(format!(
-                    "{} · {:.1}s · 进度条完全不能反映进度",
-                    active.kind.label(),
+                    "{} · {:.1}s · 正在等待下一阶段",
+                    detail,
                     active.started.elapsed().as_secs_f32()
                 )),
             area,
@@ -732,6 +1082,53 @@ fn draw_progress(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &
                 .style(Style::default().fg(MUTED)),
             area,
         );
+    }
+}
+
+fn stage_label(stage: &str) -> &str {
+    match stage {
+        "check" => "检查升级清单",
+        "download" => "下载 CCU 安装包",
+        "verify" => "校验大小与 SHA-256",
+        "extract" => "安全解压升级包",
+        "ready" => "准备安装接力",
+        _ => stage,
+    }
+}
+
+fn format_bytes(bytes: f64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes.max(0.0);
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{value:.0} {}", UNITS[unit])
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+fn format_speed(bytes_per_second: Option<f64>) -> String {
+    bytes_per_second
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .map(|value| format!("{}/s", format_bytes(value)))
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_eta(seconds: Option<f64>) -> String {
+    let Some(seconds) = seconds.filter(|value| value.is_finite() && *value >= 0.0) else {
+        return "--".to_string();
+    };
+    let seconds = seconds.round() as u64;
+    if seconds < 60 {
+        format!("{seconds}秒")
+    } else if seconds < 3600 {
+        format!("{}分{:02}秒", seconds / 60, seconds % 60)
+    } else {
+        format!("{}时{:02}分", seconds / 3600, (seconds % 3600) / 60)
     }
 }
 
@@ -834,9 +1231,46 @@ fn draw_status(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &Ap
             Span::styled("安装目录：", Style::default().fg(MUTED)),
             Span::styled(&app.status.install_root, Style::default().fg(TEXT)),
         ]),
+        Line::from(vec![
+            Span::styled("Manager 代理：", Style::default().fg(MUTED)),
+            Span::styled(
+                if app.status.network.proxy_enabled {
+                    "已开启"
+                } else {
+                    "未开启"
+                },
+                Style::default().fg(if app.status.network.proxy_enabled {
+                    SUCCESS
+                } else {
+                    HEADING
+                }),
+            ),
+            Span::styled(
+                format!("  {}", app.status.network.proxy_url),
+                Style::default().fg(TEXT),
+            ),
+            Span::styled("  p 切换  Shift+P 配置", Style::default().fg(MUTED)),
+        ]),
+        Line::from(Span::styled(
+            "国内特殊网络环境建议打开代理；默认指向本地 7890 端口，地址可配置并会被记住。",
+            Style::default().fg(HEADING),
+        )),
+        app.proxy_input.as_ref().map_or_else(
+            || Line::from(""),
+            |input| {
+                Line::from(vec![
+                    Span::styled("代理地址 > ", Style::default().fg(ACCENT)),
+                    Span::styled(
+                        input,
+                        Style::default().fg(TEXT).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("  Enter 保存 / Esc 取消", Style::default().fg(MUTED)),
+                ])
+            },
+        ),
         Line::from(""),
         Line::from(Span::styled(
-            "c 同步三路远程版本；u 只更新 CCU-I18N；CCU 本体有新版时前往 Release 获取完整包。",
+            "c 同步三路远程版本；u 下载、校验并升级完整 CCU，完成后 Manager 会自动接力安装。",
             Style::default().fg(MUTED),
         )),
         Line::from(Span::styled(
@@ -969,12 +1403,14 @@ mod tests {
     #[test]
     fn parses_management_status_contract() {
         let parsed: StatusSnapshot = serde_json::from_str(
-            r#"{"ccuVersion":"0.1.2","installRoot":"C:\\ccu","official":{"installed":true,"version":"0.144.5","binaryPath":"C:\\official.exe"},"fork":{"installed":true,"displayVersion":"0.144.5-ccu.i18n.1","upstreamVersion":"0.144.5","i18nApiVersion":1,"binaryPath":"C:\\ccu.exe"},"latestCcu":{"version":"0.1.3","tag":"v0.1.3"},"latestUpstream":{"version":"0.144.6","tag":"rust-v0.144.6"},"updateAvailable":false,"onlineErrors":[]}"#,
+            r#"{"ccuVersion":"0.1.2","installRoot":"C:\\ccu","network":{"proxyEnabled":true,"proxyUrl":"http://127.0.0.1:7890"},"official":{"installed":true,"version":"0.144.5","binaryPath":"C:\\official.exe"},"fork":{"installed":true,"displayVersion":"0.144.5-ccu.i18n.1","upstreamVersion":"0.144.5","i18nApiVersion":1,"binaryPath":"C:\\ccu.exe"},"latestCcu":{"version":"0.1.3","tag":"v0.1.3"},"latestUpstream":{"version":"0.144.6","tag":"rust-v0.144.6"},"updateAvailable":false,"onlineErrors":[]}"#,
         )
         .unwrap();
         assert_eq!(parsed.ccu_version, "0.1.2");
         assert!(parsed.official.installed);
         assert_eq!(parsed.fork.i18n_api_version, Some(1));
+        assert!(parsed.network.proxy_enabled);
+        assert_eq!(parsed.network.proxy_url, "http://127.0.0.1:7890");
         assert_eq!(parsed.latest_ccu.unwrap().version, "0.1.3");
         assert_eq!(parsed.latest_upstream.unwrap().version, "0.144.6");
     }
@@ -1038,6 +1474,40 @@ mod tests {
         }
         assert!(app.active_task.is_none());
         assert_eq!(app.status.ccu_version, "0.1.2");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn parses_real_download_progress_and_handoff() {
+        let root =
+            std::env::temp_dir().join(format!("ccu-manager-upgrade-events-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let manager = root.join("manager.mjs");
+        fs::write(
+            &manager,
+            r#"
+console.log(JSON.stringify({type:"stage",stage:"download",detail:"ccu.zip"}));
+console.log(JSON.stringify({type:"progress",phase:"download",transferredBytes:5242880,totalBytes:10485760,percent:50,instantBytesPerSecond:2097152,averageBytesPerSecond:1572864,etaSeconds:2.5}));
+console.log(JSON.stringify({type:"result",result:{changed:true,handoff:{scheduled:true}}}));
+"#,
+        )
+        .unwrap();
+        let (sender, receiver) = mpsc::channel();
+        assert!(run_upgrade_task(&manager, None, Some("0.1.5"), &sender).unwrap());
+        drop(sender);
+        let messages = receiver.into_iter().collect::<Vec<_>>();
+        assert!(messages.iter().any(|message| matches!(
+            message,
+            TaskMessage::Stage { stage, .. } if stage == "download"
+        )));
+        let progress = messages.iter().find_map(|message| match message {
+            TaskMessage::Progress(progress) => Some(progress),
+            _ => None,
+        });
+        assert_eq!(progress.unwrap().percent, Some(50.0));
+        assert_eq!(format_speed(Some(2.0 * 1024.0 * 1024.0)), "2.0 MiB/s");
+        assert_eq!(format_eta(Some(125.0)), "2分05秒");
         let _ = fs::remove_dir_all(&root);
     }
 }

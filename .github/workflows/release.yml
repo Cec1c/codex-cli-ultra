@@ -51,7 +51,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: codex-cli-ultra-windows
-          path: artifacts/*.zip*
+          path: |
+            artifacts/*.zip*
+            artifacts/ccu-update-manifest.json
           if-no-files-found: error
       - name: Publish GitHub Release
         shell: pwsh
@@ -69,6 +71,16 @@ jobs:
           }
           $zip = $zipFiles[0]
           $sidecar = Get-Item -LiteralPath "$($zip.FullName).sha256"
+          $updateManifestFile = Get-Item -LiteralPath 'artifacts/ccu-update-manifest.json'
+          $updateManifest = Get-Content -LiteralPath $updateManifestFile.FullName -Raw | ConvertFrom-Json
+          if (
+            $updateManifest.releaseTag -ne $tag -or
+            $updateManifest.ccuVersion -ne $tag.Substring(1) -or
+            $updateManifest.asset.name -ne $zip.Name -or
+            [long]$updateManifest.asset.size -ne $zip.Length
+          ) {
+            throw "CCU update manifest does not match the release package"
+          }
           $sidecarLine = (Get-Content -LiteralPath $sidecar.FullName -Raw).Trim()
           if ($sidecarLine -notmatch '^([0-9a-fA-F]{64})\s{2}(.+)$') {
             throw "invalid SHA256 sidecar: $($sidecar.Name)"
@@ -83,7 +95,7 @@ jobs:
 
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag $zip.FullName $sidecar.FullName `
+            gh release create $tag $zip.FullName $sidecar.FullName $updateManifestFile.FullName `
               --repo $env:GITHUB_REPOSITORY `
               --verify-tag `
               --title "Codex CLI Ultra $tag" `
@@ -97,7 +109,7 @@ jobs:
             throw "published release must be stable and non-draft"
           }
           $assetNames = @($release.assets | ForEach-Object name)
-          foreach ($expected in @($zip.Name, $sidecar.Name)) {
+          foreach ($expected in @($zip.Name, $sidecar.Name, $updateManifestFile.Name)) {
             if ($expected -notin $assetNames) {
               throw "published release is missing asset: $expected"
             }
@@ -108,6 +120,7 @@ jobs:
           gh release download $tag --repo $env:GITHUB_REPOSITORY `
             --pattern $zip.Name `
             --pattern $sidecar.Name `
+            --pattern $updateManifestFile.Name `
             --dir $verifyDir `
             --clobber
           $remoteZip = Join-Path $verifyDir $zip.Name

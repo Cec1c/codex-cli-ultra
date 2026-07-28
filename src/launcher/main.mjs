@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -5,8 +6,38 @@ import { resolveInstallRoot } from "../config/constants.mjs";
 import { discoverOfficialCodex } from "../discovery/official-codex.mjs";
 import { writeNoticeOnce } from "../notices/once.mjs";
 import { readState } from "../state/store.mjs";
+import { CCU_VERSION } from "../version.mjs";
 import { runSelectedTarget } from "./process.mjs";
 import { selectLaunchTarget } from "./select-target.mjs";
+
+function prepareManagedUpdateEnvironment(options) {
+  const managerPath = join(options.installRoot, "bin", "codex-ultra.mjs");
+  const spawnDetached = options.spawnDetached ?? spawn;
+  try {
+    const child = spawnDetached(
+      options.execPath ?? process.execPath,
+      [managerPath, "upgrade", "check", "--background", "--json"],
+      {
+        detached: true,
+        windowsHide: true,
+        stdio: "ignore",
+        env: {
+          ...options.env,
+          CODEX_ULTRA_HOME: options.installRoot
+        }
+      }
+    );
+    child.once?.("error", () => {});
+    child.unref?.();
+  } catch {}
+  return {
+    CODEX_CCU_MANAGED: "1",
+    CODEX_CCU_MANAGER_PATH: join(options.installRoot, "bin", "ccu-manager.exe"),
+    CODEX_CCU_MANAGER_VERSION: CCU_VERSION,
+    CODEX_CCU_UPDATE_CACHE_PATH: join(options.installRoot, "update-cache.json"),
+    CODEX_CCU_UPDATE_DISMISSALS_DIR: join(options.installRoot, "update-dismissals")
+  };
+}
 
 export async function launcherMain(options = {}) {
   const env = options.env ?? process.env;
@@ -49,6 +80,19 @@ export async function launcherMain(options = {}) {
     installRoot,
     env
   });
+
+  if (selection.kind === "ultra") {
+    try {
+      selection.env = {
+        ...selection.env,
+        ...prepareManagedUpdateEnvironment({
+          ...options,
+          env,
+          installRoot
+        })
+      };
+    } catch {}
+  }
 
   if (selection.notice && selection.kind !== "error") {
     let firstNotice = false;

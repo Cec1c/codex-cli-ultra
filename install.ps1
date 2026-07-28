@@ -8,14 +8,15 @@ param(
     [switch]$SkipBuild,
     [switch]$EnableStatusLine,
     [switch]$DisableStatusLine,
+    [switch]$PreserveStatusLine,
     [switch]$NonInteractive
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if ($EnableStatusLine -and $DisableStatusLine) {
-    throw 'EnableStatusLine and DisableStatusLine cannot be used together.'
+if ((@($EnableStatusLine, $DisableStatusLine, $PreserveStatusLine) | Where-Object { $_ }).Count -gt 1) {
+    throw 'EnableStatusLine, DisableStatusLine, and PreserveStatusLine cannot be used together.'
 }
 
 function Write-InstallStep {
@@ -209,7 +210,10 @@ if (-not $ForkReleaseDir) {
     }
 }
 
-$statusLineEnabled = if ($EnableStatusLine) {
+$statusLineEnabled = if ($PreserveStatusLine) {
+    $null
+}
+elseif ($EnableStatusLine) {
     $true
 }
 elseif ($DisableStatusLine) {
@@ -224,7 +228,10 @@ elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
 else {
     $false
 }
-$statusLineMessage = if ($statusLineEnabled) {
+$statusLineMessage = if ($null -eq $statusLineEnabled) {
+    '状态栏预设：保留当前设置'
+}
+elseif ($statusLineEnabled) {
     '状态栏预设：启用'
 }
 else {
@@ -270,10 +277,10 @@ $arguments = @($managerEntrypoint, 'install')
 if ($ForkReleaseDir) {
     $arguments += @('--release-dir', [System.IO.Path]::GetFullPath($ForkReleaseDir))
 }
-if ($statusLineEnabled) {
+if ($statusLineEnabled -eq $true) {
     $arguments += '--enable-statusline'
 }
-else {
+elseif ($statusLineEnabled -eq $false) {
     $arguments += '--disable-statusline'
 }
 try {

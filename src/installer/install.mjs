@@ -765,7 +765,10 @@ export async function installForkFromProvider(options) {
     const extractedRelease = join(stagingRoot, "release");
 
     await runStage(options, "download-fork", () =>
-      options.provider.materializeAsset(manifest.asset.name, forkZip)
+      options.provider.materializeAsset(manifest.asset.name, forkZip, {
+        expectedSize: manifest.asset.size,
+        onProgress: options.onProgress
+      })
     );
     const archiveHash = await runStage(
       options,

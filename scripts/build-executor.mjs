@@ -24,7 +24,7 @@ export async function buildExecutors(options = {}) {
     banner: {
       js: 'import { createRequire as __ccuCreateRequire } from "node:module"; const require = __ccuCreateRequire(import.meta.url);'
     },
-    legalComments: "external",
+    legalComments: "inline",
     metafile: true,
     sourcemap: false,
     logLevel: options.logLevel ?? "info"

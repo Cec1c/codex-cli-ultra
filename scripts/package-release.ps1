@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$Version = '0.1.4',
+    [string]$Version = '0.1.5',
+    [string]$MinimumManagerVersion = '0.1.5',
     [string]$OutputDirectory = $(Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts'),
     [string]$ForkReleaseDir = $env:CCU_FORK_RELEASE_DIR
 )
@@ -58,6 +59,7 @@ $output = [System.IO.Path]::GetFullPath($OutputDirectory)
 $name = "codex-cli-ultra-v$Version-windows-x64"
 $stage = Assert-ChildPath -Root $output -Candidate (Join-Path $output $name) -Label 'Release staging directory'
 $zip = Assert-ChildPath -Root $output -Candidate (Join-Path $output "$name.zip") -Label 'Release ZIP'
+$updateManifestPath = Assert-ChildPath -Root $output -Candidate (Join-Path $output 'ccu-update-manifest.json') -Label 'CCU update manifest'
 
 Push-Location $root
 try {
@@ -70,6 +72,7 @@ finally { Pop-Location }
 
 if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+if (Test-Path -LiteralPath $updateManifestPath) { Remove-Item -LiteralPath $updateManifestPath -Force }
 New-Item -ItemType Directory -Path (Join-Path $stage 'bin') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stage 'content\languages') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stage 'content\themes') -Force | Out-Null
@@ -96,9 +99,30 @@ Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $stage
 Compress-Archive -LiteralPath $stage -DestinationPath $zip -CompressionLevel Optimal
 $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 "$hash  $([System.IO.Path]::GetFileName($zip))" | Set-Content -LiteralPath "$zip.sha256" -Encoding ascii
+$updateManifest = [ordered]@{
+    schemaVersion = 1
+    type = 'codex-cli-ultra-update'
+    ccuVersion = $Version
+    releaseTag = "v$Version"
+    platform = 'windows-x64'
+    minimumManagerVersion = $MinimumManagerVersion
+    bundledFork = [ordered]@{
+        releaseTag = [string]$forkManifest.releaseTag
+        displayVersion = [string]$forkManifest.displayVersion
+        upstreamVersion = [string]$forkManifest.upstreamVersion
+        i18nApiVersion = [int]$forkManifest.i18nApiVersion
+    }
+    asset = [ordered]@{
+        name = [System.IO.Path]::GetFileName($zip)
+        size = (Get-Item -LiteralPath $zip).Length
+        sha256 = "sha256:$hash"
+    }
+}
+$updateManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $updateManifestPath -Encoding utf8
 [pscustomobject]@{
     version = $Version
     package = $stage
     zip = $zip
     sha256 = $hash
+    updateManifest = $updateManifestPath
 } | ConvertTo-Json

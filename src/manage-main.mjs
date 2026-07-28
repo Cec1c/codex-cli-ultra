@@ -34,13 +34,30 @@ import {
   DirectoryReleaseProvider,
   HttpReleaseProvider
 } from "./release/provider.mjs";
+import { createNetworkClient } from "./network/client.mjs";
+import {
+  readSettings,
+  updateProxySettings
+} from "./settings/store.mjs";
 import { readState } from "./state/store.mjs";
+import { checkForCcuUpdate } from "./update/check.mjs";
+import {
+  dismissUpdateVersion,
+  readUpdateCache,
+  updateCheckIsDue
+} from "./update/cache.mjs";
+import { upgradeCcu } from "./update/upgrade.mjs";
 import { CCU_VERSION } from "./version.mjs";
 
 const USAGE = [
   "Usage:",
   "  codex-ultra version [--json]",
   "  codex-ultra status [--check] [--json]",
+  "  codex-ultra upgrade [--target VERSION] [--manager-pid PID] [--events jsonl] [--json]",
+  "  codex-ultra upgrade check [--json]",
+  "  codex-ultra upgrade dismiss VERSION [--json]",
+  "  codex-ultra proxy status|toggle|test [--json]",
+  "  codex-ultra proxy set URL [--json]",
   "  codex-ultra install [--manifest-url URL | --release-dir PATH] [--enable-statusline | --disable-statusline] [--json]",
   "  codex-ultra update [--manifest-url URL | --release-dir PATH] [--enable-statusline | --disable-statusline] [--json]",
   "  codex-ultra uninstall [--json]",
@@ -87,6 +104,20 @@ function createInstallStageReporter(stdout) {
     stdout.write(
       `[${completed}/${total}] ${INSTALL_STAGE_LABELS[name] ?? name}\n`
     );
+  };
+}
+
+function createEventReporter(stdout) {
+  return {
+    stage(event) {
+      stdout.write(`${JSON.stringify({ type: "stage", ...event })}\n`);
+    },
+    progress(event) {
+      stdout.write(`${JSON.stringify({ type: "progress", ...event })}\n`);
+    },
+    result(result) {
+      stdout.write(`${JSON.stringify({ type: "result", result })}\n`);
+    }
   };
 }
 
@@ -256,6 +287,7 @@ async function readInstalledManifest(state, readFileImpl = readFile) {
 
 async function collectStatus(options) {
   const installRoot = options.installRoot;
+  const settings = await (options.readSettings ?? readSettings)(installRoot);
   const statePath = join(installRoot, "state.json");
   const state = await readOptionalState(
     statePath,
@@ -279,6 +311,7 @@ async function collectStatus(options) {
   return {
     ccuVersion: CCU_VERSION,
     installRoot,
+    network: settings.network,
     official: official === null
       ? { installed: false }
       : {
@@ -324,46 +357,54 @@ function remoteError(channel, result) {
 }
 
 async function collectRemoteStatus(status, options) {
+  const settings =
+    options.settings ??
+    await (options.readSettings ?? readSettings)(options.installRoot);
+  const network = options.networkClient ?? createNetworkClient(settings, options);
   const remoteOptions = {
-    fetchImpl: options.fetchImpl,
+    fetchImpl: network.fetch,
     token: options.githubToken
   };
-  const [forkResult, ccuResult, upstreamResult] = await Promise.allSettled([
-    (options.resolveLatestForkRelease ?? resolveLatestForkRelease)(remoteOptions),
-    (options.resolveLatestCcuRelease ?? resolveLatestCcuRelease)(remoteOptions),
-    (options.resolveLatestUpstreamRelease ?? resolveLatestUpstreamRelease)(remoteOptions)
-  ]);
+  try {
+    const [forkResult, ccuResult, upstreamResult] = await Promise.allSettled([
+      (options.resolveLatestForkRelease ?? resolveLatestForkRelease)(remoteOptions),
+      (options.resolveLatestCcuRelease ?? resolveLatestCcuRelease)(remoteOptions),
+      (options.resolveLatestUpstreamRelease ?? resolveLatestUpstreamRelease)(remoteOptions)
+    ]);
 
-  if (forkResult.status === "fulfilled") {
-    status.latest = forkResult.value.manifest;
-    status.updateAvailable = status.installedManifest === null
-      ? true
-      : compareForkReleases(status.installedManifest, status.latest) < 0;
-  } else {
-    status.onlineErrors.push(remoteError("ccu-i18n", forkResult));
-  }
+    if (forkResult.status === "fulfilled") {
+      status.latest = forkResult.value.manifest;
+      status.updateAvailable = status.installedManifest === null
+        ? true
+        : compareForkReleases(status.installedManifest, status.latest) < 0;
+    } else {
+      status.onlineErrors.push(remoteError("ccu-i18n", forkResult));
+    }
 
-  if (ccuResult.status === "fulfilled") {
-    status.latestCcu = ccuResult.value;
-    status.ccuUpdateAvailable =
-      compareStableVersions(CCU_VERSION, ccuResult.value.version) < 0;
-  } else {
-    status.onlineErrors.push(remoteError("ccu", ccuResult));
-  }
+    if (ccuResult.status === "fulfilled") {
+      status.latestCcu = ccuResult.value;
+      status.ccuUpdateAvailable =
+        compareStableVersions(CCU_VERSION, ccuResult.value.version) < 0;
+    } else {
+      status.onlineErrors.push(remoteError("ccu", ccuResult));
+    }
 
-  if (upstreamResult.status === "fulfilled") {
-    status.latestUpstream = upstreamResult.value;
-    const localUpstream = status.official.installed
-      ? status.official.version
-      : status.fork.upstreamVersion;
-    status.upstreamUpdateAvailable =
-      typeof localUpstream === "string" &&
-      /^[0-9]+\.[0-9]+\.[0-9]+$/.test(localUpstream) &&
-      compareStableVersions(localUpstream, upstreamResult.value.version) < 0;
-  } else {
-    status.onlineErrors.push(remoteError("codex-upstream", upstreamResult));
+    if (upstreamResult.status === "fulfilled") {
+      status.latestUpstream = upstreamResult.value;
+      const localUpstream = status.official.installed
+        ? status.official.version
+        : status.fork.upstreamVersion;
+      status.upstreamUpdateAvailable =
+        typeof localUpstream === "string" &&
+        /^[0-9]+\.[0-9]+\.[0-9]+$/.test(localUpstream) &&
+        compareStableVersions(localUpstream, upstreamResult.value.version) < 0;
+    } else {
+      status.onlineErrors.push(remoteError("codex-upstream", upstreamResult));
+    }
+    return status;
+  } finally {
+    if (!options.networkClient) await network.close();
   }
-  return status;
 }
 
 function writeJson(stdout, value) {
@@ -387,6 +428,13 @@ function writeVersion(stdout, status) {
 
 function writeStatus(stdout, status) {
   writeVersion(stdout, status);
+  if (status.latestCcu) {
+    stdout.write(
+      status.ccuUpdateAvailable
+        ? `CCU update available: ${status.latestCcu.version}\n`
+        : `CCU up to date: ${status.latestCcu.version}\n`
+    );
+  }
   stdout.write(
     status.official.installed
       ? `official ${status.official.version} at ${status.official.binaryPath}\n`
@@ -450,6 +498,12 @@ export async function manageMain(options = {}) {
   const installRoot = options.installRoot ?? resolveInstallRoot(env);
   const command = args[0];
   const json = args.includes("--json");
+  const eventMode = args.includes("--events")
+    ? optionValue(args, "--events")
+    : null;
+  if (eventMode !== null && eventMode !== "jsonl") {
+    throw new Error("--events currently supports only jsonl");
+  }
   const context = {
     ...options,
     cwd,
@@ -462,6 +516,128 @@ export async function manageMain(options = {}) {
     await (
       options.waitForInactiveReleaseCleanup ?? waitForInactiveReleaseCleanup
     )(context);
+    return 0;
+  }
+
+  if (command === "proxy") {
+    const action = args[1] ?? "status";
+    let settings = await (options.readSettings ?? readSettings)(installRoot);
+    if (action === "toggle") {
+      settings = await (options.updateProxySettings ?? updateProxySettings)(
+        installRoot,
+        { proxyEnabled: !settings.network.proxyEnabled },
+        context
+      );
+    } else if (action === "set") {
+      if (!args[2] || args[2].startsWith("--")) {
+        throw new Error("proxy set requires a URL");
+      }
+      settings = await (options.updateProxySettings ?? updateProxySettings)(
+        installRoot,
+        { proxyUrl: args[2] },
+        context
+      );
+    } else if (action === "test") {
+      const startedAt = Date.now();
+      const checked = await (options.checkForCcuUpdate ?? checkForCcuUpdate)({
+        ...context,
+        settings
+      });
+      const report = {
+        ...settings.network,
+        available: true,
+        latencyMs: Date.now() - startedAt,
+        latestCcuVersion: checked.latest.version
+      };
+      if (json) writeJson(stdout, report);
+      else {
+        stdout.write(
+          `${report.proxyEnabled ? `代理 ${report.proxyUrl}` : "直连"}可用，延迟 ${report.latencyMs}ms\n`
+        );
+      }
+      return 0;
+    } else if (action !== "status") {
+      throw new Error("proxy action must be status, toggle, set, or test");
+    }
+    const report = settings.network;
+    if (json) writeJson(stdout, report);
+    else {
+      stdout.write(
+        report.proxyEnabled
+          ? `代理已开启：${report.proxyUrl}\n`
+          : `代理未开启；国内特殊网络环境建议启用，默认地址 ${report.proxyUrl}\n`
+      );
+    }
+    return 0;
+  }
+
+  if (command === "upgrade") {
+    const action = args[1];
+    if (action === "check") {
+      if (args.includes("--background")) {
+        const settings = await (options.readSettings ?? readSettings)(installRoot);
+        const cache = await (options.readUpdateCache ?? readUpdateCache)(installRoot);
+        if (!updateCheckIsDue(cache, settings, options.now ?? new Date())) {
+          const report = { skipped: true, reason: "update check cache is fresh", cache };
+          if (json) writeJson(stdout, report);
+          return 0;
+        }
+      }
+      const checked = await (options.checkForCcuUpdate ?? checkForCcuUpdate)(context);
+      const report = {
+        currentVersion: CCU_VERSION,
+        latestVersion: checked.latest.version,
+        updateAvailable:
+          compareStableVersions(CCU_VERSION, checked.latest.version) < 0,
+        releaseUrl: checked.latest.url,
+        packageReady: checked.manifest !== null,
+        cache: checked.cache
+      };
+      if (json) writeJson(stdout, report);
+      else {
+        stdout.write(
+          report.updateAvailable
+            ? `CCU ${report.latestVersion} 可用${report.packageReady ? "" : "，但尚无自动升级清单"}\n`
+            : `CCU 已是最新版本 ${CCU_VERSION}\n`
+        );
+      }
+      return 0;
+    }
+    if (action === "dismiss") {
+      const version = args[2]?.replace(/^v/, "");
+      if (!version) throw new Error("upgrade dismiss requires a version");
+      const report = await (options.dismissUpdateVersion ?? dismissUpdateVersion)(
+        installRoot,
+        version
+      );
+      if (json) writeJson(stdout, report);
+      else stdout.write(`已跳过 CCU ${report.version}\n`);
+      return 0;
+    }
+    const targetVersion = optionValue(args, "--target")?.replace(/^v/, "");
+    const managerPidText = optionValue(args, "--manager-pid");
+    const managerPid = managerPidText === undefined ? 0 : Number(managerPidText);
+    if (!Number.isSafeInteger(managerPid) || managerPid < 0) {
+      throw new Error("--manager-pid must be a non-negative integer");
+    }
+    const events = eventMode === "jsonl" ? createEventReporter(stdout) : null;
+    const report = await (options.upgradeCcu ?? upgradeCcu)({
+      ...context,
+      currentVersion: CCU_VERSION,
+      targetVersion,
+      managerPid,
+      onStage: events?.stage,
+      onProgress: events?.progress
+    });
+    if (events) events.result(report);
+    else if (json) writeJson(stdout, report);
+    else if (report.changed) {
+      stdout.write(
+        `CCU ${report.manifest.ccuVersion} 已准备完成；Manager 退出后将自动切换并重新打开。\n`
+      );
+    } else {
+      stdout.write(`${report.message}\n`);
+    }
     return 0;
   }
 

@@ -69,16 +69,30 @@ async function resolveLatestVersion(options) {
     repository: options.repository,
     tag: release.tag_name,
     version: match[1],
-    url: release.html_url ?? null
+    url: release.html_url ?? null,
+    assets: Array.isArray(release.assets) ? release.assets : []
   };
 }
 
 export async function resolveLatestCcuRelease(options = {}) {
-  return await resolveLatestVersion({
+  const result = await resolveLatestVersion({
     ...options,
     repository: options.repository ?? "Cec1c/codex-cli-ultra",
     tagPattern: /^v([0-9]+\.[0-9]+\.[0-9]+)$/
   });
+  const updateManifest = result.assets.find(
+    (asset) => asset?.name === "ccu-update-manifest.json"
+  );
+  return {
+    repository: result.repository,
+    tag: result.tag,
+    version: result.version,
+    url: result.url,
+    updateManifestUrl:
+      typeof updateManifest?.browser_download_url === "string"
+        ? updateManifest.browser_download_url
+        : null
+  };
 }
 
 export async function resolveLatestUpstreamRelease(options = {}) {

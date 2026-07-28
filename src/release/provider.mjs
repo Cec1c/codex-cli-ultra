@@ -8,7 +8,6 @@ import {
 } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 
 const MANIFEST_NAME = "release-manifest.json";
 const MAX_REDIRECTS = 5;
@@ -75,17 +74,92 @@ function isPathInside(root, candidate) {
   );
 }
 
-async function writeReadableExclusive(readable, destination) {
+function parseContentLength(headers) {
+  const value = headers.get("content-length");
+  if (value === null || !/^\d+$/.test(value)) return null;
+  const length = Number(value);
+  return Number.isSafeInteger(length) ? length : null;
+}
+
+export function createDownloadProgressReporter(options = {}) {
+  const startedAt = options.now?.() ?? Date.now();
+  const now = options.now ?? Date.now;
+  const onProgress = options.onProgress ?? (() => {});
+  const totalBytes = Number.isSafeInteger(options.totalBytes)
+    ? options.totalBytes
+    : null;
+  const initialBytes = options.initialBytes ?? 0;
+  const samples = [{ at: startedAt, bytes: initialBytes }];
+  let lastEmittedAt = 0;
+  return (transferredBytes, force = false) => {
+    const at = now();
+    samples.push({ at, bytes: transferredBytes });
+    while (samples.length > 2 && samples[0].at < at - 3_000) samples.shift();
+    if (!force && at - lastEmittedAt < 150) return;
+    lastEmittedAt = at;
+    const window = samples.at(-1);
+    const base = samples[0];
+    const windowSeconds = Math.max((window.at - base.at) / 1_000, 0.001);
+    const instantBytesPerSecond = Math.max(
+      0,
+      (window.bytes - base.bytes) / windowSeconds
+    );
+    const elapsedSeconds = Math.max((at - startedAt) / 1_000, 0.001);
+    const averageBytesPerSecond = Math.max(
+      0,
+      (transferredBytes - initialBytes) / elapsedSeconds
+    );
+    const speed = instantBytesPerSecond || averageBytesPerSecond;
+    const remaining = totalBytes === null
+      ? null
+      : Math.max(0, totalBytes - transferredBytes);
+    onProgress({
+      phase: "download",
+      transferredBytes,
+      totalBytes,
+      percent:
+        totalBytes === null
+          ? null
+          : Math.min(100, (transferredBytes / totalBytes) * 100),
+      instantBytesPerSecond,
+      averageBytesPerSecond,
+      etaSeconds: remaining === null || speed <= 0 ? null : remaining / speed
+    });
+  };
+}
+
+async function writeReadable(readable, destination, options = {}) {
   const target = resolve(destination);
   let handle = null;
   try {
-    handle = await open(target, "wx");
-    const output = handle.createWriteStream();
-    await pipeline(readable, output);
+    handle = await open(target, options.append ? "a" : "wx");
+    const report = createDownloadProgressReporter({
+      totalBytes: options.totalBytes,
+      initialBytes: options.initialBytes,
+      onProgress: options.onProgress,
+      now: options.now
+    });
+    let transferredBytes = options.initialBytes ?? 0;
+    report(transferredBytes, true);
+    for await (const chunk of readable) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      await handle.write(bytes);
+      transferredBytes += bytes.length;
+      if (
+        Number.isSafeInteger(options.totalBytes) &&
+        transferredBytes > options.totalBytes
+      ) {
+        throw new Error("download exceeded the expected asset size");
+      }
+      report(transferredBytes);
+    }
+    report(transferredBytes, true);
   } catch (error) {
     if (handle !== null) {
       await handle.close().catch(() => {});
-      await rm(target, { force: true }).catch(() => {});
+      if (!options.keepPartial) {
+        await rm(target, { force: true }).catch(() => {});
+      }
     }
     throw error;
   }
@@ -152,9 +226,14 @@ export class DirectoryReleaseProvider {
     );
   }
 
-  async materializeAsset(name, destination) {
+  async materializeAsset(name, destination, options = {}) {
     const source = await this.#resolveSource(name, "release asset");
-    return await writeReadableExclusive(createReadStream(source), destination);
+    const metadata = await stat(source);
+    return await writeReadable(createReadStream(source), destination, {
+      totalBytes: options.expectedSize ?? metadata.size,
+      onProgress: options.onProgress,
+      now: options.now
+    });
   }
 }
 
@@ -173,20 +252,23 @@ export class HttpReleaseProvider {
     this.assetTimeoutMs = assetTimeoutMs;
   }
 
-  #requestHeaders(url) {
+  #requestHeaders(url, extraHeaders = {}) {
     const headers = new Headers(this.headers);
+    for (const [key, value] of new Headers(extraHeaders)) {
+      headers.set(key, value);
+    }
     if (!AUTHORIZATION_HOSTS.has(url.hostname.toLowerCase())) {
       headers.delete("authorization");
     }
     return headers;
   }
 
-  async #fetch(url, timeoutMs) {
+  async #fetch(url, timeoutMs, extraHeaders = {}) {
     let current = validateHttpsGitHubUrl(url, "request URL");
     for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
       const response = await this.fetchImpl(current, {
         method: "GET",
-        headers: this.#requestHeaders(current),
+        headers: this.#requestHeaders(current, extraHeaders),
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs)
       });
@@ -228,8 +310,8 @@ export class HttpReleaseProvider {
 
   async readManifest() {
     const response = await this.#fetch(this.manifestUrl, this.manifestTimeoutMs);
-    const declaredLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_MANIFEST_BYTES) {
+    const declaredLength = parseContentLength(response.headers);
+    if (declaredLength !== null && declaredLength > MAX_MANIFEST_BYTES) {
       throw new Error("release manifest exceeds the manifest size limit");
     }
     return await parseManifestText(
@@ -238,19 +320,70 @@ export class HttpReleaseProvider {
     );
   }
 
-  async materializeAsset(name, destination) {
+  async materializeAsset(name, destination, options = {}) {
     const basename = validateAssetName(name);
     const assetUrl = new URL(
       encodeURIComponent(basename),
       new URL(".", this.manifestUrl)
     );
-    const response = await this.#fetch(assetUrl, this.assetTimeoutMs);
+    let initialBytes = 0;
+    if (options.resume) {
+      try {
+        const metadata = await stat(destination);
+        if (!metadata.isFile()) throw new Error("partial download is not a file");
+        initialBytes = metadata.size;
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+    }
+    if (
+      Number.isSafeInteger(options.expectedSize) &&
+      initialBytes === options.expectedSize
+    ) {
+      options.onProgress?.({
+        phase: "download",
+        transferredBytes: initialBytes,
+        totalBytes: options.expectedSize,
+        percent: 100,
+        instantBytesPerSecond: 0,
+        averageBytesPerSecond: 0,
+        etaSeconds: 0
+      });
+      return resolve(destination);
+    }
+    const response = await this.#fetch(
+      assetUrl,
+      this.assetTimeoutMs,
+      initialBytes > 0 ? { Range: `bytes=${initialBytes}-` } : {}
+    );
     if (response.body === null) {
       throw new Error("HTTP response has no body");
     }
-    return await writeReadableExclusive(
-      Readable.fromWeb(response.body),
-      destination
-    );
+    let append = initialBytes > 0 && response.status === 206;
+    if (append) {
+      const range = response.headers.get("content-range");
+      const match = /^bytes (\d+)-\d+\/(\d+|\*)$/.exec(range ?? "");
+      if (!match || Number(match[1]) !== initialBytes) {
+        throw new Error("resume response has an invalid Content-Range");
+      }
+    } else if (initialBytes > 0) {
+      await rm(destination, { force: true });
+      initialBytes = 0;
+      append = false;
+    }
+    const declaredLength = parseContentLength(response.headers);
+    const totalBytes = Number.isSafeInteger(options.expectedSize)
+      ? options.expectedSize
+      : declaredLength !== null
+        ? initialBytes + declaredLength
+        : null;
+    return await writeReadable(Readable.fromWeb(response.body), destination, {
+      append,
+      keepPartial: options.resume === true,
+      initialBytes,
+      totalBytes,
+      onProgress: options.onProgress,
+      now: options.now
+    });
   }
 }
