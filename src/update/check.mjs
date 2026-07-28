@@ -8,29 +8,64 @@ import { HttpReleaseProvider } from "../release/provider.mjs";
 import { readSettings } from "../settings/store.mjs";
 import { writeUpdateCacheAtomic } from "./cache.mjs";
 
+const CCU_RELEASES_URL = "https://github.com/Cec1c/codex-cli-ultra/releases";
+
+function manifestProvider(manifestUrl, options, network) {
+  return new HttpReleaseProvider({
+    manifestUrl,
+    fetchImpl: network.fetch,
+    headers: options.githubToken
+      ? { Authorization: `Bearer ${options.githubToken}` }
+      : {},
+    manifestName: CCU_UPDATE_MANIFEST_NAME
+  });
+}
+
+async function readUpdateManifest(manifestUrl, options, network, expected = {}) {
+  const provider = manifestProvider(manifestUrl, options, network);
+  return validateCcuUpdateManifest(await provider.readManifest(), expected);
+}
+
 export async function checkForCcuUpdate(options = {}) {
   const settings =
     options.settings ??
     await (options.readSettings ?? readSettings)(options.installRoot);
   const network = options.networkClient ?? createNetworkClient(settings, options);
   try {
-    const latest = await (options.resolveLatestCcuRelease ?? resolveLatestCcuRelease)({
-      fetchImpl: network.fetch,
-      token: options.githubToken
-    });
+    let latest;
     let manifest = null;
-    if (latest.updateManifestUrl) {
-      const provider = new HttpReleaseProvider({
-        manifestUrl: latest.updateManifestUrl,
+    try {
+      latest = await (options.resolveLatestCcuRelease ?? resolveLatestCcuRelease)({
         fetchImpl: network.fetch,
-        headers: options.githubToken
-          ? { Authorization: `Bearer ${options.githubToken}` }
-          : {},
-        manifestName: CCU_UPDATE_MANIFEST_NAME
+        token: options.githubToken
       });
-      manifest = validateCcuUpdateManifest(await provider.readManifest(), {
-        releaseTag: latest.tag
-      });
+    } catch (apiError) {
+      const manifestUrl =
+        options.latestManifestUrl ??
+        `${CCU_RELEASES_URL}/latest/download/${CCU_UPDATE_MANIFEST_NAME}`;
+      try {
+        manifest = await readUpdateManifest(manifestUrl, options, network);
+      } catch (manifestError) {
+        throw new Error(
+          `GitHub API update check failed: ${apiError.message}; public manifest fallback failed: ${manifestError.message}`,
+          { cause: manifestError }
+        );
+      }
+      latest = {
+        repository: "Cec1c/codex-cli-ultra",
+        tag: manifest.releaseTag,
+        version: manifest.ccuVersion,
+        url: `${CCU_RELEASES_URL}/tag/${manifest.releaseTag}`,
+        updateManifestUrl: manifestUrl
+      };
+    }
+    if (latest.updateManifestUrl) {
+      manifest ??= await readUpdateManifest(
+        latest.updateManifestUrl,
+        options,
+        network,
+        { releaseTag: latest.tag }
+      );
     }
     const cache = await (options.writeUpdateCacheAtomic ?? writeUpdateCacheAtomic)(
       options.installRoot,
@@ -69,14 +104,7 @@ export async function resolveCcuUpdatePackage(options = {}) {
   const network = options.networkClient ?? createNetworkClient(settings, options);
   return {
     ...checked,
-    provider: new HttpReleaseProvider({
-      manifestUrl: checked.latest.updateManifestUrl,
-      fetchImpl: network.fetch,
-      headers: options.githubToken
-        ? { Authorization: `Bearer ${options.githubToken}` }
-        : {},
-      manifestName: CCU_UPDATE_MANIFEST_NAME
-    }),
+    provider: manifestProvider(checked.latest.updateManifestUrl, options, network),
     networkClient: network,
     ownsNetworkClient: !options.networkClient
   };
