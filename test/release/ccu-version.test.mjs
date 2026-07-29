@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 
 import {
@@ -12,6 +12,23 @@ import {
 test("nextPatchVersion increments only the patch component", () => {
   assert.equal(nextPatchVersion("0.1.3"), "0.1.4");
   assert.equal(nextPatchVersion("2.9.99"), "2.9.100");
+});
+
+test("repository release version surfaces match package.json", async () => {
+  const root = resolve(import.meta.dirname, "../..");
+  const packageJson = JSON.parse(
+    await readFile(join(root, "package.json"), "utf8")
+  );
+  const expectedVersion = `v${packageJson.version}`;
+  const expectedMarker = `| CCU | \`${expectedVersion}\``;
+
+  for (const path of ["README.md", "README.en.md"]) {
+    const content = await readFile(join(root, path), "utf8");
+    assert.ok(
+      content.includes(expectedMarker),
+      `${path} must contain ${expectedMarker}`
+    );
+  }
 });
 
 test("prepareCcuVersion updates the complete release version contract", async (t) => {
@@ -52,4 +69,5 @@ test("prepareCcuVersion updates the complete release version contract", async (t
   assert.equal(JSON.parse(await readFile(join(root, "package.json"))).version, "0.1.4");
   assert.match(await readFile(join(root, "src/version.mjs"), "utf8"), /0\.1\.4/);
   assert.match(await readFile(join(root, "README.md"), "utf8"), /v0\.1\.4/);
+  assert.match(await readFile(join(root, "README.en.md"), "utf8"), /v0\.1\.4/);
 });
