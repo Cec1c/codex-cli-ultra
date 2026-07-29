@@ -15,7 +15,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if ((@($EnableStatusLine, $DisableStatusLine, $PreserveStatusLine) | Where-Object { $_ }).Count -gt 1) {
+$selectedStatusLineModes = @(
+    @($EnableStatusLine, $DisableStatusLine, $PreserveStatusLine) |
+        Where-Object { $_ }
+)
+if ($selectedStatusLineModes.Count -gt 1) {
     throw 'EnableStatusLine, DisableStatusLine, and PreserveStatusLine cannot be used together.'
 }
 
