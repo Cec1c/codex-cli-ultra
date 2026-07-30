@@ -14,8 +14,11 @@ function optionValue(args, name) {
 const output = resolve(
   optionValue(process.argv.slice(2), "--output") ?? "artifacts/fork-release"
 );
+const releaseTag =
+  optionValue(process.argv.slice(2), "--tag")?.trim() || undefined;
 const latest = await resolveLatestForkRelease({
-  token: process.env.GITHUB_TOKEN
+  token: process.env.GITHUB_TOKEN,
+  releaseTag
 });
 await mkdir(output, { recursive: true });
 const manifestPath = resolve(output, FORK_MANIFEST_NAME);

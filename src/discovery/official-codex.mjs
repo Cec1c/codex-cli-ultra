@@ -1,23 +1,15 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile, realpath, stat } from "node:fs/promises";
 import {
-  delimiter,
-  dirname,
-  join,
-  resolve
-} from "node:path";
-import { promisify } from "node:util";
-
-import {
-  isAbsoluteLocalWindowsPath,
-  isWindowsPathInside,
+  RUNTIME_PLATFORM,
+  isAbsoluteLocalPath,
+  isPathInside,
   resolveInstallRoot
 } from "../config/constants.mjs";
+import { pathApiFor } from "../platform/runtime.mjs";
+import { promisify } from "node:util";
 
 const execFilePromise = promisify(execFileCallback);
-const PLATFORM_PACKAGE = "@openai/codex-win32-x64";
-const PLATFORM_SUFFIX = "win32-x64";
-const TARGET = "x86_64-pc-windows-msvc";
 
 function parsePackageJson(source, label) {
   let value;
@@ -35,45 +27,57 @@ function parsePackageJson(source, label) {
   return value;
 }
 
-function assertOutsideInstallRoot(installRoot, candidate) {
-  if (isWindowsPathInside(installRoot, candidate)) {
+function assertOutsideInstallRoot(installRoot, candidate, runtime) {
+  if (isPathInside(installRoot, candidate, runtime)) {
     throw new Error(
       `official Codex path is inside the Codex Ultra install root: ${candidate}`
     );
   }
 }
 
-async function resolveExistingFile(path, label, realpathFile) {
+async function resolveExistingFile(path, label, realpathFile, runtime) {
+  const pathApi = pathApiFor(runtime);
   let canonical;
   try {
-    canonical = resolve(await realpathFile(path));
+    canonical = pathApi.resolve(await realpathFile(path));
   } catch (error) {
     throw new Error(`${label} is unavailable`, { cause: error });
   }
-  if (!isAbsoluteLocalWindowsPath(canonical)) {
-    throw new Error(`${label} resolved outside a local Windows drive`);
+  if (!isAbsoluteLocalPath(canonical, runtime)) {
+    throw new Error(
+      runtime.isWindows
+        ? `${label} resolved outside a local Windows drive`
+        : `${label} resolved outside an absolute local path`
+    );
   }
   return canonical;
 }
 
-async function canonicalizeInstallRoot(path, realpathFile) {
-  const resolved = resolve(path);
+async function canonicalizeInstallRoot(path, realpathFile, runtime) {
+  const pathApi = pathApiFor(runtime);
+  const resolved = pathApi.resolve(path);
   let canonical;
   try {
-    canonical = resolve(await realpathFile(resolved));
+    canonical = pathApi.resolve(await realpathFile(resolved));
   } catch (error) {
     if (error?.code === "ENOENT") {
       return resolved;
     }
     throw new Error("Codex Ultra install root is unsafe", { cause: error });
   }
-  if (!isAbsoluteLocalWindowsPath(canonical)) {
-    throw new Error("Codex Ultra install root resolved outside a local Windows drive");
+  if (!isAbsoluteLocalPath(canonical, runtime)) {
+    throw new Error(
+      runtime.isWindows
+        ? "Codex Ultra install root resolved outside a local Windows drive"
+        : "Codex Ultra install root resolved outside an absolute local path"
+    );
   }
   return canonical;
 }
 
-function sanitizeExecEnvironment(env, installRoot) {
+function sanitizeExecEnvironment(env, installRoot, runtime) {
+  const pathApi = pathApiFor(runtime);
+  const delimiter = runtime.isWindows ? ";" : ":";
   const result = {};
   let pathValue;
   for (const [key, value] of Object.entries(env)) {
@@ -90,19 +94,19 @@ function sanitizeExecEnvironment(env, installRoot) {
       .map((entry) => entry.trim().replace(/^"(.*)"$/, "$1"))
       .filter((entry) => {
         if (
-          !isAbsoluteLocalWindowsPath(entry) ||
-          isWindowsPathInside(installRoot, entry)
+          !isAbsoluteLocalPath(entry, runtime) ||
+          isPathInside(installRoot, entry, runtime)
         ) {
           return false;
         }
-        const identity = entry.toLowerCase();
+        const identity = runtime.isWindows ? entry.toLowerCase() : entry;
         if (seen.has(identity)) {
           return false;
         }
         seen.add(identity);
         return true;
       })
-      .map((entry) => resolve(entry));
+      .map((entry) => pathApi.resolve(entry));
     result.PATH = localEntries.join(delimiter);
   }
   return result;
@@ -112,46 +116,52 @@ async function resolveTrustedNpmCommand({
   env,
   installRoot,
   realpathFile,
-  statFile
+  statFile,
+  runtime
 }) {
+  const pathApi = pathApiFor(runtime);
+  const delimiter = runtime.isWindows ? ";" : ":";
   const pathValue = env.PATH ?? "";
   for (const directory of pathValue.split(delimiter)) {
     if (!directory) continue;
-    const candidate = join(directory, "npm.cmd");
+    const candidate = pathApi.join(directory, runtime.isWindows ? "npm.cmd" : "npm");
     if (/[%!^&|<>"\r\n]/.test(candidate)) continue;
     let npmCommand;
     let nodePath;
     let npmCliPath;
     try {
-      npmCommand = resolve(await realpathFile(candidate));
+      npmCommand = pathApi.resolve(await realpathFile(candidate));
       if (
-        !isAbsoluteLocalWindowsPath(npmCommand) ||
-        isWindowsPathInside(installRoot, npmCommand)
+        !isAbsoluteLocalPath(npmCommand, runtime) ||
+        isPathInside(installRoot, npmCommand, runtime)
       ) {
         continue;
       }
-      const npmDirectory = dirname(npmCommand);
-      nodePath = resolve(await realpathFile(join(npmDirectory, "node.exe")));
-      npmCliPath = resolve(
-        await realpathFile(
-          join(npmDirectory, "node_modules", "npm", "bin", "npm-cli.js")
-        )
-      );
-      if (
-        !isAbsoluteLocalWindowsPath(nodePath) ||
-        !isAbsoluteLocalWindowsPath(npmCliPath) ||
-        isWindowsPathInside(installRoot, nodePath) ||
-        isWindowsPathInside(installRoot, npmCliPath)
-      ) {
-        continue;
+      if (runtime.isWindows) {
+        const npmDirectory = pathApi.dirname(npmCommand);
+        nodePath = pathApi.resolve(
+          await realpathFile(pathApi.join(npmDirectory, "node.exe"))
+        );
+        npmCliPath = pathApi.resolve(
+          await realpathFile(
+            pathApi.join(npmDirectory, "node_modules", "npm", "bin", "npm-cli.js")
+          )
+        );
+        if (
+          !isAbsoluteLocalPath(nodePath, runtime) ||
+          !isAbsoluteLocalPath(npmCliPath, runtime) ||
+          isPathInside(installRoot, nodePath, runtime) ||
+          isPathInside(installRoot, npmCliPath, runtime)
+        ) {
+          continue;
+        }
       }
-      const [npmStats, nodeStats, cliStats] = await Promise.all([
-        statFile(npmCommand),
-        statFile(nodePath),
-        statFile(npmCliPath)
-      ]);
+      const paths = runtime.isWindows
+        ? [npmCommand, nodePath, npmCliPath]
+        : [npmCommand];
+      const metadataList = await Promise.all(paths.map((path) => statFile(path)));
       if (
-        [npmStats, nodeStats, cliStats].some(
+        metadataList.some(
           (metadata) =>
             !metadata ||
             (typeof metadata.isFile === "function" && !metadata.isFile()) ||
@@ -165,7 +175,11 @@ async function resolveTrustedNpmCommand({
     }
     return { npmCommand, nodePath, npmCliPath };
   }
-  throw new Error("no trusted npm.cmd found on the local PATH");
+  throw new Error(
+    runtime.isWindows
+      ? "no trusted npm.cmd found on the local PATH"
+      : "no trusted npm found on PATH"
+  );
 }
 
 async function resolveNpmRoot({
@@ -174,68 +188,80 @@ async function resolveNpmRoot({
   env,
   installRoot,
   realpathFile,
-  statFile
+  statFile,
+  runtime
 }) {
+  const pathApi = pathApiFor(runtime);
   if (npmRoot !== undefined) {
-    return resolve(npmRoot);
+    return pathApi.resolve(npmRoot);
   }
   const npm = await resolveTrustedNpmCommand({
     env,
     installRoot,
     realpathFile,
-    statFile
+    statFile,
+    runtime
   });
-  const execEnv = { ...env, PATH: dirname(npm.nodePath) };
+  const executable = runtime.isWindows ? npm.nodePath : npm.npmCommand;
+  const args = runtime.isWindows ? [npm.npmCliPath, "root", "-g"] : ["root", "-g"];
+  const execEnv = runtime.isWindows
+    ? { ...env, PATH: pathApi.dirname(npm.nodePath) }
+    : env;
   const result = await execFile(
-    npm.nodePath,
-    [npm.npmCliPath, "root", "-g"],
+    executable,
+    args,
     {
       env: execEnv,
       encoding: "utf8",
-      windowsHide: true
+      windowsHide: runtime.isWindows
     }
   );
   const stdout =
     typeof result === "string" ? result : String(result?.stdout ?? "");
   const discovered = stdout.trim();
   if (!discovered) {
-    throw new Error("npm.cmd root -g returned an empty path");
+    throw new Error("npm root -g returned an empty path");
   }
-  return resolve(discovered);
+  return pathApi.resolve(discovered);
 }
 
 export async function discoverOfficialCodex(options = {}) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  const pathApi = pathApiFor(runtime);
   const env = options.env ?? process.env;
   const runExecFile = options.execFile ?? execFilePromise;
   const readFileImpl = options.readFile ?? readFile;
   const realpathImpl = options.realpath ?? realpath;
   const statImpl = options.stat ?? stat;
   const installRoot = await canonicalizeInstallRoot(
-    options.installRoot ?? resolveInstallRoot(env),
-    realpathImpl
+    options.installRoot ?? resolveInstallRoot(env, runtime),
+    realpathImpl,
+    runtime
   );
   const npmRoot = await resolveNpmRoot({
     npmRoot: options.npmRoot,
     execFile: runExecFile,
-    env: sanitizeExecEnvironment(env, installRoot),
+    env: sanitizeExecEnvironment(env, installRoot, runtime),
     installRoot,
     realpathFile: realpathImpl,
-    statFile: statImpl
+    statFile: statImpl,
+    runtime
   });
 
-  if (!isAbsoluteLocalWindowsPath(installRoot)) {
-    throw new Error("install root must be on a local Windows drive");
+  if (!isAbsoluteLocalPath(installRoot, runtime)) {
+    throw new Error("install root must be an absolute local path");
   }
-  if (!isAbsoluteLocalWindowsPath(npmRoot)) {
-    throw new Error("npm root must be on a local Windows drive");
+  if (!isAbsoluteLocalPath(npmRoot, runtime)) {
+    throw new Error("npm root must be an absolute local path");
   }
 
   const packageJsonPath = await resolveExistingFile(
-    join(npmRoot, "@openai", "codex", "package.json"),
+    pathApi.join(npmRoot, "@openai", "codex", "package.json"),
     "official Codex package.json",
-    realpathImpl
+    realpathImpl,
+    runtime
   );
-  assertOutsideInstallRoot(installRoot, packageJsonPath);
+  assertOutsideInstallRoot(installRoot, packageJsonPath, runtime);
   const manifest = parsePackageJson(
     await readFileImpl(packageJsonPath, "utf8"),
     "official Codex package.json"
@@ -243,50 +269,52 @@ export async function discoverOfficialCodex(options = {}) {
   if (manifest.name !== "@openai/codex") {
     throw new Error("official Codex package has an unexpected name");
   }
-  const expectedPlatformVersion = `${manifest.version}-${PLATFORM_SUFFIX}`;
+  const expectedPlatformVersion = `${manifest.version}-${runtime.npmSuffix}`;
   const expectedDependency = `npm:@openai/codex@${expectedPlatformVersion}`;
-  if (manifest.optionalDependencies?.[PLATFORM_PACKAGE] !== expectedDependency) {
+  if (manifest.optionalDependencies?.[runtime.npmPackage] !== expectedDependency) {
     throw new Error(
-      "official package does not declare the exact Windows platform dependency"
+      runtime.isWindows
+        ? "official package does not declare the exact Windows platform dependency"
+        : `official package does not declare the exact ${runtime.id} platform dependency`
     );
   }
 
   const platformPackageJsonPath = await resolveExistingFile(
-    join(
-      dirname(packageJsonPath),
+    pathApi.join(
+      pathApi.dirname(packageJsonPath),
       "node_modules",
-      "@openai",
-      "codex-win32-x64",
+      ...runtime.npmPackage.split("/"),
       "package.json"
     ),
-    "official Windows platform package.json",
-    realpathImpl
+    `official ${runtime.id} platform package.json`,
+    realpathImpl,
+    runtime
   );
-  assertOutsideInstallRoot(installRoot, platformPackageJsonPath);
+  assertOutsideInstallRoot(installRoot, platformPackageJsonPath, runtime);
   const platformManifest = parsePackageJson(
     await readFileImpl(platformPackageJsonPath, "utf8"),
-    "official Windows platform package.json"
+    `official ${runtime.id} platform package.json`
   );
   if (platformManifest.name !== "@openai/codex") {
-    throw new Error("official Windows platform package has an unexpected name");
+    throw new Error(`official ${runtime.id} platform package has an unexpected name`);
   }
   if (platformManifest.version !== expectedPlatformVersion) {
-    throw new Error("official Windows platform package version does not match");
+    throw new Error(`official ${runtime.id} platform package version does not match`);
   }
 
-  const expectedBinaryPath = join(
-    dirname(platformPackageJsonPath),
+  const expectedBinaryPath = pathApi.join(
+    pathApi.dirname(platformPackageJsonPath),
     "vendor",
-    TARGET,
+    runtime.target,
     "bin",
-    "codex.exe"
+    runtime.binaryName
   );
   let binaryPath;
   let binaryStats;
   try {
-    binaryPath = resolve(await realpathImpl(expectedBinaryPath));
-    if (!isAbsoluteLocalWindowsPath(binaryPath)) {
-      throw new Error("binary resolved outside a local Windows drive");
+    binaryPath = pathApi.resolve(await realpathImpl(expectedBinaryPath));
+    if (!isAbsoluteLocalPath(binaryPath, runtime)) {
+      throw new Error("binary resolved outside an absolute local path");
     }
     binaryStats = await statImpl(binaryPath);
   } catch (error) {
@@ -299,7 +327,7 @@ export async function discoverOfficialCodex(options = {}) {
   ) {
     throw new Error("official Codex binary is missing");
   }
-  assertOutsideInstallRoot(installRoot, binaryPath);
+  assertOutsideInstallRoot(installRoot, binaryPath, runtime);
 
   return {
     version: manifest.version,

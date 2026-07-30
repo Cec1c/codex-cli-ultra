@@ -1,7 +1,16 @@
-import { compareStableVersions } from "./github-version.mjs";
+import { RUNTIME_PLATFORM } from "../config/constants.mjs";
+import { compareCcuVersions } from "./github-version.mjs";
 
-export const CCU_UPDATE_MANIFEST_NAME = "ccu-update-manifest.json";
-const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+$/;
+export function ccuUpdateManifestName(runtime = RUNTIME_PLATFORM) {
+  return runtime.isWindows
+    ? "ccu-update-manifest.json"
+    : `ccu-update-manifest-${runtime.id}.json`;
+}
+
+export const CCU_UPDATE_MANIFEST_NAME = ccuUpdateManifestName();
+const CCU_VERSION_PATTERN =
+  /^[0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.[1-9][0-9]*)?$/;
+const STABLE_VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+$/;
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
 function record(value, label) {
@@ -27,13 +36,14 @@ function safeName(value, label) {
 }
 
 export function validateCcuUpdateManifest(value, expected = {}) {
+  const platform = expected.platform ?? RUNTIME_PLATFORM.id;
   record(value, "CCU update manifest");
   if (value.schemaVersion !== 1 || value.type !== "codex-cli-ultra-update") {
     throw new Error("unsupported CCU update manifest");
   }
   const ccuVersion = string(value.ccuVersion, "ccuVersion");
-  if (!VERSION_PATTERN.test(ccuVersion)) {
-    throw new Error("ccuVersion must be a stable x.y.z version");
+  if (!CCU_VERSION_PATTERN.test(ccuVersion)) {
+    throw new Error("ccuVersion must be x.y.z or x.y.z-alpha.N");
   }
   const releaseTag = string(value.releaseTag, "releaseTag");
   if (releaseTag !== `v${ccuVersion}`) {
@@ -42,14 +52,14 @@ export function validateCcuUpdateManifest(value, expected = {}) {
   if (expected.releaseTag && expected.releaseTag !== releaseTag) {
     throw new Error("manifest releaseTag does not match GitHub Release");
   }
-  if (value.platform !== "windows-x64") {
+  if (value.platform !== platform) {
     throw new Error("unsupported CCU update platform");
   }
   const minimumManagerVersion = string(
     value.minimumManagerVersion,
     "minimumManagerVersion"
   );
-  if (!VERSION_PATTERN.test(minimumManagerVersion)) {
+  if (!STABLE_VERSION_PATTERN.test(minimumManagerVersion)) {
     throw new Error("minimumManagerVersion must be a stable version");
   }
   const fork = record(value.bundledFork, "bundledFork");
@@ -67,7 +77,7 @@ export function validateCcuUpdateManifest(value, expected = {}) {
     type: "codex-cli-ultra-update",
     ccuVersion,
     releaseTag,
-    platform: "windows-x64",
+    platform,
     minimumManagerVersion,
     bundledFork: {
       releaseTag: string(fork.releaseTag, "bundledFork.releaseTag"),
@@ -88,5 +98,5 @@ export function validateCcuUpdateManifest(value, expected = {}) {
 
 export function managerCanApplyUpdate(currentVersion, manifest) {
   const value = validateCcuUpdateManifest(manifest);
-  return compareStableVersions(currentVersion, value.minimumManagerVersion) >= 0;
+  return compareCcuVersions(currentVersion, value.minimumManagerVersion) >= 0;
 }

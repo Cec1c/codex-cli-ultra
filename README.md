@@ -4,9 +4,11 @@
 
 [![Release](https://img.shields.io/github/v/release/Cec1c/codex-cli-ultra?display_name=tag&style=flat-square)](https://github.com/Cec1c/codex-cli-ultra/releases/latest)
 ![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square&logo=windows11&logoColor=white)
+![Linux x64 / ARM64](https://img.shields.io/badge/Linux-x64%20%2F%20ARM64-FCC624?style=flat-square&logo=linux&logoColor=black)
+![macOS Intel / Apple Silicon](https://img.shields.io/badge/macOS-Intel%20%2F%20Apple%20Silicon-000000?style=flat-square&logo=apple&logoColor=white)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
 
-Codex-Cli-Ultra（CCU）为 Codex CLI 提供外部 FTL 语言包、Windows 安装管理和可选的界面扩展。当前参考实现为简体中文。
+Codex-Cli-Ultra（CCU）为 Codex CLI 提供外部 FTL 语言包、跨平台安装管理和可选的界面扩展。当前参考实现为简体中文。
 
 [最新 Release](https://github.com/Cec1c/codex-cli-ultra/releases/latest) · [贡献指南](CONTRIBUTING.md) · [Codex i18n fork](https://github.com/Cec1c/codex) · [LinuxDo](https://linux.do)
 
@@ -37,10 +39,10 @@ Codex-Cli-Ultra（CCU）为 Codex CLI 提供外部 FTL 语言包、Windows 安�
 
 ### 环境要求
 
-- Windows x64
-- PowerShell 7
-- Node.js 24 或更高版本
+- Windows x64、Linux x64/ARM64，或 macOS Intel/Apple Silicon
+- Node.js 22.19.0 或更高版本
 - 通过 npm 安装的官方 Codex
+- Windows 安装需要 PowerShell 7；Linux/macOS 安装需要 Bash
 
 ```powershell
 npm install -g @openai/codex
@@ -48,9 +50,9 @@ npm install -g @openai/codex
 
 ### Release 安装（推荐）
 
-1. 从 [Releases](https://github.com/Cec1c/codex-cli-ultra/releases/latest) 下载 `codex-cli-ultra-v*-windows-x64.zip` 和对应的 `.sha256`。
+1. 从 [Releases](https://github.com/Cec1c/codex-cli-ultra/releases/latest) 下载当前系统对应的 ZIP 和 `.sha256`。
 2. 校验 SHA256 并解压 ZIP。
-3. 运行 `install.cmd`。
+3. Windows 运行 `install.cmd`；Linux/macOS 运行 `./install.sh`。
 4. 打开新终端并验证：
 
 ```powershell
@@ -61,11 +63,31 @@ codex --yolo
 
 Release ZIP 已内置经过 manifest、文件大小和 SHA256 校验的 fork 二进制。
 
+| 系统 | Release 文件后缀 | 安装入口 |
+| --- | --- | --- |
+| Windows x64 | `windows-x64.zip` | `install.cmd` |
+| Linux x64 | `linux-x64.zip` | `./install.sh` |
+| Linux ARM64 | `linux-arm64.zip` | `./install.sh` |
+| macOS Intel | `macos-x64.zip` | `./install.sh` |
+| macOS Apple Silicon | `macos-arm64.zip` | `./install.sh` |
+
+Linux/macOS 示例：
+
+```bash
+sha256sum -c codex-cli-ultra-v*-linux-x64.zip.sha256  # macOS 可用 shasum -a 256 -c
+unzip codex-cli-ultra-v*-linux-x64.zip
+cd codex-cli-ultra-v*-linux-x64
+./install.sh
+source ~/.bashrc  # zsh 使用 source ~/.zshrc
+```
+
+多平台 Release 流水线正在落地；若最新 Release 尚无对应 Unix 资产，请使用下面的源码安装方式，不要下载其他平台的二进制。
+
 卸载 CCU 并恢复官方英文版：
 
 ```powershell
 codex-ultra uninstall
-# 或运行 Release 包中的 uninstall.cmd
+# 或运行 Release 包中的 uninstall.cmd / ./uninstall.sh
 ```
 
 ### 我非要源码安装
@@ -79,11 +101,20 @@ npm ci
 .\install.ps1
 ```
 
+Linux/macOS：
+
+```bash
+git clone https://github.com/Cec1c/codex-cli-ultra.git
+cd codex-cli-ultra
+npm ci
+./install.sh
+```
+
 本仓库只编译 CCU 管理器，不编译完整的 Codex Rust 项目。运行 CCU-I18N 仍需要符合发布 manifest 的 fork 二进制。
 
 安装器按以下顺序查找 fork Release：
 
-1. `-ForkReleaseDir` 指定的目录；
+1. `-ForkReleaseDir`（Windows）或 `--fork-release-dir`（Linux/macOS）指定的目录；
 2. 仓库根目录的 `fork-release/`；
 3. [`Cec1c/codex` Releases](https://github.com/Cec1c/codex/releases) 中的最新稳定版本。
 
@@ -104,6 +135,7 @@ npm ci
 | `i` | 安装检测到的本地 fork Release |
 | `u` | 更新 CCU-I18N |
 | `f` | 同步语言包和主题 |
+| `o` | 在浏览器中打开 CCU Release 页面 |
 | `x` | 二次确认卸载 |
 | `q` | 退出 |
 
@@ -158,8 +190,8 @@ codex-cli-ultra/
 ├── templates/languages/     # 英文 FTL 模板
 ├── test/                    # Node.js 测试
 ├── tui/                     # Rust Ratatui 管理器
-├── install.ps1 / install.cmd
-└── uninstall.ps1 / uninstall.cmd
+├── install.ps1 / install.cmd / install.sh
+└── uninstall.ps1 / uninstall.cmd / uninstall.sh
 ```
 
 `dist/`、`tui/target/` 和 `artifacts/` 为构建产物，不是语言包或主题的维护入口。
@@ -198,9 +230,9 @@ node src/cli.mjs language validate `
 
 | 通道 | 当前版本示例 | 更新条件 |
 | --- | --- | --- |
-| CCU | `v0.1.7` | 安装器、管理器、内容包或文档发生变化 |
-| CCU-I18N fork | `0.144.6-ccu.i18n.2` | Codex 源码或 i18n 接口发生变化 |
-| OpenAI Codex | `0.144.6` | 官方发布新的稳定版本 |
+| CCU | `v0.1.8-alpha.1` | 安装器、管理器、内容包或文档发生变化 |
+| CCU-I18N fork | `v0.145.0-CCU.R2`（Alpha） | Codex 源码或 i18n 接口发生变化 |
+| OpenAI Codex | `0.145.0` | 官方发布新的稳定版本 |
 
 自动化每 6 小时检查上游稳定 Release。CCU 的独立更新不会触发 fork 重新编译；只有 fork 代码需要变化时才创建新的 fork Release。
 
@@ -208,15 +240,15 @@ node src/cli.mjs language validate `
 
 | 项目 | 状态 |
 | --- | --- |
-| 支持平台 | Windows x64 |
-| CCU | `v0.1.7` |
-| CCU-I18N | `0.144.6-ccu.i18n.2` |
+| 支持平台 | Windows x64；Linux x64/ARM64；macOS Intel/Apple Silicon |
+| CCU | `v0.1.8-alpha.1` |
+| CCU-I18N | `v0.145.0-CCU.R2`（Alpha） |
 | 参考语言包 | 简体中文 `zh-CN` |
 | FTL 覆盖 | 1,396 个实际使用的消息键 |
 | 回退机制 | 按消息回退到内置英文 |
 | 个性化 | 可选 Hermes 状态栏；其他主题能力仍在开发中 |
 
-Mac 和 Linux也许以后会做，主要是我手上没有Mac
+当前 Windows x64 回归与 Linux x64 真环境安装/卸载冒烟已通过。Linux ARM64 和两种 macOS 架构已接入构建矩阵；macOS 仍需真人实机验收，详见 [macOS 验收清单](docs/macos-testing.md)。
 
 ## 贡献指南
 

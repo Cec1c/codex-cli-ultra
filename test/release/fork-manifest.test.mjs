@@ -7,12 +7,17 @@ import {
 } from "../../src/release/fork-manifest.mjs";
 import { resolveLatestForkRelease } from "../../src/release/github-fork.mjs";
 
-function manifest(revision = 1, version = "0.144.5") {
+function manifest(revision = 1, version = "0.144.5", options = {}) {
+  const releaseTag = `ccu-rust-v${version}-r${revision}${
+    options.alpha === undefined ? "" : `-alpha.${options.alpha}`
+  }`;
   return {
     schemaVersion: 1,
     type: "codex-ccu-i18n-build",
-    releaseTag: `ccu-rust-v${version}-r${revision}`,
-    displayVersion: `${version}-ccu.i18n.${revision}`,
+    releaseTag,
+    displayVersion: options.legacy
+      ? `${version}-ccu.i18n.${revision}`
+      : `v${version}-CCU.R${revision}`,
     upstreamVersion: version,
     upstreamTag: `rust-v${version}`,
     upstreamCommit: "a".repeat(40),
@@ -47,6 +52,20 @@ test("fork manifest validates the release, display, upstream, and asset contract
   ]) {
     assert.throws(() => validateForkManifest(invalid));
   }
+});
+
+test("fork manifest accepts legacy stable installs and canonical Alpha tags", () => {
+  const legacy = manifest(2, "0.145.0", { legacy: true });
+  const alpha = manifest(2, "0.145.0", { alpha: 1 });
+  assert.deepEqual(validateForkManifest(legacy), legacy);
+  assert.deepEqual(
+    validateForkManifest(alpha, { releaseTag: alpha.releaseTag }),
+    alpha
+  );
+  assert.throws(
+    () => validateForkManifest({ ...alpha, releaseTag: "ccu-rust-v0.145.0-r2-alpha.0" }),
+    /release contract/
+  );
 });
 
 test("fork release ordering handles a new upstream and same-upstream revisions", () => {
@@ -84,4 +103,46 @@ test("latest fork release resolves the manifest asset and checks the GitHub tag"
   assert.deepEqual(latest.manifest, value);
   assert.equal(calls.length, 2);
   assert.match(calls[0], /api\.github\.com\/repos\/Cec1c\/codex\/releases\/latest/);
+});
+
+test("an exact fork Alpha tag resolves its prerelease assets", async () => {
+  const value = manifest(2, "0.145.0", { alpha: 1 });
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(String(url));
+    if (calls.length === 1) {
+      return new Response(JSON.stringify({
+        draft: false,
+        prerelease: true,
+        tag_name: value.releaseTag,
+        html_url: `https://github.com/Cec1c/codex/releases/tag/${value.releaseTag}`,
+        assets: [{
+          name: "ccu-fork-manifest.json",
+          browser_download_url:
+            `https://github.com/Cec1c/codex/releases/download/${value.releaseTag}/ccu-fork-manifest.json`
+        }]
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify(value), { status: 200 });
+  };
+
+  const alpha = await resolveLatestForkRelease({
+    fetchImpl,
+    releaseTag: value.releaseTag
+  });
+  assert.deepEqual(alpha.manifest, value);
+  assert.match(calls[0], /releases\/tags\/ccu-rust-v0\.145\.0-r2-alpha\.1$/);
+
+  await assert.rejects(
+    resolveLatestForkRelease({
+      releaseTag: value.releaseTag,
+      fetchImpl: async () => new Response(JSON.stringify({
+        draft: false,
+        prerelease: false,
+        tag_name: value.releaseTag,
+        assets: []
+      }), { status: 200 })
+    }),
+    /prerelease state/
+  );
 });

@@ -1,15 +1,17 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 
+import { RUNTIME_PLATFORM } from "../config/constants.mjs";
+import { pathApiFor } from "../platform/runtime.mjs";
 import { extractZipSecure } from "../release/archive.mjs";
 import {
   managerCanApplyUpdate,
   validateCcuUpdateManifest
 } from "../release/ccu-update-manifest.mjs";
 import { sha256File } from "../release/hash.mjs";
-import { compareStableVersions } from "../release/github-version.mjs";
+import { compareCcuVersions } from "../release/github-version.mjs";
 import { CCU_VERSION } from "../version.mjs";
 import { resolveCcuUpdatePackage } from "./check.mjs";
 
@@ -48,6 +50,25 @@ catch {
 }
 `;
 
+const POSIX_APPLY_SCRIPT = String.raw`#!/bin/sh
+set -u
+manager_pid="\${CCU_MANAGER_PID:-0}"
+if [ "$manager_pid" -gt 0 ] 2>/dev/null; then
+  while kill -0 "$manager_pid" 2>/dev/null; do sleep 1; done
+fi
+if bash "$CCU_INSTALL_SCRIPT" --non-interactive --preserve-statusline; then
+  printf '{"schemaVersion":1,"status":"succeeded","targetVersion":"%s","message":"CCU upgrade completed"}\n' "$CCU_TARGET_VERSION" > "$CCU_JOB_RESULT"
+  if [ -x "$CCU_INSTALLED_MANAGER" ]; then
+    (cd "$CCU_INSTALL_ROOT" && nohup "$CCU_INSTALLED_MANAGER" >/dev/null 2>&1 &)
+  fi
+  rm -f -- "$CCU_DOWNLOAD_PATH"
+  rm -rf -- "$CCU_STAGE_ROOT"
+  exit 0
+fi
+printf '{"schemaVersion":1,"status":"failed","targetVersion":"%s","message":"CCU installer failed"}\n' "$CCU_TARGET_VERSION" > "$CCU_JOB_RESULT"
+exit 1
+`;
+
 async function findPackageRoot(stagingRoot, fsOps = {}) {
   const readDirectory = fsOps.readdir ?? readdir;
   const entries = await readDirectory(stagingRoot, { withFileTypes: true });
@@ -64,6 +85,8 @@ function emitStage(options, stage, detail = null) {
 
 export async function stageCcuUpgrade(options = {}) {
   if (!options.installRoot) throw new Error("installRoot is required");
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  const pathApi = pathApiFor(runtime);
   const targetVersion = options.targetVersion
     ? options.targetVersion.replace(/^v/, "")
     : undefined;
@@ -73,7 +96,8 @@ export async function stageCcuUpgrade(options = {}) {
   });
   try {
     const manifest = validateCcuUpdateManifest(resolved.manifest, {
-      releaseTag: resolved.latest.tag
+      releaseTag: resolved.latest.tag,
+      platform: runtime.id
     });
     if (!managerCanApplyUpdate(options.currentVersion ?? CCU_VERSION, manifest)) {
       throw new Error(
@@ -81,7 +105,7 @@ export async function stageCcuUpgrade(options = {}) {
       );
     }
     if (
-      compareStableVersions(options.currentVersion ?? CCU_VERSION, manifest.ccuVersion) >= 0
+      compareCcuVersions(options.currentVersion ?? CCU_VERSION, manifest.ccuVersion) >= 0
     ) {
       return {
         changed: false,
@@ -91,10 +115,10 @@ export async function stageCcuUpgrade(options = {}) {
       };
     }
 
-    const cacheRoot = join(options.installRoot, "cache", "updates");
+    const cacheRoot = pathApi.join(options.installRoot, "cache", "updates");
     await (options.mkdir ?? mkdir)(cacheRoot, { recursive: true });
-    const downloadPath = join(cacheRoot, `${manifest.asset.name}.part`);
-    const stagingRoot = join(cacheRoot, `stage-${randomUUID()}`);
+    const downloadPath = pathApi.join(cacheRoot, `${manifest.asset.name}.part`);
+    const stagingRoot = pathApi.join(cacheRoot, `stage-${randomUUID()}`);
     await (options.mkdir ?? mkdir)(stagingRoot, { recursive: true });
 
     try {
@@ -123,7 +147,7 @@ export async function stageCcuUpgrade(options = {}) {
         stagingRoot,
         options.fsOps
       );
-      const installScript = join(packageRoot, "install.ps1");
+      const installScript = pathApi.join(packageRoot, runtime.installerName);
       emitStage(options, "ready", packageRoot);
       return {
         changed: true,
@@ -148,22 +172,34 @@ export async function stageCcuUpgrade(options = {}) {
 
 export async function scheduleCcuUpgradeApply(staged, options = {}) {
   if (!staged.changed) return { scheduled: false, reason: staged.message };
-  const jobsRoot = join(options.installRoot, "cache", "update-jobs");
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  const pathApi = pathApiFor(runtime);
+  const jobsRoot = pathApi.join(options.installRoot, "cache", "update-jobs");
   await (options.mkdir ?? mkdir)(jobsRoot, { recursive: true });
   const jobId = randomUUID();
-  const scriptPath = join(jobsRoot, `${jobId}.ps1`);
-  const resultPath = join(jobsRoot, `${jobId}.json`);
-  await (options.writeFile ?? writeFile)(scriptPath, APPLY_SCRIPT, "utf8");
+  const scriptPath = pathApi.join(jobsRoot, `${jobId}.${runtime.isWindows ? "ps1" : "sh"}`);
+  const resultPath = pathApi.join(jobsRoot, `${jobId}.json`);
+  await (options.writeFile ?? writeFile)(
+    scriptPath,
+    runtime.isWindows ? APPLY_SCRIPT : POSIX_APPLY_SCRIPT,
+    runtime.isWindows ? "utf8" : { encoding: "utf8", mode: 0o700 }
+  );
   const spawnProcess = options.spawn ?? spawn;
-  const child = spawnProcess(options.pwshExecutable ?? "pwsh.exe", [
-    "-NoLogo",
-    "-NoProfile",
-    "-NonInteractive",
-    "-WindowStyle",
-    "Hidden",
-    "-File",
-    scriptPath
-  ], {
+  const executable = runtime.isWindows
+    ? options.pwshExecutable ?? "pwsh.exe"
+    : options.shellExecutable ?? "sh";
+  const args = runtime.isWindows
+    ? [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-File",
+        scriptPath
+      ]
+    : [scriptPath];
+  const child = spawnProcess(executable, args, {
     detached: true,
     windowsHide: true,
     stdio: "ignore",
@@ -173,7 +209,11 @@ export async function scheduleCcuUpgradeApply(staged, options = {}) {
       CCU_MANAGER_PID: String(options.managerPid ?? 0),
       CCU_INSTALL_SCRIPT: staged.installScript,
       CCU_INSTALL_ROOT: options.installRoot,
-      CCU_INSTALLED_MANAGER: join(options.installRoot, "bin", "ccu-manager.exe"),
+      CCU_INSTALLED_MANAGER: pathApi.join(
+        options.installRoot,
+        "bin",
+        runtime.managerName
+      ),
       CCU_JOB_RESULT: resultPath,
       CCU_DOWNLOAD_PATH: staged.downloadPath,
       CCU_STAGE_ROOT: staged.stagingRoot
@@ -186,7 +226,7 @@ export async function scheduleCcuUpgradeApply(staged, options = {}) {
     jobId,
     resultPath,
     targetVersion: staged.manifest.ccuVersion,
-    assetName: basename(staged.downloadPath).replace(/\.part$/, "")
+    assetName: pathApi.basename(staged.downloadPath).replace(/\.part$/, "")
   };
 }
 

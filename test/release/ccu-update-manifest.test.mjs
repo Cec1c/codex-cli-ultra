@@ -40,3 +40,12 @@ test("CCU update manifest rejects a mismatched release tag", () => {
   value.releaseTag = "v0.1.6";
   assert.throws(() => validateCcuUpdateManifest(value), /does not match/);
 });
+
+test("CCU update manifest accepts a canonical Alpha release", () => {
+  const value = manifest();
+  value.ccuVersion = "0.1.8-alpha.1";
+  value.releaseTag = "v0.1.8-alpha.1";
+  value.asset.name = "codex-cli-ultra-v0.1.8-alpha.1-windows-x64.zip";
+  assert.deepEqual(validateCcuUpdateManifest(value), value);
+  assert.equal(managerCanApplyUpdate("0.1.8-alpha.1", value), true);
+});

@@ -19,7 +19,7 @@ export async function buildExecutors(options = {}) {
     outExtension: { ".js": ".mjs" },
     platform: "node",
     format: "esm",
-    target: "node24",
+    target: "node22.19",
     bundle: true,
     banner: {
       js: 'import { createRequire as __ccuCreateRequire } from "node:module"; const require = __ccuCreateRequire(import.meta.url);'

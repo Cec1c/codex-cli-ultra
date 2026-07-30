@@ -1,8 +1,9 @@
 import { createNetworkClient } from "../network/client.mjs";
 import {
-  CCU_UPDATE_MANIFEST_NAME,
+  ccuUpdateManifestName,
   validateCcuUpdateManifest
 } from "../release/ccu-update-manifest.mjs";
+import { RUNTIME_PLATFORM } from "../config/constants.mjs";
 import { resolveLatestCcuRelease } from "../release/github-version.mjs";
 import { HttpReleaseProvider } from "../release/provider.mjs";
 import { readSettings } from "../settings/store.mjs";
@@ -10,23 +11,31 @@ import { writeUpdateCacheAtomic } from "./cache.mjs";
 
 const CCU_RELEASES_URL = "https://github.com/Cec1c/codex-cli-ultra/releases";
 
-function manifestProvider(manifestUrl, options, network) {
+function manifestProvider(manifestUrl, options, network, manifestName) {
   return new HttpReleaseProvider({
     manifestUrl,
     fetchImpl: network.fetch,
     headers: options.githubToken
       ? { Authorization: `Bearer ${options.githubToken}` }
       : {},
-    manifestName: CCU_UPDATE_MANIFEST_NAME
+    manifestName
   });
 }
 
 async function readUpdateManifest(manifestUrl, options, network, expected = {}) {
-  const provider = manifestProvider(manifestUrl, options, network);
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  const provider = manifestProvider(
+    manifestUrl,
+    options,
+    network,
+    ccuUpdateManifestName(runtime)
+  );
   return validateCcuUpdateManifest(await provider.readManifest(), expected);
 }
 
 export async function checkForCcuUpdate(options = {}) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  const manifestName = ccuUpdateManifestName(runtime);
   const settings =
     options.settings ??
     await (options.readSettings ?? readSettings)(options.installRoot);
@@ -37,14 +46,20 @@ export async function checkForCcuUpdate(options = {}) {
     try {
       latest = await (options.resolveLatestCcuRelease ?? resolveLatestCcuRelease)({
         fetchImpl: network.fetch,
-        token: options.githubToken
+        token: options.githubToken,
+        runtime
       });
     } catch (apiError) {
       const manifestUrl =
         options.latestManifestUrl ??
-        `${CCU_RELEASES_URL}/latest/download/${CCU_UPDATE_MANIFEST_NAME}`;
+        `${CCU_RELEASES_URL}/latest/download/${manifestName}`;
       try {
-        manifest = await readUpdateManifest(manifestUrl, options, network);
+        manifest = await readUpdateManifest(
+          manifestUrl,
+          options,
+          network,
+          { platform: runtime.id }
+        );
       } catch (manifestError) {
         throw new Error(
           `GitHub API update check failed: ${apiError.message}; public manifest fallback failed: ${manifestError.message}`,
@@ -64,7 +79,7 @@ export async function checkForCcuUpdate(options = {}) {
         latest.updateManifestUrl,
         options,
         network,
-        { releaseTag: latest.tag }
+        { releaseTag: latest.tag, platform: runtime.id }
       );
     }
     const cache = await (options.writeUpdateCacheAtomic ?? writeUpdateCacheAtomic)(
@@ -97,14 +112,19 @@ export async function resolveCcuUpdatePackage(options = {}) {
   }
   if (!checked.latest.updateManifestUrl || !checked.manifest) {
     throw new Error(
-      `CCU ${checked.latest.version} does not provide ${CCU_UPDATE_MANIFEST_NAME}`
+      `CCU ${checked.latest.version} does not provide ${ccuUpdateManifestName(options.runtime ?? RUNTIME_PLATFORM)}`
     );
   }
   const settings = checked.settings;
   const network = options.networkClient ?? createNetworkClient(settings, options);
   return {
     ...checked,
-    provider: manifestProvider(checked.latest.updateManifestUrl, options, network),
+    provider: manifestProvider(
+      checked.latest.updateManifestUrl,
+      options,
+      network,
+      ccuUpdateManifestName(options.runtime ?? RUNTIME_PLATFORM)
+    ),
     networkClient: network,
     ownsNetworkClient: !options.networkClient
   };

@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { mkdir, open } from "node:fs/promises";
 import { join } from "node:path";
 
-import { isAbsoluteLocalWindowsPath } from "../config/constants.mjs";
+import {
+  RUNTIME_PLATFORM,
+  isAbsoluteLocalPath
+} from "../config/constants.mjs";
 
 export async function writeNoticeOnce(options = {}) {
   try {
@@ -10,7 +13,10 @@ export async function writeNoticeOnce(options = {}) {
     const detail = String(options.detail ?? "");
     const noticesDirectory =
       options.noticesDirectory ?? join(options.installRoot, "notices");
-    if (!isAbsoluteLocalWindowsPath(noticesDirectory)) {
+    if (!isAbsoluteLocalPath(
+      noticesDirectory,
+      options.runtime ?? RUNTIME_PLATFORM
+    )) {
       return false;
     }
     const hash = createHash("sha256")

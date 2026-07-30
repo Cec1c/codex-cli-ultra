@@ -1,11 +1,10 @@
-import { win32 } from "node:path";
-
 import {
-  isAbsoluteLocalWindowsPath,
-  PLATFORM,
+  RUNTIME_PLATFORM,
   STATE_SCHEMA_VERSION,
-  windowsPathsEqual
+  isAbsoluteLocalPath,
+  pathsEqual
 } from "../config/constants.mjs";
+import { pathApiFor } from "../platform/runtime.mjs";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
@@ -39,7 +38,7 @@ function validateNonEmptyString(value, label) {
   return value;
 }
 
-function validateWindowsPathSegment(value, label) {
+function validatePathSegment(value, label, runtime) {
   const segment = validateNonEmptyString(value, label);
   if (
     !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment) ||
@@ -47,17 +46,21 @@ function validateWindowsPathSegment(value, label) {
     segment === "." ||
     segment === ".."
   ) {
-    throw new Error(`${label} must be a safe Windows path segment`);
+    throw new Error(
+      `${label} must be a safe ${runtime.isWindows ? "Windows " : ""}path segment`
+    );
   }
   return segment;
 }
 
-function validateAbsolutePath(value, label) {
+function validateAbsolutePath(value, label, runtime) {
   if (
     typeof value !== "string" ||
-    !isAbsoluteLocalWindowsPath(value)
+    !isAbsoluteLocalPath(value, runtime)
   ) {
-    throw new Error(`${label} must be an absolute local Windows drive path`);
+    throw new Error(
+      `${label} must be an absolute local ${runtime.isWindows ? "Windows drive " : ""}path`
+    );
   }
   return value;
 }
@@ -97,7 +100,7 @@ function validateLocaleId(value, label) {
   return id;
 }
 
-function validateOfficial(value) {
+function validateOfficial(value, runtime) {
   assertRecord(value, "official");
   assertExactKeys(
     value,
@@ -114,7 +117,8 @@ function validateOfficial(value) {
     version: validateNonEmptyString(value.version, "official.version"),
     packageJsonPath: validateAbsolutePath(
       value.packageJsonPath,
-      "official.packageJsonPath"
+      "official.packageJsonPath",
+      runtime
     ),
     platformPackageVersion: validateNonEmptyString(
       value.platformPackageVersion,
@@ -122,44 +126,47 @@ function validateOfficial(value) {
     ),
     platformPackageJsonPath: validateAbsolutePath(
       value.platformPackageJsonPath,
-      "official.platformPackageJsonPath"
+      "official.platformPackageJsonPath",
+      runtime
     ),
     binaryPath: validateAbsolutePath(
       value.binaryPath,
-      "official.binaryPath"
+      "official.binaryPath",
+      runtime
     )
   };
-  const expectedPlatformPackageJsonPath = win32.join(
-    win32.dirname(official.packageJsonPath),
+  const pathApi = pathApiFor(runtime);
+  const expectedPlatformPackageJsonPath = pathApi.join(
+    pathApi.dirname(official.packageJsonPath),
     "node_modules",
-    "@openai",
-    "codex-win32-x64",
+    ...runtime.npmPackage.split("/"),
     "package.json"
   );
   if (
-    !windowsPathsEqual(
+    !pathsEqual(
       official.platformPackageJsonPath,
-      expectedPlatformPackageJsonPath
+      expectedPlatformPackageJsonPath,
+      runtime
     )
   ) {
     throw new Error(
       "official.platformPackageJsonPath must match the official package layout"
     );
   }
-  const expectedBinaryPath = win32.join(
-    win32.dirname(official.platformPackageJsonPath),
+  const expectedBinaryPath = pathApi.join(
+    pathApi.dirname(official.platformPackageJsonPath),
     "vendor",
-    PLATFORM,
+    runtime.target,
     "bin",
-    "codex.exe"
+    runtime.binaryName
   );
-  if (!windowsPathsEqual(official.binaryPath, expectedBinaryPath)) {
+  if (!pathsEqual(official.binaryPath, expectedBinaryPath, runtime)) {
     throw new Error("official.binaryPath must match the official package layout");
   }
   return official;
 }
 
-function validateBuild(value, label) {
+function validateBuild(value, label, runtime) {
   assertRecord(value, label);
   assertExactKeys(
     value,
@@ -175,13 +182,14 @@ function validateBuild(value, label) {
     ],
     label
   );
-  if (value.platform !== PLATFORM) {
-    throw new Error(`${label}.platform must equal ${PLATFORM}`);
+  if (value.platform !== runtime.target) {
+    throw new Error(`${label}.platform must equal ${runtime.target}`);
   }
   return {
-    releaseId: validateWindowsPathSegment(
+    releaseId: validatePathSegment(
       value.releaseId,
-      `${label}.releaseId`
+      `${label}.releaseId`,
+      runtime
     ),
     upstreamVersion: validateNonEmptyString(
       value.upstreamVersion,
@@ -191,10 +199,11 @@ function validateBuild(value, label) {
       value.ultraRevision,
       `${label}.ultraRevision`
     ),
-    platform: PLATFORM,
+    platform: runtime.target,
     binaryPath: validateAbsolutePath(
       value.binaryPath,
-      `${label}.binaryPath`
+      `${label}.binaryPath`,
+      runtime
     ),
     size: validatePositiveSafeInteger(value.size, `${label}.size`),
     mtimeMs: validateMtime(value.mtimeMs, `${label}.mtimeMs`),
@@ -202,7 +211,7 @@ function validateBuild(value, label) {
   };
 }
 
-function validateLocale(value, label = "locale") {
+function validateLocale(value, runtime, label = "locale") {
   assertRecord(value, label);
   assertExactKeys(
     value,
@@ -213,11 +222,13 @@ function validateLocale(value, label = "locale") {
     id: validateLocaleId(value.id, `${label}.id`),
     manifestPath: validateAbsolutePath(
       value.manifestPath,
-      `${label}.manifestPath`
+      `${label}.manifestPath`,
+      runtime
     ),
     resourcePath: validateAbsolutePath(
       value.resourcePath,
-      `${label}.resourcePath`
+      `${label}.resourcePath`,
+      runtime
     ),
     size: validatePositiveSafeInteger(value.size, `${label}.size`),
     mtimeMs: validateMtime(value.mtimeMs, `${label}.mtimeMs`),
@@ -225,19 +236,20 @@ function validateLocale(value, label = "locale") {
   };
 }
 
-function validateLastKnownGood(value) {
+function validateLastKnownGood(value, runtime) {
   assertRecord(value, "lastKnownGood");
   assertExactKeys(value, ["build", "locale"], "lastKnownGood");
   return {
-    build: validateBuild(value.build, "lastKnownGood.build"),
+    build: validateBuild(value.build, "lastKnownGood.build", runtime),
     locale:
       value.locale === null
         ? null
-        : validateLocale(value.locale, "lastKnownGood.locale")
+        : validateLocale(value.locale, runtime, "lastKnownGood.locale")
   };
 }
 
-export function validateState(value) {
+export function validateState(value, options = {}) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
   assertRecord(value, "state");
   assertExactKeys(
     value,
@@ -249,12 +261,13 @@ export function validateState(value) {
   }
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
-    official: validateOfficial(value.official),
-    active: value.active === null ? null : validateBuild(value.active, "active"),
-    locale: value.locale === null ? null : validateLocale(value.locale),
+    official: validateOfficial(value.official, runtime),
+    active:
+      value.active === null ? null : validateBuild(value.active, "active", runtime),
+    locale: value.locale === null ? null : validateLocale(value.locale, runtime),
     lastKnownGood:
       value.lastKnownGood === null
         ? null
-        : validateLastKnownGood(value.lastKnownGood)
+        : validateLastKnownGood(value.lastKnownGood, runtime)
   };
 }

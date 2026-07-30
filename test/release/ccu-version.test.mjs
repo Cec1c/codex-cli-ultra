@@ -12,6 +12,7 @@ import {
 test("nextPatchVersion increments only the patch component", () => {
   assert.equal(nextPatchVersion("0.1.3"), "0.1.4");
   assert.equal(nextPatchVersion("2.9.99"), "2.9.100");
+  assert.equal(nextPatchVersion("0.1.8-alpha.1"), "0.1.9");
 });
 
 test("repository release version surfaces match package.json", async () => {

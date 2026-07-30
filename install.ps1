@@ -155,14 +155,15 @@ function Assert-ChildPath {
 
 $sourceRoot = $PSScriptRoot
 $packaged = Test-Path -LiteralPath (Join-Path $sourceRoot 'bin\codex-ultra.mjs') -PathType Leaf
-$nodePath = Resolve-ApplicationPath -Name 'node' -InstallHint 'Install Node.js 24 or newer and retry.'
+$nodePath = Resolve-ApplicationPath -Name 'node' -InstallHint 'Install Node.js 22.19.0 or newer and retry.'
 $nodeVersionText = (& $nodePath --version).Trim().TrimStart('v')
 if ($LASTEXITCODE -ne 0) {
     throw "Unable to read the Node.js version (exit code $LASTEXITCODE)."
 }
 $nodeVersion = $null
-if (-not [version]::TryParse($nodeVersionText, [ref]$nodeVersion) -or $nodeVersion.Major -lt 24) {
-    throw "Node.js 24 or newer is required; found $nodeVersionText."
+$minimumNodeVersion = [version]'22.19.0'
+if (-not [version]::TryParse($nodeVersionText, [ref]$nodeVersion) -or $nodeVersion -lt $minimumNodeVersion) {
+    throw "Node.js 22.19.0 or newer is required; found $nodeVersionText."
 }
 Write-Host ''
 Write-Host 'Codex CLI Ultra 中文版安装程序' -ForegroundColor Green

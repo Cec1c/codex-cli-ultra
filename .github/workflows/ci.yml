@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "22.19.0"
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -34,6 +34,34 @@ jobs:
           if ($first.sha256 -ne $second.sha256) {
             throw 'visible-text audit is not deterministic'
           }
+      - name: Verify Rust manager TUI
+        working-directory: tui
+        run: |
+          cargo fmt --all -- --check
+          cargo test --locked
+          cargo build --release --locked
+
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.19.0"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.1"
+      - run: npm ci
+      - name: Verify cross-platform runtime contracts
+        run: node --test test/platform.test.mjs test/installer/posix-path.test.mjs test/install-script.test.mjs test/update-upgrade.test.mjs
+      - run: npm run build
       - name: Verify Rust manager TUI
         working-directory: tui
         run: |

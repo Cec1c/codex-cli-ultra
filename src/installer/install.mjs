@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
+  chmod,
   lstat,
   mkdir,
   open,
@@ -11,16 +12,17 @@ import {
   stat,
   writeFile
 } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 
 import { MESSAGE_SPECS } from "../catalog/message-specs.mjs";
 import {
-  PLATFORM,
+  RUNTIME_PLATFORM,
   STATE_SCHEMA_VERSION,
-  isAbsoluteLocalWindowsPath,
+  isAbsoluteLocalPath,
+  pathsEqual,
   resolveInstallRoot,
-  windowsPathsEqual
 } from "../config/constants.mjs";
+import { pathApiFor } from "../platform/runtime.mjs";
 import { discoverOfficialCodex } from "../discovery/official-codex.mjs";
 import { validateLanguagePack } from "../language/validate.mjs";
 import { buildLaunchEnvironment } from "../launcher/select-target.mjs";
@@ -100,7 +102,11 @@ const RECOVERABLE_ROOT_FILES = new Set([
 ]);
 const CCU_RELEASE_ID = /^\d+\.\d+\.\d+-ccu\.i18n\.\d+$/;
 
-async function isRecoverableCcuInstallRoot(installRoot, entries) {
+async function isRecoverableCcuInstallRoot(
+  installRoot,
+  entries,
+  runtime = RUNTIME_PLATFORM
+) {
   let releasesEntry = null;
   for (const entry of entries) {
     if (entry.isSymbolicLink()) return false;
@@ -133,10 +139,10 @@ async function isRecoverableCcuInstallRoot(installRoot, entries) {
       installRoot,
       "releases",
       release.name,
-      PLATFORM,
+      runtime.target,
       "package",
       "bin",
-      "codex.exe"
+      runtime.binaryName
     );
     const metadata = await pathExists(binaryPath);
     if (!metadata?.isFile() || metadata.isSymbolicLink()) return false;
@@ -337,7 +343,8 @@ export async function readOptionalState(path, readStateImpl) {
   }
 }
 
-export async function ensureOwnershipMarker(installRoot) {
+export async function ensureOwnershipMarker(installRoot, options = {}) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
   let rootMetadata = await pathExists(installRoot);
   if (rootMetadata) {
     if (!rootMetadata.isDirectory() || rootMetadata.isSymbolicLink()) {
@@ -361,7 +368,7 @@ export async function ensureOwnershipMarker(installRoot) {
     if (
       existing?.schemaVersion !== 1 ||
       typeof existing.root !== "string" ||
-      !windowsPathsEqual(existing.root, installRoot) ||
+      !pathsEqual(existing.root, installRoot, runtime) ||
       Reflect.ownKeys(existing).length !== 2
     ) {
       throw new Error("Codex Ultra ownership marker does not match install root");
@@ -371,7 +378,7 @@ export async function ensureOwnershipMarker(installRoot) {
   const rootEntries = await readdir(installRoot, { withFileTypes: true });
   if (
     rootEntries.length !== 0 &&
-    !(await isRecoverableCcuInstallRoot(installRoot, rootEntries))
+    !(await isRecoverableCcuInstallRoot(installRoot, rootEntries, runtime))
   ) {
     throw new Error("install root is not empty and has no ownership marker");
   }
@@ -492,12 +499,14 @@ export function statesEqual(left, right) {
 export async function installFromProvider(options) {
   if (!options?.provider) throw new Error("provider is required");
   if (!options.catalogPath) throw new Error("catalogPath is required");
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  const pathApi = pathApiFor(runtime);
   const env = options.env ?? process.env;
-  const installRoot = resolve(
-    options.installRoot ?? resolveInstallRoot(env)
+  const installRoot = pathApi.resolve(
+    options.installRoot ?? resolveInstallRoot(env, runtime)
   );
-  if (!isAbsoluteLocalWindowsPath(installRoot)) {
-    throw new Error("installRoot must be on a local Windows drive");
+  if (!isAbsoluteLocalPath(installRoot, runtime)) {
+    throw new Error("installRoot must be an absolute local path");
   }
   const statePath = join(installRoot, "state.json");
   const discover = options.discoverOfficialCodex ?? discoverOfficialCodex;
@@ -513,7 +522,7 @@ export async function installFromProvider(options) {
   });
   const removePathEntry = options.removePathEntry ?? (async () => ({ changed: false }));
 
-  const official = await discover({ installRoot, env });
+  const official = await discover({ installRoot, env, runtime });
   const oldState = await readOptionalState(statePath, readStateImpl);
   let stagingRoot = null;
   let pathAdded = false;
@@ -526,10 +535,10 @@ export async function installFromProvider(options) {
       upstreamVersion: official.version,
       upstreamTag: options.expectedUpstreamTag ?? `rust-v${official.version}`,
       upstreamCommit: expectedCommit,
-      platform: PLATFORM
+      platform: runtime.target
     });
 
-    await ensureOwnershipMarker(installRoot);
+    await ensureOwnershipMarker(installRoot, { runtime });
     stagingRoot = join(installRoot, "cache", `install-${randomUUID()}`);
     await mkdir(stagingRoot, { recursive: true });
     const ultraZip = join(stagingRoot, manifest.asset.name);
@@ -562,7 +571,15 @@ export async function installFromProvider(options) {
       throw new Error("language pack locale does not match the Release manifest");
     }
 
-    const stagedBinary = join(extractedRelease, "package", "bin", "codex.exe");
+    const stagedBinary = join(
+      extractedRelease,
+      "package",
+      "bin",
+      runtime.binaryName
+    );
+    if (!runtime.isWindows) {
+      await (options.chmod ?? chmod)(stagedBinary, 0o755);
+    }
     const stagedResource = join(extractedLanguage, "messages.ftl");
     await runStage(options, "smoke-version", () => smoke({
       binaryPath: stagedBinary,
@@ -629,7 +646,12 @@ export async function installFromProvider(options) {
       })
     );
 
-    const finalBinary = join(finalRelease, "package", "bin", "codex.exe");
+    const finalBinary = join(
+      finalRelease,
+      "package",
+      "bin",
+      runtime.binaryName
+    );
     const finalResource = join(finalLanguage, "messages.ftl");
     const finalManifest = join(finalLanguage, "manifest.json");
     const [binaryHash, binaryStat, resourceHash, resourceStat] = await Promise.all([
@@ -718,12 +740,14 @@ export async function updateFromProvider(options) {
 
 export async function installForkFromProvider(options) {
   if (!options?.provider) throw new Error("provider is required");
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  const pathApi = pathApiFor(runtime);
   const env = options.env ?? process.env;
-  const installRoot = resolve(
-    options.installRoot ?? resolveInstallRoot(env)
+  const installRoot = pathApi.resolve(
+    options.installRoot ?? resolveInstallRoot(env, runtime)
   );
-  if (!isAbsoluteLocalWindowsPath(installRoot)) {
-    throw new Error("installRoot must be on a local Windows drive");
+  if (!isAbsoluteLocalPath(installRoot, runtime)) {
+    throw new Error("installRoot must be an absolute local path");
   }
 
   const statePath = join(installRoot, "state.json");
@@ -742,7 +766,7 @@ export async function installForkFromProvider(options) {
   });
   const removePathEntry = options.removePathEntry ?? (async () => ({ changed: false }));
 
-  const official = await discover({ installRoot, env });
+  const official = await discover({ installRoot, env, runtime });
   const oldState = await readOptionalState(statePath, readStateImpl);
   let stagingRoot = null;
   let pathAdded = false;
@@ -753,9 +777,9 @@ export async function installForkFromProvider(options) {
       "manifest",
       () => options.provider.readManifest()
     );
-    const manifest = validateManifest(rawManifest, { platform: PLATFORM });
+    const manifest = validateManifest(rawManifest, { platform: runtime.target });
 
-    await ensureOwnershipMarker(installRoot);
+    await ensureOwnershipMarker(installRoot, { runtime });
     const recoveredReleases = oldState === null
       ? await quarantineOrphanedCcuReleases(installRoot, options)
       : [];
@@ -780,7 +804,15 @@ export async function installForkFromProvider(options) {
       extractZip(forkZip, extractedRelease)
     );
 
-    const stagedBinary = join(extractedRelease, "package", "bin", "codex.exe");
+    const stagedBinary = join(
+      extractedRelease,
+      "package",
+      "bin",
+      runtime.binaryName
+    );
+    if (!runtime.isWindows) {
+      await (options.chmod ?? chmod)(stagedBinary, 0o755);
+    }
     await runStage(options, "smoke-version", () => smoke({
       binaryPath: stagedBinary,
       binaryArgsPrefix: options.binaryArgsPrefix,
@@ -813,7 +845,12 @@ export async function installForkFromProvider(options) {
       })
     );
 
-    const finalBinary = join(finalRelease, "package", "bin", "codex.exe");
+    const finalBinary = join(
+      finalRelease,
+      "package",
+      "bin",
+      runtime.binaryName
+    );
     const [binaryHash, binaryStat] = await Promise.all([
       hashFile(finalBinary),
       stat(finalBinary)

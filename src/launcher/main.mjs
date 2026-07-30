@@ -2,7 +2,10 @@ import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { resolveInstallRoot } from "../config/constants.mjs";
+import {
+  RUNTIME_PLATFORM,
+  resolveInstallRoot
+} from "../config/constants.mjs";
 import { discoverOfficialCodex } from "../discovery/official-codex.mjs";
 import { writeNoticeOnce } from "../notices/once.mjs";
 import { readState } from "../state/store.mjs";
@@ -11,6 +14,7 @@ import { runSelectedTarget } from "./process.mjs";
 import { selectLaunchTarget } from "./select-target.mjs";
 
 function prepareManagedUpdateEnvironment(options) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
   const managerPath = join(options.installRoot, "bin", "codex-ultra.mjs");
   const spawnDetached = options.spawnDetached ?? spawn;
   try {
@@ -32,7 +36,11 @@ function prepareManagedUpdateEnvironment(options) {
   } catch {}
   return {
     CODEX_CCU_MANAGED: "1",
-    CODEX_CCU_MANAGER_PATH: join(options.installRoot, "bin", "ccu-manager.exe"),
+    CODEX_CCU_MANAGER_PATH: join(
+      options.installRoot,
+      "bin",
+      runtime.managerName
+    ),
     CODEX_CCU_MANAGER_VERSION: CCU_VERSION,
     CODEX_CCU_UPDATE_CACHE_PATH: join(options.installRoot, "update-cache.json"),
     CODEX_CCU_UPDATE_DISMISSALS_DIR: join(options.installRoot, "update-dismissals")
@@ -40,10 +48,11 @@ function prepareManagedUpdateEnvironment(options) {
 }
 
 export async function launcherMain(options = {}) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
   const env = options.env ?? process.env;
   const args = options.args ?? process.argv.slice(2);
   const stderr = options.stderr ?? process.stderr;
-  const installRoot = options.installRoot ?? resolveInstallRoot(env);
+  const installRoot = options.installRoot ?? resolveInstallRoot(env, runtime);
   const statePath = options.statePath ?? join(installRoot, "state.json");
 
   const readStateImpl = options.readState ?? readState;
@@ -66,7 +75,8 @@ export async function launcherMain(options = {}) {
       recoveredOfficial = await discoverOfficialImpl({
         ...options.discoveryOptions,
         env,
-        installRoot
+        installRoot,
+        runtime
       });
     } catch {
       recoveredOfficial = null;
@@ -78,7 +88,8 @@ export async function launcherMain(options = {}) {
     state,
     recoveredOfficial,
     installRoot,
-    env
+    env,
+    runtime
   });
 
   if (selection.kind === "ultra") {
@@ -88,7 +99,8 @@ export async function launcherMain(options = {}) {
         ...prepareManagedUpdateEnvironment({
           ...options,
           env,
-          installRoot
+          installRoot,
+          runtime
         })
       };
     } catch {}
@@ -101,7 +113,8 @@ export async function launcherMain(options = {}) {
         ...options.noticeOptions,
         installRoot,
         reason: selection.reason,
-        detail: selection.notice
+        detail: selection.notice,
+        runtime
       });
     } catch {
       firstNotice = false;

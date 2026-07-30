@@ -6,7 +6,10 @@ import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
-import { resolveInstallRoot } from "./config/constants.mjs";
+import {
+  RUNTIME_PLATFORM,
+  resolveInstallRoot
+} from "./config/constants.mjs";
 import { syncBundledContent } from "./content/sync.mjs";
 import { discoverOfficialCodex } from "./discovery/official-codex.mjs";
 import { installManagementBin } from "./installer/bin.mjs";
@@ -17,7 +20,7 @@ import {
 import {
   addUserPathEntry,
   removeUserPathEntry
-} from "./installer/windows-path.mjs";
+} from "./installer/path.mjs";
 import { uninstallCcu } from "./installer/uninstall.mjs";
 import {
   FORK_MANIFEST_NAME,
@@ -26,6 +29,7 @@ import {
 } from "./release/fork-manifest.mjs";
 import { resolveLatestForkRelease } from "./release/github-fork.mjs";
 import {
+  compareCcuVersions,
   compareStableVersions,
   resolveLatestCcuRelease,
   resolveLatestUpstreamRelease
@@ -215,6 +219,7 @@ exit 1
 `;
 
 function scheduleInstallRootCleanup(options) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
   const spawnDetached = options.spawnDetached ?? spawn;
   const tombstoneRoot = join(
     dirname(options.installRoot),
@@ -234,6 +239,28 @@ function scheduleInstallRootCleanup(options) {
       removeTombstone(tombstoneRoot);
       return true;
     } catch {}
+  }
+  if (!runtime.isWindows) {
+    const child = spawnDetached(
+      options.execPath ?? process.execPath,
+      [
+        "--input-type=module",
+        "--eval",
+        "import { renameSync, rmSync } from 'node:fs'; setTimeout(() => { let target = process.env.CCU_INSTALL_ROOT; try { renameSync(target, process.env.CCU_TOMBSTONE_ROOT); target = process.env.CCU_TOMBSTONE_ROOT; } catch {} try { rmSync(target, { recursive: true, force: true }); } catch { process.exitCode = 1; } }, 250);"
+      ],
+      {
+        detached: true,
+        stdio: "ignore",
+        env: {
+          ...options.env,
+          CCU_INSTALL_ROOT: options.installRoot,
+          CCU_TOMBSTONE_ROOT: tombstoneRoot
+        }
+      }
+    );
+    child.once?.("error", () => {});
+    child.unref?.();
+    return Number.isInteger(child.pid) && child.pid > 0;
   }
   const child = spawnDetached(
     options.pwshExecutable ??
@@ -298,7 +325,8 @@ async function collectStatus(options) {
     try {
       official = await (options.discoverOfficialCodex ?? discoverOfficialCodex)({
         installRoot,
-        env: options.env
+        env: options.env,
+        runtime: options.runtime
       });
     } catch {
       official = null;
@@ -363,7 +391,8 @@ async function collectRemoteStatus(status, options) {
   const network = options.networkClient ?? createNetworkClient(settings, options);
   const remoteOptions = {
     fetchImpl: network.fetch,
-    token: options.githubToken
+    token: options.githubToken,
+    runtime: options.runtime
   };
   try {
     const [forkResult, ccuResult, upstreamResult] = await Promise.allSettled([
@@ -384,7 +413,7 @@ async function collectRemoteStatus(status, options) {
     if (ccuResult.status === "fulfilled") {
       status.latestCcu = ccuResult.value;
       status.ccuUpdateAvailable =
-        compareStableVersions(CCU_VERSION, ccuResult.value.version) < 0;
+        compareCcuVersions(CCU_VERSION, ccuResult.value.version) < 0;
     } else {
       status.onlineErrors.push(remoteError("ccu", ccuResult));
     }
@@ -477,7 +506,8 @@ async function resolveProvider(args, options) {
   }
   const latest = await (options.resolveLatestForkRelease ?? resolveLatestForkRelease)({
     fetchImpl: options.fetchImpl,
-    token: options.githubToken
+    token: options.githubToken,
+    runtime: options.runtime
   });
   return {
     ...latest,
@@ -494,8 +524,9 @@ export async function manageMain(options = {}) {
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
   const env = options.env ?? process.env;
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
   const cwd = options.cwd ?? process.cwd();
-  const installRoot = options.installRoot ?? resolveInstallRoot(env);
+  const installRoot = options.installRoot ?? resolveInstallRoot(env, runtime);
   const command = args[0];
   const json = args.includes("--json");
   const eventMode = args.includes("--events")
@@ -508,6 +539,7 @@ export async function manageMain(options = {}) {
     ...options,
     cwd,
     env,
+    runtime,
     installRoot,
     githubToken: options.githubToken ?? env.GITHUB_TOKEN
   };
@@ -588,7 +620,7 @@ export async function manageMain(options = {}) {
         currentVersion: CCU_VERSION,
         latestVersion: checked.latest.version,
         updateAvailable:
-          compareStableVersions(CCU_VERSION, checked.latest.version) < 0,
+          compareCcuVersions(CCU_VERSION, checked.latest.version) < 0,
         releaseUrl: checked.latest.url,
         packageReady: checked.manifest !== null,
         cache: checked.cache
@@ -673,7 +705,10 @@ export async function manageMain(options = {}) {
     const result = await (options.uninstallCcu ?? uninstallCcu)({
       installRoot,
       env,
-      removePathEntry: options.removePathEntry ?? removeUserPathEntry
+      runtime,
+      removePathEntry:
+        options.removePathEntry ??
+        ((entry) => removeUserPathEntry(entry, { env, runtime }))
     });
     const schedule =
       options.scheduleInstallRootCleanup ?? scheduleInstallRootCleanup;
@@ -721,7 +756,8 @@ export async function manageMain(options = {}) {
       installManagementBin({
         binDirectory,
         managerSource,
-        launcherSource
+        launcherSource,
+        runtime
       }));
     const contentRoot = resolve(
       options.contentRoot ??
@@ -763,9 +799,14 @@ export async function manageMain(options = {}) {
       provider: release.provider,
       installRoot,
       env,
+      runtime,
       discoverOfficialCodex: options.discoverOfficialCodex,
-      addPathEntry: options.addPathEntry ?? addUserPathEntry,
-      removePathEntry: options.removePathEntry ?? removeUserPathEntry,
+      addPathEntry:
+        options.addPathEntry ??
+        ((entry) => addUserPathEntry(entry, { env, runtime })),
+      removePathEntry:
+        options.removePathEntry ??
+        ((entry) => removeUserPathEntry(entry, { env, runtime })),
       prepareBin,
       onStage:
         options.onStage ??

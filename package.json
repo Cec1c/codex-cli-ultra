@@ -1,11 +1,11 @@
 {
   "name": "codex-cli-ultra",
-  "version": "0.1.7",
+  "version": "0.1.8-alpha.1",
   "private": true,
   "type": "module",
   "packageManager": "npm@11.12.1",
   "engines": {
-    "node": ">=24"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "build": "node scripts/build-executor.mjs",

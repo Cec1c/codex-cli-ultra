@@ -4,11 +4,16 @@ on:
   push:
     tags:
       - "v*"
+      - "!v*-alpha.*"
   workflow_dispatch:
     inputs:
       tag:
         description: Existing v-prefixed tag to publish
         required: true
+        type: string
+      fork_tag:
+        description: Optional exact fork Release tag; required for Alpha builds
+        required: false
         type: string
 
 permissions:
@@ -19,117 +24,199 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  metadata:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      fork_tag: ${{ steps.release.outputs.fork_tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - name: Validate release channel
+        id: release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          FORK_TAG: ${{ inputs.fork_tag }}
+        run: |
+          set -euo pipefail
+          prerelease=false
+          if [[ "$RELEASE_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            if [[ -n "$FORK_TAG" && ! "$FORK_TAG" =~ ^ccu-rust-v[0-9]+\.[0-9]+\.[0-9]+-r[1-9][0-9]*$ ]]; then
+              echo "Stable CCU releases require a stable fork tag" >&2
+              exit 1
+            fi
+          elif [[ "$RELEASE_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-alpha\.([1-9][0-9]*)$ ]]; then
+            version="${BASH_REMATCH[1]}-alpha.${BASH_REMATCH[2]}"
+            prerelease=true
+            [[ "$FORK_TAG" =~ ^ccu-rust-v[0-9]+\.[0-9]+\.[0-9]+-r[1-9][0-9]*-alpha\.[1-9][0-9]*$ ]] || {
+              echo "Alpha CCU releases require an exact Alpha fork tag" >&2
+              exit 1
+            }
+          else
+            echo "invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "version=$version"
+            echo "fork_tag=$FORK_TAG"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: metadata
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            os: windows-latest
+            node-platform: win32
+            node-arch: x64
+            update-manifest: ccu-update-manifest.json
+          - platform: linux-x64
+            os: ubuntu-24.04
+            node-platform: linux
+            node-arch: x64
+            update-manifest: ccu-update-manifest-linux-x64.json
+          - platform: linux-arm64
+            os: ubuntu-24.04-arm
+            node-platform: linux
+            node-arch: arm64
+            update-manifest: ccu-update-manifest-linux-arm64.json
+          - platform: macos-x64
+            os: macos-15-intel
+            node-platform: darwin
+            node-arch: x64
+            update-manifest: ccu-update-manifest-macos-x64.json
+          - platform: macos-arm64
+            os: macos-15
+            node-platform: darwin
+            node-arch: arm64
+            update-manifest: ccu-update-manifest-macos-arm64.json
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "22.19.0"
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.96.1"
       - run: npm ci
-      - run: npm test
-      - name: Download and verify latest fork Release
-        shell: pwsh
+      - name: Verify runner architecture
+        shell: bash
+        env:
+          EXPECTED_PLATFORM: ${{ matrix.node-platform }}
+          EXPECTED_ARCH: ${{ matrix.node-arch }}
+        run: |
+          node -e 'if (process.platform !== process.env.EXPECTED_PLATFORM || process.arch !== process.env.EXPECTED_ARCH) { throw new Error(`runner is ${process.platform}-${process.arch}, expected ${process.env.EXPECTED_PLATFORM}-${process.env.EXPECTED_ARCH}`); }'
+      - name: Run full Windows regression
+        if: matrix.node-platform == 'win32'
+        run: npm test
+      - name: Run Unix platform contracts
+        if: matrix.node-platform != 'win32'
+        run: node --test test/platform.test.mjs test/installer/posix-path.test.mjs test/install-script.test.mjs test/update-upgrade.test.mjs
+      - name: Download and verify latest platform fork Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/download-fork-release.mjs --output artifacts/fork-release
-      - name: Build release package
-        shell: pwsh
+        run: node scripts/download-fork-release.mjs --output artifacts/fork-release --tag "${{ needs.metadata.outputs.fork_tag }}"
+      - name: Build self-contained platform package
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
         run: |
-          $tag = '${{ inputs.tag || github.ref_name }}'
-          if ($tag -notmatch '^v(.+)$') { throw "invalid release tag: $tag" }
-          .\scripts\package-release.ps1 `
-            -Version $Matches[1] `
-            -OutputDirectory artifacts `
-            -ForkReleaseDir artifacts/fork-release
+          node scripts/package-release.mjs \
+            --version "$RELEASE_VERSION" \
+            --output artifacts \
+            --fork-release-dir artifacts/fork-release
+          node scripts/verify-release-artifacts.mjs \
+            --directory artifacts \
+            --version "$RELEASE_VERSION" \
+            --platform "${{ matrix.platform }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: codex-cli-ultra-windows
+          name: ccu-release-${{ matrix.platform }}
           path: |
-            artifacts/*.zip*
-            artifacts/ccu-update-manifest.json
+            artifacts/codex-cli-ultra-v*-${{ matrix.platform }}.zip
+            artifacts/codex-cli-ultra-v*-${{ matrix.platform }}.zip.sha256
+            artifacts/${{ matrix.update-manifest }}
           if-no-files-found: error
+
+  publish:
+    needs:
+      - metadata
+      - build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.19.0"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ccu-release-*
+          path: artifacts
+          merge-multiple: true
+      - name: Verify complete release set
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          node scripts/verify-release-artifacts.mjs \
+            --directory artifacts \
+            --version "$RELEASE_VERSION"
       - name: Publish GitHub Release
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
         run: |
-          $tag = '${{ inputs.tag || github.ref_name }}'
-          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
-            throw "invalid release tag: $tag"
-          }
-
-          $zipFiles = @(Get-ChildItem -LiteralPath artifacts -Filter '*.zip' -File)
-          if ($zipFiles.Count -ne 1) {
-            throw "expected exactly one release ZIP; found $($zipFiles.Count)"
-          }
-          $zip = $zipFiles[0]
-          $sidecar = Get-Item -LiteralPath "$($zip.FullName).sha256"
-          $updateManifestFile = Get-Item -LiteralPath 'artifacts/ccu-update-manifest.json'
-          $updateManifest = Get-Content -LiteralPath $updateManifestFile.FullName -Raw | ConvertFrom-Json
-          if (
-            $updateManifest.releaseTag -ne $tag -or
-            $updateManifest.ccuVersion -ne $tag.Substring(1) -or
-            $updateManifest.asset.name -ne $zip.Name -or
-            [long]$updateManifest.asset.size -ne $zip.Length
-          ) {
-            throw "CCU update manifest does not match the release package"
-          }
-          $sidecarLine = (Get-Content -LiteralPath $sidecar.FullName -Raw).Trim()
-          if ($sidecarLine -notmatch '^([0-9a-fA-F]{64})\s{2}(.+)$') {
-            throw "invalid SHA256 sidecar: $($sidecar.Name)"
-          }
-          if ($Matches[2] -ne $zip.Name) {
-            throw "SHA256 sidecar names '$($Matches[2])', expected '$($zip.Name)'"
-          }
-          $actualHash = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actualHash -ne $Matches[1].ToLowerInvariant()) {
-            throw "local release ZIP SHA256 mismatch"
-          }
-
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag $zip.FullName $sidecar.FullName $updateManifestFile.FullName `
-              --repo $env:GITHUB_REPOSITORY `
-              --verify-tag `
-              --title "Codex CLI Ultra $tag" `
-              --notes "自包含 Windows 安装包：内置已验证的 CCU i18n fork、1396 条简体中文 FTL 和 Hermes 状态栏；新版管理器支持后台任务进度、本地 fork Release 安装与二次确认卸载，并同步显示 CCU、CCU-I18N 和 OpenAI Codex 三路版本。安装器在网络失败时提供直接下载指引。" `
-              --latest
-          }
-
-          $release = gh release view $tag --repo $env:GITHUB_REPOSITORY `
-            --json isDraft,isPrerelease,assets | ConvertFrom-Json
-          if ($release.isDraft -or $release.isPrerelease) {
-            throw "published release must be stable and non-draft"
-          }
-          $assetNames = @($release.assets | ForEach-Object name)
-          foreach ($expected in @($zip.Name, $sidecar.Name, $updateManifestFile.Name)) {
-            if ($expected -notin $assetNames) {
-              throw "published release is missing asset: $expected"
-            }
-          }
-
-          $verifyDir = Join-Path $env:RUNNER_TEMP 'ccu-release-verify'
-          New-Item -ItemType Directory -Path $verifyDir -Force | Out-Null
-          gh release download $tag --repo $env:GITHUB_REPOSITORY `
-            --pattern $zip.Name `
-            --pattern $sidecar.Name `
-            --pattern $updateManifestFile.Name `
-            --dir $verifyDir `
-            --clobber
-          $remoteZip = Join-Path $verifyDir $zip.Name
-          $remoteSidecar = Join-Path $verifyDir $sidecar.Name
-          $remoteLine = (Get-Content -LiteralPath $remoteSidecar -Raw).Trim()
-          if ($remoteLine -notmatch '^([0-9a-fA-F]{64})\s{2}(.+)$') {
-            throw "downloaded SHA256 sidecar is invalid"
-          }
-          $remoteHash = (Get-FileHash -LiteralPath $remoteZip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($remoteHash -ne $Matches[1].ToLowerInvariant() -or $Matches[2] -ne $zip.Name) {
-            throw "downloaded release asset failed SHA256 verification"
-          }
+          set -euo pipefail
+          release_tier="Alpha test build"
+          release_flags=(--prerelease)
+          if [[ "$PRERELEASE" != "true" ]]; then
+            release_tier="Stable build"
+            release_flags=(--latest)
+          fi
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" artifacts/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" artifacts/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Codex CLI Ultra $RELEASE_TAG" \
+              --notes "$release_tier. Self-contained packages for Windows x64, Linux x64/ARM64, and macOS Intel/Apple Silicon. Each package includes the matching verified CCU i18n fork, Simplified Chinese FTL, Hermes status line, and the CCU Manager." \
+              "${release_flags[@]}"
+          fi
+          actual_prerelease="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
+          if [[ "$actual_prerelease" != "$PRERELEASE" ]]; then
+            echo "Release prerelease state is $actual_prerelease, expected $PRERELEASE" >&2
+            exit 1
+          fi
+      - name: Download and verify published assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          mkdir remote-assets
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir remote-assets
+          node scripts/verify-release-artifacts.mjs \
+            --directory remote-assets \
+            --version "$RELEASE_VERSION"

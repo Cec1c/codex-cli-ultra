@@ -1,12 +1,12 @@
 import { readFile, realpath, stat } from "node:fs/promises";
-import { win32 } from "node:path";
 
 import {
-  isAbsoluteLocalWindowsPath,
-  isWindowsPathInside,
-  PLATFORM,
-  windowsPathsEqual
+  RUNTIME_PLATFORM,
+  isAbsoluteLocalPath,
+  isPathInside,
+  pathsEqual
 } from "../config/constants.mjs";
+import { pathApiFor } from "../platform/runtime.mjs";
 import { validateState } from "../state/schema.mjs";
 
 const MANAGED_ENV_KEYS = new Set([
@@ -88,8 +88,9 @@ async function readFileStat(path, statFile) {
   }
 }
 
-async function canonicalizeLocalPath(path, realpathFile) {
-  if (!isAbsoluteLocalWindowsPath(path)) {
+async function canonicalizeLocalPath(path, realpathFile, runtime) {
+  const pathApi = pathApiFor(runtime);
+  if (!isAbsoluteLocalPath(path, runtime)) {
     return { kind: "untrusted", path: null };
   }
   let canonical;
@@ -98,51 +99,52 @@ async function canonicalizeLocalPath(path, realpathFile) {
   } catch {
     return { kind: "missing", path: null };
   }
-  if (!isAbsoluteLocalWindowsPath(canonical)) {
+  if (!isAbsoluteLocalPath(canonical, runtime)) {
     return { kind: "untrusted", path: null };
   }
-  return { kind: "ok", path: win32.resolve(canonical) };
+  return { kind: "ok", path: pathApi.resolve(canonical) };
 }
 
-async function canonicalizeInstallRoot(path, realpathFile) {
-  if (!isAbsoluteLocalWindowsPath(path)) {
+async function canonicalizeInstallRoot(path, realpathFile, runtime) {
+  const pathApi = pathApiFor(runtime);
+  if (!isAbsoluteLocalPath(path, runtime)) {
     return { kind: "untrusted", path: null };
   }
   try {
     const canonical = await realpathFile(path);
-    if (!isAbsoluteLocalWindowsPath(canonical)) {
+    if (!isAbsoluteLocalPath(canonical, runtime)) {
       return { kind: "untrusted", path: null };
     }
-    return { kind: "ok", path: win32.resolve(canonical) };
+    return { kind: "ok", path: pathApi.resolve(canonical) };
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return { kind: "missing", path: win32.resolve(path) };
+      return { kind: "missing", path: pathApi.resolve(path) };
     }
     return { kind: "untrusted", path: null };
   }
 }
 
-function expectedOfficialPaths(packageJsonPath) {
-  const platformPackageJsonPath = win32.join(
-    win32.dirname(packageJsonPath),
+function expectedOfficialPaths(packageJsonPath, runtime) {
+  const pathApi = pathApiFor(runtime);
+  const platformPackageJsonPath = pathApi.join(
+    pathApi.dirname(packageJsonPath),
     "node_modules",
-    "@openai",
-    "codex-win32-x64",
+    ...runtime.npmPackage.split("/"),
     "package.json"
   );
   return {
     platformPackageJsonPath,
-    binaryPath: win32.join(
-      win32.dirname(platformPackageJsonPath),
+    binaryPath: pathApi.join(
+      pathApi.dirname(platformPackageJsonPath),
       "vendor",
-      PLATFORM,
+      runtime.target,
       "bin",
-      "codex.exe"
+      runtime.binaryName
     )
   };
 }
 
-function officialLayoutIsSafe(official, installRoot) {
+function officialLayoutIsSafe(official, installRoot, runtime) {
   if (!official || typeof official !== "object") {
     return false;
   }
@@ -152,18 +154,19 @@ function officialLayoutIsSafe(official, installRoot) {
     official.binaryPath
   ]) {
     if (
-      !isAbsoluteLocalWindowsPath(path) ||
-      isWindowsPathInside(installRoot, path)
+      !isAbsoluteLocalPath(path, runtime) ||
+      isPathInside(installRoot, path, runtime)
     ) {
       return false;
     }
   }
-  const expected = expectedOfficialPaths(official.packageJsonPath);
+  const expected = expectedOfficialPaths(official.packageJsonPath, runtime);
   return (
-    windowsPathsEqual(
+    pathsEqual(
       official.platformPackageJsonPath,
-      expected.platformPackageJsonPath
-    ) && windowsPathsEqual(official.binaryPath, expected.binaryPath)
+      expected.platformPackageJsonPath,
+      runtime
+    ) && pathsEqual(official.binaryPath, expected.binaryPath, runtime)
   );
 }
 
@@ -172,9 +175,10 @@ async function inspectOfficial({
   installRoot,
   readPackageVersion,
   realpathFile,
-  statFile
+  statFile,
+  runtime
 }) {
-  if (!officialLayoutIsSafe(official, installRoot)) {
+  if (!officialLayoutIsSafe(official, installRoot, runtime)) {
     return {
       rootVersion: null,
       platformVersion: null,
@@ -185,11 +189,12 @@ async function inspectOfficial({
 
   const packagePath = await canonicalizeLocalPath(
     official.packageJsonPath,
-    realpathFile
+    realpathFile,
+    runtime
   );
   if (
     packagePath.kind !== "ok" ||
-    isWindowsPathInside(installRoot, packagePath.path)
+    isPathInside(installRoot, packagePath.path, runtime)
   ) {
     return {
       rootVersion: null,
@@ -213,18 +218,20 @@ async function inspectOfficial({
 
   const platformPath = await canonicalizeLocalPath(
     official.platformPackageJsonPath,
-    realpathFile
+    realpathFile,
+    runtime
   );
   if (platformPath.kind !== "ok") {
     return { rootVersion, platformVersion: null, trusted: false, path: null };
   }
-  const canonicalExpected = expectedOfficialPaths(packagePath.path);
+  const canonicalExpected = expectedOfficialPaths(packagePath.path, runtime);
   if (
-    !windowsPathsEqual(
+    !pathsEqual(
       platformPath.path,
-      canonicalExpected.platformPackageJsonPath
+      canonicalExpected.platformPackageJsonPath,
+      runtime
     ) ||
-    isWindowsPathInside(installRoot, platformPath.path)
+    isPathInside(installRoot, platformPath.path, runtime)
   ) {
     return { rootVersion, platformVersion: null, trusted: false, path: null };
   }
@@ -235,18 +242,19 @@ async function inspectOfficial({
   if (platformVersion === null) {
     return { rootVersion, platformVersion: null, trusted: false, path: null };
   }
-  if (platformVersion !== `${rootVersion}-win32-x64`) {
+  if (platformVersion !== `${rootVersion}-${runtime.npmSuffix}`) {
     return { rootVersion, platformVersion, trusted: false, path: null };
   }
 
   const binaryPath = await canonicalizeLocalPath(
     official.binaryPath,
-    realpathFile
+    realpathFile,
+    runtime
   );
   if (
     binaryPath.kind !== "ok" ||
-    !windowsPathsEqual(binaryPath.path, canonicalExpected.binaryPath) ||
-    isWindowsPathInside(installRoot, binaryPath.path)
+    !pathsEqual(binaryPath.path, canonicalExpected.binaryPath, runtime) ||
+    isPathInside(installRoot, binaryPath.path, runtime)
   ) {
     return { rootVersion, platformVersion, trusted: false, path: null };
   }
@@ -259,30 +267,32 @@ async function inspectOfficial({
   };
 }
 
-async function inspectUltra(active, installRoot, realpathFile, statFile) {
-  const expectedPath = win32.join(
+async function inspectUltra(active, installRoot, realpathFile, statFile, runtime) {
+  const pathApi = pathApiFor(runtime);
+  const expectedPath = pathApi.join(
     installRoot,
     "releases",
     active.releaseId,
     active.platform,
     "package",
     "bin",
-    "codex.exe"
+    runtime.binaryName
   );
-  if (!windowsPathsEqual(active.binaryPath, expectedPath)) {
+  if (!pathsEqual(active.binaryPath, expectedPath, runtime)) {
     return { valid: false, reason: "ultra-path-untrusted" };
   }
   const binaryPath = await canonicalizeLocalPath(
     active.binaryPath,
-    realpathFile
+    realpathFile,
+    runtime
   );
   if (binaryPath.kind === "missing") {
     return { valid: false, reason: "ultra-missing" };
   }
   if (
     binaryPath.kind !== "ok" ||
-    !windowsPathsEqual(binaryPath.path, expectedPath) ||
-    !isWindowsPathInside(installRoot, binaryPath.path)
+    !pathsEqual(binaryPath.path, expectedPath, runtime) ||
+    !isPathInside(installRoot, binaryPath.path, runtime)
   ) {
     return { valid: false, reason: "ultra-path-untrusted" };
   }
@@ -309,19 +319,21 @@ function combineNotices(primary, secondary) {
   return `${primary} ${secondary.replace(/^Codex Ultra:\s*/, "")}`;
 }
 
-async function selectLanguageEnvironment({ installRoot }) {
+async function selectLanguageEnvironment({ installRoot, runtime }) {
+  const pathApi = pathApiFor(runtime);
   return {
     env: {
-      CODEX_CCU_LANGUAGE_PACK_ROOT: win32.join(installRoot, "languages"),
-      CODEX_CCU_THEME_PACK_ROOT: win32.join(installRoot, "themes"),
-      CODEX_CCU_QUOTA_PATH: win32.join(installRoot, "quota.json")
+      CODEX_CCU_LANGUAGE_PACK_ROOT: pathApi.join(installRoot, "languages"),
+      CODEX_CCU_THEME_PACK_ROOT: pathApi.join(installRoot, "themes"),
+      CODEX_CCU_QUOTA_PATH: pathApi.join(installRoot, "quota.json")
     },
     notice: null
   };
 }
 
 export async function selectLaunchTarget(options = {}) {
-  if (!isAbsoluteLocalWindowsPath(options.installRoot)) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  if (!isAbsoluteLocalPath(options.installRoot, runtime)) {
     return result(
       "error",
       null,
@@ -332,7 +344,8 @@ export async function selectLaunchTarget(options = {}) {
   const realpathFile = options.realpathFile ?? realpath;
   const canonicalRoot = await canonicalizeInstallRoot(
     options.installRoot,
-    realpathFile
+    realpathFile,
+    runtime
   );
   if (canonicalRoot.kind === "untrusted") {
     return result(
@@ -347,7 +360,7 @@ export async function selectLaunchTarget(options = {}) {
   let state = null;
   if (options.state !== null && options.state !== undefined) {
     try {
-      state = validateState(options.state);
+      state = validateState(options.state, { runtime });
     } catch {
       state = null;
     }
@@ -362,7 +375,8 @@ export async function selectLaunchTarget(options = {}) {
     installRoot,
     readPackageVersion,
     realpathFile,
-    statFile
+    statFile,
+    runtime
   });
 
   if (state === null) {
@@ -404,7 +418,8 @@ export async function selectLaunchTarget(options = {}) {
     active,
     installRoot,
     realpathFile,
-    statFile
+    statFile,
+    runtime
   );
   if (ultra.valid) {
     const language = await selectLanguageEnvironment({
@@ -412,7 +427,8 @@ export async function selectLaunchTarget(options = {}) {
       installRoot,
       env: options.env ?? process.env,
       realpathFile,
-      statFile
+      statFile,
+      runtime
     });
     const officialUnavailable = !official.trusted;
     const officialVersionChanged =

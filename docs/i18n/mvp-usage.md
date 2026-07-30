@@ -29,12 +29,12 @@
 ## 2. 环境要求 / Requirements
 
 - Windows 11 与 PowerShell 7。
-- Node.js 24 或更高版本，以及 npm。
+- Node.js 22.19.0 或更高版本，以及 npm。
 - Git，以及包含固定提交的 `openai/codex` 源码仓库。
 - 上游 `rust-toolchain.toml` 指定的 Rust/Cargo 1.95.0。
 
 - Windows 11 and PowerShell 7.
-- Node.js 24 or newer, plus npm.
+- Node.js 22.19.0 or newer, plus npm.
 - Git and an `openai/codex` source repository containing the pinned commit.
 - Rust/Cargo 1.95.0 selected by the upstream `rust-toolchain.toml`.
 

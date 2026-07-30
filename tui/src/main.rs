@@ -126,6 +126,8 @@ struct ForkManifest {
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 struct RemoteVersion {
     version: String,
+    #[serde(default)]
+    url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -329,6 +331,25 @@ impl App {
             self.content_root.as_deref(),
             self.explicit_release_dir.as_deref(),
         );
+    }
+
+    fn open_release_page(&mut self) {
+        let url = trusted_release_url(
+            self.status
+                .latest_ccu
+                .as_ref()
+                .and_then(|release| release.url.as_deref()),
+        );
+        match open_url(url) {
+            Ok(()) => {
+                self.notice = format!("已在默认浏览器中打开 {url}");
+                self.failed = false;
+            }
+            Err(error) => {
+                self.notice = format!("无法自动打开浏览器：{error}；请访问 {url}");
+                self.failed = true;
+            }
+        }
     }
 
     fn refresh_now(&mut self, online: bool) {
@@ -757,6 +778,81 @@ fn friendly_error(source: &str) -> String {
     source.trim().to_string()
 }
 
+fn trusted_release_url(candidate: Option<&str>) -> &str {
+    candidate
+        .filter(|url| {
+            *url == RELEASES_URL
+                || url
+                    .strip_prefix(RELEASES_URL)
+                    .is_some_and(|suffix| suffix.starts_with("/tag/v"))
+        })
+        .unwrap_or(RELEASES_URL)
+}
+
+fn fork_manifest_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "ccu-fork-manifest.json"
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        "ccu-fork-manifest-linux-x64.json"
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        "ccu-fork-manifest-linux-arm64.json"
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        "ccu-fork-manifest-macos-x64.json"
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        "ccu-fork-manifest-macos-arm64.json"
+    } else {
+        "ccu-fork-manifest.json"
+    }
+}
+
+fn open_url(url: &str) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .status()
+            .context("无法调用 Windows 默认浏览器")?;
+        if !status.success() {
+            bail!("Windows 默认浏览器命令返回 {status}");
+        }
+        return Ok(());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open")
+            .arg(url)
+            .status()
+            .context("无法调用 macOS open")?;
+        if !status.success() {
+            bail!("macOS open 返回 {status}");
+        }
+        return Ok(());
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        for program in ["xdg-open", "wslview"] {
+            if Command::new(program)
+                .arg(url)
+                .status()
+                .is_ok_and(|status| status.success())
+            {
+                return Ok(());
+            }
+        }
+        if std::env::var_os("WSL_DISTRO_NAME").is_some()
+            && Command::new("cmd.exe")
+                .args(["/C", "start", "", url])
+                .status()
+                .is_ok_and(|status| status.success())
+        {
+            return Ok(());
+        }
+        bail!("未找到 xdg-open、wslview 或 WSL 浏览器桥接")
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
+    bail!("当前平台不支持自动打开浏览器")
+}
+
 fn format_online_errors(errors: &[OnlineError]) -> String {
     let channels = errors
         .iter()
@@ -788,7 +884,7 @@ fn discover_local_release(
         }
     }
     for root in candidates {
-        let manifest_path = root.join("ccu-fork-manifest.json");
+        let manifest_path = root.join(fork_manifest_name());
         let Ok(source) = fs::read_to_string(&manifest_path) else {
             continue;
         };
@@ -905,6 +1001,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
             ),
             KeyCode::Char('i') => app.install_local(),
             KeyCode::Char('u') => app.start_ccu_upgrade(),
+            KeyCode::Char('o') => app.open_release_page(),
             KeyCode::Char('P') => app.begin_proxy_edit(),
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 app.begin_proxy_edit();
@@ -1003,7 +1100,7 @@ fn draw(frame: &mut ratatui::Frame, app: &App) {
                 ),
             ]),
             Line::from(Span::styled(
-                "Tab/1-3 切换  r 刷新  c 检查版本  u 升级完整CCU  p 代理开关  Shift+P 配置  q 退出",
+                "Tab/1-3 切换  r 刷新  c 检查版本  u 升级完整CCU  o 打开Release  p 代理开关  Shift+P 配置  q 退出",
                 Style::default().fg(MUTED),
             )),
         ])
@@ -1270,7 +1367,7 @@ fn draw_status(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &Ap
         ),
         Line::from(""),
         Line::from(Span::styled(
-            "c 同步三路远程版本；u 下载、校验并升级完整 CCU，完成后 Manager 会自动接力安装。",
+            "c 同步三路远程版本；u 下载并升级完整 CCU；o 在默认浏览器打开对应 Release。",
             Style::default().fg(MUTED),
         )),
         Line::from(Span::styled(
@@ -1423,13 +1520,27 @@ mod tests {
     }
 
     #[test]
+    fn release_page_accepts_only_the_ccu_repository() {
+        assert_eq!(
+            trusted_release_url(Some(
+                "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.7"
+            )),
+            "https://github.com/Cec1c/codex-cli-ultra/releases/tag/v0.1.7"
+        );
+        assert_eq!(
+            trusted_release_url(Some("https://example.com/fake-release")),
+            RELEASES_URL
+        );
+    }
+
+    #[test]
     fn discovers_a_complete_local_fork_release() {
         let root =
             std::env::temp_dir().join(format!("ccu-manager-local-release-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         fs::write(
-            root.join("ccu-fork-manifest.json"),
+            root.join(fork_manifest_name()),
             r#"{"displayVersion":"0.144.6-ccu.i18n.2","upstreamVersion":"0.144.6","asset":{"name":"fork.zip"}}"#,
         )
         .unwrap();

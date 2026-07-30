@@ -1,3 +1,6 @@
+import { RUNTIME_PLATFORM } from "../config/constants.mjs";
+import { ccuUpdateManifestName } from "./ccu-update-manifest.mjs";
+
 const MAX_RELEASE_RESPONSE_BYTES = 1024 * 1024;
 
 async function readLimitedJson(response) {
@@ -75,13 +78,14 @@ async function resolveLatestVersion(options) {
 }
 
 export async function resolveLatestCcuRelease(options = {}) {
+  const runtime = options.runtime ?? RUNTIME_PLATFORM;
   const result = await resolveLatestVersion({
     ...options,
     repository: options.repository ?? "Cec1c/codex-cli-ultra",
     tagPattern: /^v([0-9]+\.[0-9]+\.[0-9]+)$/
   });
   const updateManifest = result.assets.find(
-    (asset) => asset?.name === "ccu-update-manifest.json"
+    (asset) => asset?.name === ccuUpdateManifestName(runtime)
   );
   return {
     repository: result.repository,
@@ -116,4 +120,29 @@ export function compareStableVersions(left, right) {
     if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
   }
   return 0;
+}
+
+export function compareCcuVersions(left, right) {
+  const parse = (value) => {
+    if (typeof value !== "string") {
+      throw new Error(`invalid CCU version: ${value}`);
+    }
+    const match = /^(\d+)\.(\d+)\.(\d+)(?:-alpha\.([1-9]\d*))?$/.exec(value);
+    if (!match) throw new Error(`invalid CCU version: ${value}`);
+    return {
+      core: match.slice(1, 4).map(Number),
+      alpha: match[4] === undefined ? null : Number(match[4])
+    };
+  };
+  const a = parse(left);
+  const b = parse(right);
+  for (let index = 0; index < 3; index += 1) {
+    if (a.core[index] !== b.core[index]) {
+      return a.core[index] < b.core[index] ? -1 : 1;
+    }
+  }
+  if (a.alpha === b.alpha) return 0;
+  if (a.alpha === null) return 1;
+  if (b.alpha === null) return -1;
+  return a.alpha < b.alpha ? -1 : 1;
 }
