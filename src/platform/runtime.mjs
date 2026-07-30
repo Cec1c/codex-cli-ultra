@@ -39,7 +39,7 @@ const DEFINITIONS = new Map([
       id: "linux-arm64",
       nodePlatform: "linux",
       arch: "arm64",
-      target: "aarch64-unknown-linux-musl",
+      target: "aarch64-unknown-linux-gnu",
       npmPackage: "@openai/codex-linux-arm64",
       npmSuffix: "linux-arm64",
       binaryName: "codex",

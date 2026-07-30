@@ -17,6 +17,7 @@ import {
 } from "../src/platform/runtime.mjs";
 
 const LINUX = resolveRuntimePlatform({ platform: "linux", arch: "x64" });
+const LINUX_ARM = resolveRuntimePlatform({ platform: "linux", arch: "arm64" });
 const MAC_ARM = resolveRuntimePlatform({ platform: "darwin", arch: "arm64" });
 const execFileAsync = promisify(execFile);
 
@@ -36,6 +37,7 @@ test("runtime platform descriptors cover Linux and both macOS architectures", ()
     }
   );
   assert.equal(MAC_ARM.id, "macos-arm64");
+  assert.equal(LINUX_ARM.target, "aarch64-unknown-linux-gnu");
   assert.equal(MAC_ARM.target, "aarch64-apple-darwin");
   assert.equal(
     resolveRuntimePlatform({ platform: "darwin", arch: "x64" }).target,
