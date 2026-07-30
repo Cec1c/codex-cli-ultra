@@ -305,7 +305,7 @@ export async function discoverOfficialCodex(options = {}) {
   const expectedBinaryPath = pathApi.join(
     pathApi.dirname(platformPackageJsonPath),
     "vendor",
-    runtime.target,
+    runtime.officialTarget,
     "bin",
     runtime.binaryName
   );

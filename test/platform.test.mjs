@@ -26,12 +26,14 @@ test("runtime platform descriptors cover Linux and both macOS architectures", ()
     {
       id: LINUX.id,
       target: LINUX.target,
+      officialTarget: LINUX.officialTarget,
       npmPackage: LINUX.npmPackage,
       binaryName: LINUX.binaryName
     },
     {
       id: "linux-x64",
-      target: "x86_64-unknown-linux-musl",
+      target: "x86_64-unknown-linux-gnu",
+      officialTarget: "x86_64-unknown-linux-musl",
       npmPackage: "@openai/codex-linux-x64",
       binaryName: "codex"
     }
@@ -117,7 +119,7 @@ test("Linux launch selection accepts only the platform-specific installed layout
   const packageJsonPath = "/opt/node/lib/node_modules/@openai/codex/package.json";
   const platformPackageJsonPath = "/opt/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/package.json";
   const officialBinary = "/opt/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex";
-  const ultraBinary = `${installRoot}/releases/0.145.0-ccu.i18n.2/x86_64-unknown-linux-musl/package/bin/codex`;
+  const ultraBinary = `${installRoot}/releases/0.145.0-ccu.i18n.2/${LINUX.target}/package/bin/codex`;
   const state = {
     schemaVersion: 1,
     official: {

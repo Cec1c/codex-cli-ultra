@@ -156,7 +156,7 @@ function validateOfficial(value, runtime) {
   const expectedBinaryPath = pathApi.join(
     pathApi.dirname(official.platformPackageJsonPath),
     "vendor",
-    runtime.target,
+    runtime.officialTarget,
     "bin",
     runtime.binaryName
   );

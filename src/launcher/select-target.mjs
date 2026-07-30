@@ -137,7 +137,7 @@ function expectedOfficialPaths(packageJsonPath, runtime) {
     binaryPath: pathApi.join(
       pathApi.dirname(platformPackageJsonPath),
       "vendor",
-      runtime.target,
+      runtime.officialTarget,
       "bin",
       runtime.binaryName
     )
