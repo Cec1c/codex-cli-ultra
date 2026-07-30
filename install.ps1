@@ -167,7 +167,7 @@ if (-not [version]::TryParse($nodeVersionText, [ref]$nodeVersion) -or $nodeVersi
 }
 Write-Host ''
 Write-Host 'Codex CLI Ultra 中文版安装程序' -ForegroundColor Green
-Write-Host '不会结束当前 Codex；官方 npm Codex 会保留为英文回退版本。' -ForegroundColor DarkGray
+Write-Host '不会结束当前 Codex；官方 npm Codex 如已安装会保留为可选回退，未安装也可继续。' -ForegroundColor DarkGray
 Write-InstallStep -Number 1 -Total 5 -Message '检查安装包与本机环境'
 if (-not $packaged -and -not $SkipBuild) {
     $npmPath = Resolve-ApplicationPath -Name 'npm' -InstallHint 'Reinstall Node.js with npm and retry.'
@@ -311,6 +311,6 @@ Write-InstallStep -Number 4 -Total 5 -Message '更新当前终端命令优先级
 $env:Path = "$bin;$env:Path"
 Write-InstallStep -Number 5 -Total 5 -Message '安装完成'
 Write-Host "CCU 命令目录：$bin" -ForegroundColor Green
-Write-Host '新终端中的 codex 会启动中文版本；官方英文版仍保留用于一键回退。' -ForegroundColor Green
+Write-Host '新终端中的 codex 会启动中文版本；若已安装官方版，CCU 会保留它作为故障回退。' -ForegroundColor Green
 Write-Host '验证命令：codex --version；codex --i18n-self-check；codex --yolo' -ForegroundColor Cyan
-Write-Host '卸载回退：运行安装包中的 uninstall.cmd，或执行 codex-ultra uninstall。' -ForegroundColor Cyan
+Write-Host '卸载 CCU：运行安装包中的 uninstall.cmd，或执行 codex-ultra uninstall。' -ForegroundColor Cyan

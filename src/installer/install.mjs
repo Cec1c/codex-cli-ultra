@@ -23,7 +23,10 @@ import {
   resolveInstallRoot,
 } from "../config/constants.mjs";
 import { pathApiFor } from "../platform/runtime.mjs";
-import { discoverOfficialCodex } from "../discovery/official-codex.mjs";
+import {
+  discoverOfficialCodex,
+  discoverOptionalOfficialCodex
+} from "../discovery/official-codex.mjs";
 import { validateLanguagePack } from "../language/validate.mjs";
 import { buildLaunchEnvironment } from "../launcher/select-target.mjs";
 import { extractZipSecure } from "../release/archive.mjs";
@@ -751,7 +754,8 @@ export async function installForkFromProvider(options) {
   }
 
   const statePath = join(installRoot, "state.json");
-  const discover = options.discoverOfficialCodex ?? discoverOfficialCodex;
+  const discover =
+    options.discoverOfficialCodex ?? discoverOptionalOfficialCodex;
   const validateManifest = options.validateForkManifest ?? validateForkManifest;
   const hashFile = options.sha256File ?? sha256File;
   const extractZip = options.extractZipSecure ?? extractZipSecure;

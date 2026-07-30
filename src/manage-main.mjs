@@ -721,7 +721,11 @@ export async function manageMain(options = {}) {
     const report = { ...result, cleanupScheduled };
     if (json) writeJson(stdout, report);
     else {
-      stdout.write("已从用户 PATH 移除 CCU，codex 将回退到官方英文版。\n");
+      stdout.write(
+        result.official === null
+          ? "已从用户 PATH 移除 CCU；未配置官方 Codex 回退。\n"
+          : "已从用户 PATH 移除 CCU，codex 将回退到官方英文版。\n"
+      );
       stdout.write(
         cleanupScheduled
           ? "CCU 文件将在当前命令退出后自动删除。\n"

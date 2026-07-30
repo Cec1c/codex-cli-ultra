@@ -261,7 +261,8 @@ export function validateState(value, options = {}) {
   }
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
-    official: validateOfficial(value.official, runtime),
+    official:
+      value.official === null ? null : validateOfficial(value.official, runtime),
     active:
       value.active === null ? null : validateBuild(value.active, "active", runtime),
     locale: value.locale === null ? null : validateLocale(value.locale, runtime),

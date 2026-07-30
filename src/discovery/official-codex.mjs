@@ -115,6 +115,7 @@ function sanitizeExecEnvironment(env, installRoot, runtime) {
 async function resolveTrustedNpmCommand({
   env,
   installRoot,
+  allowMissing,
   realpathFile,
   statFile,
   runtime
@@ -175,6 +176,7 @@ async function resolveTrustedNpmCommand({
     }
     return { npmCommand, nodePath, npmCliPath };
   }
+  if (allowMissing) return null;
   throw new Error(
     runtime.isWindows
       ? "no trusted npm.cmd found on the local PATH"
@@ -187,6 +189,7 @@ async function resolveNpmRoot({
   execFile,
   env,
   installRoot,
+  allowMissing,
   realpathFile,
   statFile,
   runtime
@@ -198,10 +201,12 @@ async function resolveNpmRoot({
   const npm = await resolveTrustedNpmCommand({
     env,
     installRoot,
+    allowMissing,
     realpathFile,
     statFile,
     runtime
   });
+  if (npm === null) return null;
   const executable = runtime.isWindows ? npm.nodePath : npm.npmCommand;
   const args = runtime.isWindows ? [npm.npmCliPath, "root", "-g"] : ["root", "-g"];
   const execEnv = runtime.isWindows
@@ -238,29 +243,40 @@ export async function discoverOfficialCodex(options = {}) {
     realpathImpl,
     runtime
   );
+  if (!isAbsoluteLocalPath(installRoot, runtime)) {
+    throw new Error("install root must be an absolute local path");
+  }
   const npmRoot = await resolveNpmRoot({
     npmRoot: options.npmRoot,
     execFile: runExecFile,
     env: sanitizeExecEnvironment(env, installRoot, runtime),
     installRoot,
+    allowMissing: options.allowMissing === true,
     realpathFile: realpathImpl,
     statFile: statImpl,
     runtime
   });
 
-  if (!isAbsoluteLocalPath(installRoot, runtime)) {
-    throw new Error("install root must be an absolute local path");
-  }
+  if (npmRoot === null) return null;
+
   if (!isAbsoluteLocalPath(npmRoot, runtime)) {
     throw new Error("npm root must be an absolute local path");
   }
 
-  const packageJsonPath = await resolveExistingFile(
-    pathApi.join(npmRoot, "@openai", "codex", "package.json"),
-    "official Codex package.json",
-    realpathImpl,
-    runtime
-  );
+  let packageJsonPath;
+  try {
+    packageJsonPath = await resolveExistingFile(
+      pathApi.join(npmRoot, "@openai", "codex", "package.json"),
+      "official Codex package.json",
+      realpathImpl,
+      runtime
+    );
+  } catch (error) {
+    if (options.allowMissing === true && error?.cause?.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
   assertOutsideInstallRoot(installRoot, packageJsonPath, runtime);
   const manifest = parsePackageJson(
     await readFileImpl(packageJsonPath, "utf8"),
@@ -336,4 +352,8 @@ export async function discoverOfficialCodex(options = {}) {
     platformPackageJsonPath,
     binaryPath
   };
+}
+
+export async function discoverOptionalOfficialCodex(options = {}) {
+  return await discoverOfficialCodex({ ...options, allowMissing: true });
 }

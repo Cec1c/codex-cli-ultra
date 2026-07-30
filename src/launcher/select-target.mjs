@@ -430,23 +430,28 @@ export async function selectLaunchTarget(options = {}) {
       statFile,
       runtime
     });
-    const officialUnavailable = !official.trusted;
+    const officialNotConfigured = officialCandidate === null;
+    const officialUnavailable = !officialNotConfigured && !official.trusted;
     const officialVersionChanged =
       official.rootVersion !== null &&
       official.rootVersion !== active.upstreamVersion;
-    const officialNotice = officialUnavailable
-      ? `Codex Ultra: official Codex is unavailable while using ${active.releaseId}; run codex-ultra doctor.`
-      : officialVersionChanged
-        ? `Codex Ultra: ${active.releaseId} is based on Codex ${active.upstreamVersion} while official Codex ${official.rootVersion} is installed; continuing in optimistic coexistence mode without claiming feature parity.`
-      : null;
+    const officialNotice = officialNotConfigured
+      ? null
+      : officialUnavailable
+        ? `Codex Ultra: official Codex is unavailable while using ${active.releaseId}; run codex-ultra doctor.`
+        : officialVersionChanged
+          ? `Codex Ultra: ${active.releaseId} is based on Codex ${active.upstreamVersion} while official Codex ${official.rootVersion} is installed; continuing in optimistic coexistence mode without claiming feature parity.`
+          : null;
     return result(
       "ultra",
       ultra.path,
-      officialUnavailable
-        ? "official-unavailable-ultra-valid"
-        : officialVersionChanged
-          ? "ultra-optimistic-coexistence"
-          : "ultra-exact-match",
+      officialNotConfigured
+        ? "ultra-standalone"
+        : officialUnavailable
+          ? "official-unavailable-ultra-valid"
+          : officialVersionChanged
+            ? "ultra-optimistic-coexistence"
+            : "ultra-exact-match",
       combineNotices(officialNotice, language.notice),
       language.env
     );

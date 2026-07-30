@@ -403,6 +403,28 @@ test("uninstall removes an unlocked install root without a background process", 
   assert.equal(JSON.parse(output).cleanupScheduled, true);
 });
 
+test("standalone uninstall does not claim an official fallback", async () => {
+  let output = "";
+  const code = await manageMain({
+    args: ["uninstall"],
+    installRoot,
+    uninstallCcu: async () => ({
+      changed: true,
+      installRoot,
+      official: null,
+      pathRemoved: true,
+      stateChanged: true,
+      removedPreferences: []
+    }),
+    scheduleInstallRootCleanup: () => false,
+    stdout: { write(chunk) { output += chunk; } }
+  });
+
+  assert.equal(code, 0);
+  assert.match(output, /未配置官方 Codex 回退/);
+  assert.doesNotMatch(output, /回退到官方英文版/);
+});
+
 test("uninstall reports cleanup as unscheduled when the helper has no pid", async () => {
   let output = "";
   const code = await manageMain({

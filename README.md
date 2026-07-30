@@ -41,8 +41,10 @@ Codex-Cli-Ultra（CCU）为 Codex CLI 提供外部 FTL 语言包、跨平台安�
 
 - Windows x64、Linux x64/ARM64，或 macOS Intel/Apple Silicon
 - Node.js 22.19.0 或更高版本
-- 通过 npm 安装的官方 Codex
+- 官方 Codex 可选；若已安装，CCU 会登记它作为故障回退目标
 - Windows 安装需要 PowerShell 7；Linux/macOS 安装需要 Bash
+
+可选：若希望保留官方 Codex 作为回退目标，可先安装：
 
 ```powershell
 npm install -g @openai/codex
@@ -160,7 +162,7 @@ CCU-I18N fork ── i18n API + built-in English fallback
 CCU manager ── install / update / uninstall / sync
 ```
 
-安装后保留官方 npm Codex 作为英文回退版本。CCU 启动器根据已校验的安装状态选择当前 fork；本地状态无效时回退到官方二进制。
+官方 npm Codex 是可选回退目标；没有官方版时，CCU 以 standalone 状态安装并直接启动已校验的 fork。若已登记官方版且 fork 状态无效，启动器才回退到官方二进制。
 
 是的，这么追着codex的更新其实很累很低效，但相关维护人员暂时并没有理会我的关于添加i18n接口的issues，尽管我当时提交了一版示范
 
@@ -230,7 +232,7 @@ node src/cli.mjs language validate `
 
 | 通道 | 当前版本示例 | 更新条件 |
 | --- | --- | --- |
-| CCU | `v0.1.8-alpha.2` | 安装器、管理器、内容包或文档发生变化 |
+| CCU | `v0.1.8-alpha.3` | 安装器、管理器、内容包或文档发生变化 |
 | CCU-I18N fork | `v0.145.0-CCU.R2`（Alpha） | Codex 源码或 i18n 接口发生变化 |
 | OpenAI Codex | `0.145.0` | 官方发布新的稳定版本 |
 
@@ -241,7 +243,7 @@ node src/cli.mjs language validate `
 | 项目 | 状态 |
 | --- | --- |
 | 支持平台 | Windows x64；Linux x64/ARM64；macOS Intel/Apple Silicon |
-| CCU | `v0.1.8-alpha.2` |
+| CCU | `v0.1.8-alpha.3` |
 | CCU-I18N | `v0.145.0-CCU.R2`（Alpha） |
 | 参考语言包 | 简体中文 `zh-CN` |
 | FTL 覆盖 | 1,396 个实际使用的消息键 |

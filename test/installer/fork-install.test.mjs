@@ -104,6 +104,31 @@ test("fork install keeps only the active CCU release beside the official backup"
   assert.equal(stored.lastKnownGood, null);
 });
 
+test("fork install supports a standalone state without official Codex", async (t) => {
+  const installRoot = await mkdtemp(join(tmpdir(), "ccu-fork-standalone-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const installed = await installRevision(installRoot, 1, {
+    discoverOfficialCodex: undefined,
+    env: { PATH: "C:\\Windows\\System32" }
+  });
+
+  assert.equal(installed.result.state.official, null);
+  assert.equal(
+    installed.result.state.active.releaseId,
+    "0.144.5-ccu.i18n.1"
+  );
+  const stored = await readState(join(installRoot, "state.json"));
+  assert.equal(stored.official, null);
+  assert.equal(stored.active.releaseId, "0.144.5-ccu.i18n.1");
+
+  const updated = await installRevision(installRoot, 2, {
+    discoverOfficialCodex: undefined,
+    env: { PATH: "C:\\Windows\\System32" }
+  });
+  assert.equal(updated.result.state.official, null);
+  assert.equal(updated.result.state.active.releaseId, "0.144.5-ccu.i18n.2");
+});
+
 test("fork install defers cleanup when the running Codex locks the old release", async () => {
   const installRoot = await mkdtemp(join(tmpdir(), "ccu-fork-install-locked-"));
   await installRevision(installRoot, 1);

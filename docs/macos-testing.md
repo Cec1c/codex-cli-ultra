@@ -7,7 +7,7 @@
 记录以下信息后再开始：
 
 - Mac 型号、CPU 架构和 macOS 版本；
-- `node --version`、`npm --version`、`codex --version`；
+- `node --version`、`npm --version`，以及安装前是否能找到 `codex`；
 - 下载的 CCU ZIP 文件名和 SHA256；
 - 默认 shell（通常为 zsh）及所用终端（Terminal、iTerm2 或 VS Code）。
 
@@ -15,7 +15,7 @@ Apple Silicon 和 Intel 各完成一次为完整验收；只有一类设备时�
 
 ## 安装与 Gatekeeper
 
-1. 安装官方 npm Codex，确认安装 CCU 前 `codex --version` 正常。
+1. 确认 Node.js 不低于 22.19.0。优先在没有官方 Codex 的环境验证 standalone 安装，并记录 `command -v codex || true`；若设备已有官方版，不需要卸载，只需记录其版本。
 2. 下载与 CPU 匹配的 ZIP 和 `.sha256`，运行：
 
    ```bash
@@ -57,7 +57,7 @@ ccu-manager
 
 再启动一次 `codex --yolo`，确认中文界面、键盘输入、窗口缩放和退出均正常。
 
-## 卸载与官方回退
+## 卸载与可选官方回退
 
 运行：
 
@@ -72,7 +72,7 @@ codex --version
 
 - CCU 安装目录已删除；
 - `~/.zshrc`、`~/.zprofile` 中没有残留 CCU PATH 标记；
-- `codex` 回到安装前的官方 npm 版本；
+- 安装前有官方版时，`codex` 回到该 npm 版本；安装前没有时，`command -v codex` 不再指向 CCU；
 - 原有 Codex 登录和配置仍可用。
 
 报告失败时，请附上失败命令、完整 stderr、`codex-ultra status --json` 输出，以及是否经过 Gatekeeper/quarantine 处理；不要包含 API key、token 或其他凭据。

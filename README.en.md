@@ -41,8 +41,10 @@ The terminal background, font, and colors are provided by a separate terminal co
 
 - Windows x64, Linux x64/ARM64, or macOS Intel/Apple Silicon
 - Node.js 22.19.0 or newer
-- Official Codex installed through npm
+- Official Codex is optional; when present, CCU records it as a failure fallback
 - PowerShell 7 on Windows; Bash on Linux and macOS
+
+Optional: install official Codex first if you want to retain it as a fallback:
 
 ```powershell
 npm install -g @openai/codex
@@ -160,7 +162,7 @@ CCU-I18N fork ── i18n API + built-in English fallback
 CCU manager ── install / update / uninstall / sync
 ```
 
-The official npm Codex remains installed as an English fallback. The launcher selects the verified fork from local state and falls back to the official binary when that state is invalid.
+Official npm Codex is an optional fallback. Without it, CCU installs in standalone mode and launches the verified fork directly. The launcher falls back to an official binary only when one was recorded and the fork state is invalid.
 
 ## Repository structure
 
@@ -228,7 +230,7 @@ node src/cli.mjs language validate `
 
 | Channel | Current example | Updated when |
 | --- | --- | --- |
-| CCU | `v0.1.8-alpha.2` | Installer, manager, content, or documentation changes |
+| CCU | `v0.1.8-alpha.3` | Installer, manager, content, or documentation changes |
 | CCU-I18N fork | `v0.145.0-CCU.R2` (Alpha) | Codex source or the i18n interface changes |
 | OpenAI Codex | `0.145.0` | A new official stable version is released |
 
@@ -239,7 +241,7 @@ Automation checks upstream stable Releases every six hours. A CCU-only update do
 | Item | Status |
 | --- | --- |
 | Supported platforms | Windows x64; Linux x64/ARM64; macOS Intel/Apple Silicon |
-| CCU | `v0.1.8-alpha.2` |
+| CCU | `v0.1.8-alpha.3` |
 | CCU-I18N | `v0.145.0-CCU.R2` (Alpha) |
 | Reference locale | Simplified Chinese (`zh-CN`) |
 | FTL coverage | 1,396 actively used message keys |
