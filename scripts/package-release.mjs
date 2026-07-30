@@ -126,7 +126,7 @@ if (
 }
 
 if (!skipBuild) {
-  run(RUNTIME_PLATFORM.isWindows ? "npm.cmd" : "npm", ["run", "build"]);
+  run(process.execPath, ["scripts/build-executor.mjs"]);
   run("cargo", ["build", "--release", "--locked"], join(root, "tui"));
 }
 

@@ -1,1 +1,1 @@
-export const CCU_VERSION = "0.1.8-alpha.1";
+export const CCU_VERSION = "0.1.8-alpha.2";
