@@ -39,7 +39,7 @@ codex-cli-ultra-v0.1.2-windows-x64/
 4. 即使没有预装官方 npm Codex，也允许 CCU 二进制完成首次安装；是否额外打包官方英文二进制作为离线备份，在下一期实现前单独确认。
 5. 原子写入 CCU 安装目录和状态文件，安装 `codex`、`codex-ultra`、`ccu-manager` shim。
 6. 把 CCU `bin` 放到用户 PATH 中官方 npm shim 之前；不修改系统级 PATH。
-7. 安装时询问是否启用 `ccu.hermes` 四段式状态栏，默认关闭；启用时备份并原子更新 `[tui].status_line` 与 `status_line_use_colors`，禁用时仅恢复仍由 CCU 管理的值。
+7. 全新安装默认启用 `ccu.hermes` 四段式彩色状态栏，交互安装可输入 `n` 关闭；升级和重装保留已有选择。启用时备份并原子更新 `[tui].status_line` 与 `status_line_use_colors`，禁用时仅恢复仍由 CCU 管理的值。
 8. 不结束运行中的 Codex。旧 CCU 版本被占用时由隐藏清理器等待会话自然退出后删除。
 
 ## 卸载行为

@@ -728,7 +728,11 @@ export async function manageMain(options = {}) {
         env.CODEX_CCU_CONTENT_ROOT ??
         join(dirname(managerSource), "..")
     );
-    const statusLinePreset = resolveStatusLinePreset(args.slice(1));
+    const requestedStatusLinePreset = resolveStatusLinePreset(args.slice(1));
+    const statusLinePreset =
+      requestedStatusLinePreset === undefined && current.installedManifest === null
+        ? "ccu.hermes"
+        : requestedStatusLinePreset;
     if (
       current.installedManifest !== null &&
       compareForkReleases(current.installedManifest, release.manifest) >= 0

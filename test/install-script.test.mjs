@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -60,6 +61,20 @@ test(
     }
   }
 );
+
+test("interactive installer presents Hermes colors as the default", async () => {
+  const source = await readFile(installScript, "utf8");
+
+  assert.match(source, /Hermes 彩色状态栏（全新安装默认启用）/);
+  assert.match(source, /四段式状态栏？\[Y\/n\]/);
+  assert.match(source, /IsNullOrWhiteSpace\(\$answer\)/);
+  assert.match(source, /Join-Path \$installRoot 'state\.json'/);
+  assert.match(source, /-and -not \$existingCcuState/);
+  assert.match(
+    source,
+    /else \{\r?\n\s+\$null\r?\n\}\r?\n\$statusLineMessage/
+  );
+});
 
 test(
   "PowerShell installer rejects conflicting status-line modes",

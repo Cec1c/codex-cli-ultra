@@ -214,6 +214,8 @@ if (-not $ForkReleaseDir) {
     }
 }
 
+$installRoot = [System.IO.Path]::GetFullPath($InstallRoot)
+$existingCcuState = Test-Path -LiteralPath (Join-Path $installRoot 'state.json') -PathType Leaf
 $statusLineEnabled = if ($PreserveStatusLine) {
     $null
 }
@@ -223,17 +225,27 @@ elseif ($EnableStatusLine) {
 elseif ($DisableStatusLine) {
     $false
 }
-elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
+elseif (-not $NonInteractive -and [Environment]::UserInteractive -and -not $existingCcuState) {
     Write-Host ''
-    Write-Host '可选 Hermes 状态栏：🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s │'
-    $answer = Read-Host '是否启用 CCU Hermes 四段式状态栏？[y/N]'
-    $answer -match '^(?i:y|yes|是)$'
+    Write-Host 'Hermes 彩色状态栏（全新安装默认启用）：🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s │'
+    while ($true) {
+        $answer = Read-Host '是否启用 CCU Hermes 四段式状态栏？[Y/n]'
+        if ([string]::IsNullOrWhiteSpace($answer) -or $answer -match '^(?i:y|yes|是)$') {
+            $true
+            break
+        }
+        if ($answer -match '^(?i:n|no|否)$') {
+            $false
+            break
+        }
+        Write-Host '请输入 y 或 n。' -ForegroundColor Yellow
+    }
 }
 else {
-    $false
+    $null
 }
 $statusLineMessage = if ($null -eq $statusLineEnabled) {
-    '状态栏预设：保留当前设置'
+    '状态栏预设：保留已有设置；全新安装默认启用'
 }
 elseif ($statusLineEnabled) {
     '状态栏预设：启用'
@@ -243,7 +255,6 @@ else {
 }
 Write-Host $statusLineMessage -ForegroundColor DarkGray
 
-$installRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 if ($installRoot.Equals([System.IO.Path]::GetFullPath($sourceRoot), [System.StringComparison]::OrdinalIgnoreCase)) {
     throw 'InstallRoot must not be the installer source directory.'
 }

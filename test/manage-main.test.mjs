@@ -187,6 +187,7 @@ test("update passes the latest validated fork release to the installer", async (
   assert.equal(typeof installerOptions.provider.readManifest, "function");
   assert.deepEqual(await installerOptions.provider.readManifest(), latest);
   assert.equal(contentOptions.installRoot, installRoot);
+  assert.equal(contentOptions.statusLinePreset, undefined);
   assert.equal(JSON.parse(output).displayVersion, latest.displayVersion);
   assert.equal(JSON.parse(output).content.language.locale, "zh-CN");
   assert.deepEqual(JSON.parse(output).deferredReleases, [
@@ -259,51 +260,65 @@ test("hidden cleanup command waits for inactive releases without user output", a
   assert.equal(called, true);
 });
 
-test("install forwards the optional CCU status-line selection", async () => {
-  let contentOptions;
-  let installerOptions;
+test("fresh install defaults to Hermes colors and honors explicit overrides", async () => {
   const latest = manifest(2);
-  const code = await manageMain({
-    args: ["install", "--enable-statusline", "--json"],
-    installRoot,
-    managerSource: "C:\\bundle\\codex-ultra.mjs",
-    launcherSource: "C:\\bundle\\launcher.mjs",
-    readState: async () => ({ ...state, active: null }),
-    readFile: async () => {
-      throw Object.assign(new Error("missing"), { code: "ENOENT" });
+  const cases = [
+    { args: ["install", "--json"], expected: "ccu.hermes" },
+    {
+      args: ["install", "--enable-statusline", "--json"],
+      expected: "ccu.hermes"
     },
-    resolveLatestForkRelease: async () => ({
-      manifest: latest,
-      provider: { materializeAsset: async () => {} }
-    }),
-    installForkFromProvider: async (options) => {
-      installerOptions = options;
-      return {
-        changed: true,
-        releaseId: latest.displayVersion,
-        manifest: latest,
-        removedReleases: [],
-        deferredReleases: []
-      };
-    },
-    syncBundledContent: async (options) => {
-      contentOptions = options;
-      return {
-        language: { locale: "zh-CN", messages: 1396 },
-        theme: {
-          id: "ccu.hermes",
-          displayName: "Hermes 风格",
-          statusLinePresetEnabled: true
-        },
-        codexHome: "C:\\Users\\me\\.codex"
-      };
-    },
-    stdout: { write() {} }
-  });
+    {
+      args: ["install", "--disable-statusline", "--json"],
+      expected: null
+    }
+  ];
 
-  assert.equal(code, 0);
-  assert.equal(contentOptions.statusLinePreset, "ccu.hermes");
-  assert.equal(typeof installerOptions.onStage, "undefined");
+  for (const scenario of cases) {
+    let contentOptions;
+    let installerOptions;
+    const code = await manageMain({
+      args: scenario.args,
+      installRoot,
+      managerSource: "C:\\bundle\\codex-ultra.mjs",
+      launcherSource: "C:\\bundle\\launcher.mjs",
+      readState: async () => ({ ...state, active: null }),
+      readFile: async () => {
+        throw Object.assign(new Error("missing"), { code: "ENOENT" });
+      },
+      resolveLatestForkRelease: async () => ({
+        manifest: latest,
+        provider: { materializeAsset: async () => {} }
+      }),
+      installForkFromProvider: async (options) => {
+        installerOptions = options;
+        return {
+          changed: true,
+          releaseId: latest.displayVersion,
+          manifest: latest,
+          removedReleases: [],
+          deferredReleases: []
+        };
+      },
+      syncBundledContent: async (options) => {
+        contentOptions = options;
+        return {
+          language: { locale: "zh-CN", messages: 1396 },
+          theme: {
+            id: "ccu.hermes",
+            displayName: "Hermes 风格",
+            statusLinePresetEnabled: options.statusLinePreset === "ccu.hermes"
+          },
+          codexHome: "C:\\Users\\me\\.codex"
+        };
+      },
+      stdout: { write() {} }
+    });
+
+    assert.equal(code, 0);
+    assert.equal(contentOptions.statusLinePreset, scenario.expected);
+    assert.equal(typeof installerOptions.onStage, "undefined");
+  }
 });
 
 test("uninstall removes CCU and schedules install-root cleanup", async () => {
