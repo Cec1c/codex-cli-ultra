@@ -61,7 +61,7 @@
 - `/model`、Tips、命令列表和二级界面的调用点已进入 fork 分支；仅修改既有 FTL 文案时仍无需重新编译 Codex。
 - 自包含安装已实现：CCU ZIP 内置 fork manifest/资产、安装/卸载脚本、FTL、模板、主题和管理器。
 - 状态栏 `ContextTokens` 已从 session 累计令牌改为 `last_token_usage.tokens_in_context_window()`；`11.6M/353K` 回归为 `42.7K/353K`，百分比仍为 9%。
-- `ccu.hermes` 四段式状态栏安装时可选，默认关闭；启用后自动备份并写入 `[tui].status_line`，禁用或卸载时安全恢复，用户后续修改不会被覆盖。
+- `ccu.hermes` 四段式彩色状态栏在全新安装时默认启用；交互安装可输入 `n` 关闭，升级和重装保留已有选择。启用后自动备份并写入 `[tui].status_line`，禁用或卸载时安全恢复，用户后续修改不会被覆盖。
 
 ## 已完成验证
 
