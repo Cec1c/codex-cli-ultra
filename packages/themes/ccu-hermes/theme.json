@@ -3,7 +3,7 @@
   "type": "theme",
   "id": "ccu.hermes",
   "displayName": "Hermes 风格",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "statusLine": {
     "separator": " │ ",
     "progressWidth": 10,
@@ -32,33 +32,37 @@
       "🌈"
     ],
     "palette": [
-      "#F5E0DC",
-      "#F2CDCD",
-      "#F5C2E7",
-      "#FAB387",
-      "#F9E2AF",
-      "#A6E3A1",
-      "#94E2D5",
-      "#89DCEB",
-      "#74C7EC",
-      "#CBA6F7"
+      "#F4DBD6",
+      "#F0C6C6",
+      "#F5BDE6",
+      "#C6A0F6",
+      "#ED8796",
+      "#EE99A0",
+      "#F5A97F",
+      "#EED49F",
+      "#A6DA95",
+      "#8BD5CA",
+      "#91D7E3",
+      "#7DC4E4",
+      "#8AADF4",
+      "#B7BDF8"
     ],
     "modelReasoningStyle": "bracketed",
     "colors": {
-      "model": "#94E2D5",
-      "usage": "#89DCEB",
-      "progress": "#A6E3A1",
-      "time": "#F9E2AF",
-      "quota": "#F5C2E7",
-      "separator": "#CBA6F7"
+      "model": "#ED8796",
+      "usage": "#C6A0F6",
+      "progress": "#8BD5CA",
+      "time": "#F5A97F",
+      "quota": "#EED49F",
+      "separator": "#B7BDF8"
     }
   },
   "welcome": {
-    "title": "#94E2D5",
-    "version": "#F5E0DC",
-    "label": "#CBA6F7",
-    "model": "#F2CDCD",
-    "path": "#A6E3A1",
-    "permissions": "#FAB387"
+    "title": "#F5BDE6",
+    "version": "#CAD3F5",
+    "label": "#ED8796",
+    "model": "#B7BDF8",
+    "path": "#8BD5CA",
+    "permissions": "#ED8796"
   }
 }

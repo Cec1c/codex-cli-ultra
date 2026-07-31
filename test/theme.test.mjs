@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { validateThemePack } from "../src/theme/validate.mjs";
@@ -60,4 +61,38 @@ test("theme validator rejects unknown model reasoning formats", () => {
     () => validateThemePack(themePack({ modelReasoningStyle: "template" })),
     /modelReasoningStyle must be spaced or bracketed/
   );
+});
+
+test("bundled Hermes theme uses the Macchiato-inspired color roles", async () => {
+  const source = JSON.parse(
+    await readFile(
+      new URL("../packages/themes/ccu-hermes/theme.json", import.meta.url),
+      "utf8"
+    )
+  );
+  const validated = validateThemePack(source);
+
+  assert.equal(validated.version, "0.2.0");
+  assert.deepEqual(validated.statusLine.colors, {
+    model: "#ed8796",
+    usage: "#c6a0f6",
+    progress: "#8bd5ca",
+    time: "#f5a97f",
+    quota: "#eed49f",
+    separator: "#b7bdf8"
+  });
+  assert.deepEqual(validated.welcome, {
+    title: "#f5bde6",
+    version: "#cad3f5",
+    label: "#ed8796",
+    model: "#b7bdf8",
+    path: "#8bd5ca",
+    permissions: "#ed8796"
+  });
+  assert.deepEqual(validated.statusLine.palette.slice(0, 4), [
+    "#f4dbd6",
+    "#f0c6c6",
+    "#f5bde6",
+    "#c6a0f6"
+  ]);
 });
