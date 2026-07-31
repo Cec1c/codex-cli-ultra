@@ -56,7 +56,7 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
   assert.equal(theme.statusLine.separator, " │ ");
   assert.equal(theme.statusLine.modelReasoningStyle, "bracketed");
   assert.equal(theme.statusLine.modelEmojis.length, 20);
-  assert.equal(theme.statusLine.palette.length, 10);
+  assert.equal(theme.statusLine.palette.length, 14);
   const quotaExample = JSON.parse(
     await readFile(join(installRoot, "quota.example.json"), "utf8")
   );

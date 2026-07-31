@@ -212,7 +212,7 @@ Automation checks upstream stable Releases every six hours. A CCU-only update do
 | Reference locale | Simplified Chinese (`zh-CN`) |
 | FTL coverage | 1,396 actively used message keys |
 | Fallback | Built-in English per message |
-| Customization | Fresh installs enable the Hermes color status line by default; upgrades preserve existing choices |
+| Customization | Fresh installs enable the Macchiato-colored Hermes status line by default; upgrades preserve existing choices |
 
 ## Contributing
 

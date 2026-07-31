@@ -214,7 +214,7 @@ node src/cli.mjs language validate `
 | 参考语言包 | 简体中文 `zh-CN` |
 | FTL 覆盖 | 1,396 个实际使用的消息键 |
 | 回退机制 | 按消息回退到内置英文 |
-| 个性化 | 全新安装默认启用 Hermes 彩色状态栏；已有选择在升级时保留 |
+| 个性化 | 全新安装默认启用 Macchiato 配色的 Hermes 状态栏；已有选择在升级时保留 |
 
 Mac 和 Linux也许以后会做，主要是我手上没有Mac
 
