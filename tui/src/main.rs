@@ -2,7 +2,9 @@ use std::fs;
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -268,6 +270,13 @@ struct UpgradeHandoff {
     scheduled: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UpgradeTaskOutcome {
+    Current,
+    Handoff,
+    Cancelled,
+}
+
 enum TaskMessage {
     Stage {
         stage: String,
@@ -284,6 +293,8 @@ struct ActiveTask {
     stage: Option<String>,
     stage_detail: Option<String>,
     progress: Option<DownloadProgress>,
+    cancel_sender: Option<Sender<()>>,
+    cancelling: bool,
 }
 
 struct App {
@@ -400,6 +411,8 @@ impl App {
             stage: None,
             stage_detail: None,
             progress: None,
+            cancel_sender: None,
+            cancelling: false,
         });
         self.notice = format!("已在后台开始{}", kind.label());
         self.failed = false;
@@ -416,21 +429,45 @@ impl App {
         let content_root = self.content_root.clone();
         let target = self.upgrade_target.clone();
         let (sender, receiver) = mpsc::channel();
+        let (cancel_sender, cancel_receiver) = mpsc::channel();
         thread::spawn(move || {
             let result = run_upgrade_task(
                 &manager,
                 content_root.as_deref(),
                 target.as_deref(),
                 &sender,
+                Some(cancel_receiver),
             )
             .map_err(|error| friendly_error(&error.to_string()));
-            let exit_after_handoff = result.as_ref().copied().unwrap_or(false);
-            let _ = sender.send(TaskMessage::Completion(TaskCompletion {
-                kind: TaskKind::UpgradeCcu,
-                result: result.map(|_| None),
-                exit_after_handoff,
-                success_notice: (!exit_after_handoff).then(|| "当前 CCU 已是最新版本".to_string()),
-            }));
+            let completion = match result {
+                Ok(UpgradeTaskOutcome::Current) => TaskCompletion {
+                    kind: TaskKind::UpgradeCcu,
+                    result: Ok(None),
+                    exit_after_handoff: false,
+                    success_notice: Some("当前 CCU 已是最新版本".to_string()),
+                },
+                Ok(UpgradeTaskOutcome::Handoff) => TaskCompletion {
+                    kind: TaskKind::UpgradeCcu,
+                    result: Ok(None),
+                    exit_after_handoff: true,
+                    success_notice: None,
+                },
+                Ok(UpgradeTaskOutcome::Cancelled) => TaskCompletion {
+                    kind: TaskKind::UpgradeCcu,
+                    result: Ok(None),
+                    exit_after_handoff: false,
+                    success_notice: Some(
+                        "升级已取消；可修改代理后按 u 继续，已下载部分会自动续传".to_string(),
+                    ),
+                },
+                Err(error) => TaskCompletion {
+                    kind: TaskKind::UpgradeCcu,
+                    result: Err(error),
+                    exit_after_handoff: false,
+                    success_notice: None,
+                },
+            };
+            let _ = sender.send(TaskMessage::Completion(completion));
         });
         self.active_task = Some(ActiveTask {
             kind: TaskKind::UpgradeCcu,
@@ -439,6 +476,8 @@ impl App {
             stage: Some("check".to_string()),
             stage_detail: self.upgrade_target.clone(),
             progress: None,
+            cancel_sender: Some(cancel_sender),
+            cancelling: false,
         });
         self.notice = self.upgrade_target.as_ref().map_or_else(
             || "正在检查并准备完整 CCU 升级".to_string(),
@@ -449,12 +488,39 @@ impl App {
 
     fn begin_proxy_edit(&mut self) {
         if self.active_task.is_some() {
-            self.notice = "后台任务运行中，暂不能修改代理地址".to_string();
+            self.notice = "后台任务运行中；升级时可先按 Esc 取消，再修改代理地址".to_string();
             return;
         }
         self.proxy_input = Some(self.status.network.proxy_url.clone());
         self.notice = "输入代理地址，Enter 保存，Esc 取消".to_string();
         self.failed = false;
+    }
+
+    fn cancel_ccu_upgrade(&mut self) {
+        let Some(active) = self.active_task.as_mut() else {
+            return;
+        };
+        if active.kind != TaskKind::UpgradeCcu {
+            self.notice = format!("{}仍在后台运行，请稍候", active.kind.label());
+            self.failed = false;
+            return;
+        }
+        if active.stage.as_deref() == Some("ready") {
+            self.notice = "升级已进入安装接力阶段，不能再取消".to_string();
+            self.failed = false;
+            return;
+        }
+        if active.cancelling {
+            self.notice = "正在取消升级，请稍候".to_string();
+            self.failed = false;
+            return;
+        }
+        if let Some(cancel_sender) = &active.cancel_sender {
+            let _ = cancel_sender.send(());
+            active.cancelling = true;
+            self.notice = "正在取消升级；已下载部分将保留用于续传".to_string();
+            self.failed = false;
+        }
     }
 
     fn handle_proxy_input(&mut self, code: KeyCode) -> bool {
@@ -665,7 +731,8 @@ fn run_upgrade_task(
     content_root: Option<&Path>,
     target: Option<&str>,
     sender: &Sender<TaskMessage>,
-) -> Result<bool> {
+    cancel_receiver: Option<Receiver<()>>,
+) -> Result<UpgradeTaskOutcome> {
     let mut command = Command::new("node");
     command
         .arg(manager)
@@ -685,6 +752,20 @@ fn run_upgrade_task(
     let mut child = command.spawn().context("无法启动 CCU 升级进程")?;
     let stdout = child.stdout.take().context("无法读取 CCU 升级事件")?;
     let mut stderr = child.stderr.take().context("无法读取 CCU 升级错误")?;
+    let child = Arc::new(Mutex::new(child));
+    let cancelled = Arc::new(AtomicBool::new(false));
+    if let Some(cancel_receiver) = cancel_receiver {
+        let child = Arc::clone(&child);
+        let cancelled = Arc::clone(&cancelled);
+        thread::spawn(move || {
+            if cancel_receiver.recv().is_ok() {
+                cancelled.store(true, Ordering::SeqCst);
+                if let Ok(mut child) = child.lock() {
+                    let _ = child.kill();
+                }
+            }
+        });
+    }
     let stderr_reader = thread::spawn(move || {
         let mut text = String::new();
         let _ = stderr.read_to_string(&mut text);
@@ -692,7 +773,14 @@ fn run_upgrade_task(
     });
     let mut final_result = None;
     for line in BufReader::new(stdout).lines() {
-        let line = line.context("读取 CCU 升级事件失败")?;
+        let line = match line {
+            Ok(line) => line,
+            Err(_) if cancelled.load(Ordering::SeqCst) => break,
+            Err(error) => return Err(error).context("读取 CCU 升级事件失败"),
+        };
+        if cancelled.load(Ordering::SeqCst) {
+            break;
+        }
         if line.trim().is_empty() {
             continue;
         }
@@ -708,8 +796,21 @@ fn run_upgrade_task(
             ManagerEvent::Result { result } => final_result = Some(result),
         }
     }
-    let status = child.wait().context("等待 CCU 升级进程失败")?;
+    let status = loop {
+        let status = child
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .try_wait()
+            .context("等待 CCU 升级进程失败")?;
+        if let Some(status) = status {
+            break status;
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
     let stderr = stderr_reader.join().unwrap_or_default().trim().to_string();
+    if cancelled.load(Ordering::SeqCst) {
+        return Ok(UpgradeTaskOutcome::Cancelled);
+    }
     if !status.success() {
         if stderr.is_empty() {
             bail!("CCU 升级进程退出码 {status}");
@@ -718,12 +819,12 @@ fn run_upgrade_task(
     }
     let result = final_result.context("CCU 升级进程没有返回最终结果")?;
     if !result.changed {
-        return Ok(false);
+        return Ok(UpgradeTaskOutcome::Current);
     }
     if !result.handoff.is_some_and(|handoff| handoff.scheduled) {
         bail!("CCU 升级包已准备，但安装接力未能启动");
     }
-    Ok(true)
+    Ok(UpgradeTaskOutcome::Handoff)
 }
 
 fn friendly_error(source: &str) -> String {
@@ -835,7 +936,7 @@ fn main() -> Result<()> {
         app.upgrade_target = args
             .target
             .map(|target| target.trim_start_matches('v').to_string());
-        app.notice = "完整 CCU 升级已就绪；按 u 开始".to_string();
+        app.notice = "完整 CCU 升级已就绪；可先按 p/Shift+P 调整代理，再按 u 开始".to_string();
         if args.auto_start {
             app.start_ccu_upgrade();
         }
@@ -876,7 +977,21 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
             app.uninstall_armed = false;
         }
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => {
+            KeyCode::Esc => {
+                if app
+                    .active_task
+                    .as_ref()
+                    .is_some_and(|active| active.kind == TaskKind::UpgradeCcu)
+                {
+                    app.cancel_ccu_upgrade();
+                } else if app.active_task.is_some() {
+                    app.notice = "后台任务仍在运行，请等待完成后退出".to_string();
+                    app.failed = false;
+                } else {
+                    return Ok(());
+                }
+            }
+            KeyCode::Char('q') => {
                 if app.active_task.is_some() {
                     app.notice = "后台任务仍在运行，请等待完成后退出".to_string();
                     app.failed = false;
@@ -1003,7 +1118,7 @@ fn draw(frame: &mut ratatui::Frame, app: &App) {
                 ),
             ]),
             Line::from(Span::styled(
-                "Tab/1-3 切换  r 刷新  c 检查版本  u 升级完整CCU  p 代理开关  Shift+P 配置  q 退出",
+                "Tab/1-3 切换  r 刷新  c 检查版本  u 升级  p 代理开关  Shift+P 配置  升级中 Esc 取消  q 退出",
                 Style::default().fg(MUTED),
             )),
         ])
@@ -1270,7 +1385,7 @@ fn draw_status(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &Ap
         ),
         Line::from(""),
         Line::from(Span::styled(
-            "c 同步三路远程版本；u 下载、校验并升级完整 CCU，完成后 Manager 会自动接力安装。",
+            "u 下载、校验并升级；升级中按 Esc 可取消，修改代理后再次按 u 会从断点续传。",
             Style::default().fg(MUTED),
         )),
         Line::from(Span::styled(
@@ -1494,7 +1609,10 @@ console.log(JSON.stringify({type:"result",result:{changed:true,handoff:{schedule
         )
         .unwrap();
         let (sender, receiver) = mpsc::channel();
-        assert!(run_upgrade_task(&manager, None, Some("0.1.5"), &sender).unwrap());
+        assert_eq!(
+            run_upgrade_task(&manager, None, Some("0.1.5"), &sender, None).unwrap(),
+            UpgradeTaskOutcome::Handoff
+        );
         drop(sender);
         let messages = receiver.into_iter().collect::<Vec<_>>();
         assert!(messages.iter().any(|message| matches!(
@@ -1509,5 +1627,64 @@ console.log(JSON.stringify({type:"result",result:{changed:true,handoff:{schedule
         assert_eq!(format_speed(Some(2.0 * 1024.0 * 1024.0)), "2.0 MiB/s");
         assert_eq!(format_eta(Some(125.0)), "2分05秒");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cancels_an_active_upgrade_process() {
+        let root =
+            std::env::temp_dir().join(format!("ccu-manager-upgrade-cancel-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let manager = root.join("manager.mjs");
+        fs::write(&manager, "setInterval(() => {}, 1000);").unwrap();
+        let manager_for_task = manager.clone();
+        let (sender, _receiver) = mpsc::channel();
+        let (cancel_sender, cancel_receiver) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            run_upgrade_task(
+                &manager_for_task,
+                None,
+                Some("0.1.5"),
+                &sender,
+                Some(cancel_receiver),
+            )
+        });
+        thread::sleep(Duration::from_millis(100));
+        cancel_sender.send(()).unwrap();
+        assert_eq!(
+            worker.join().unwrap().unwrap(),
+            UpgradeTaskOutcome::Cancelled
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cancellation_is_available_before_but_not_during_handoff() {
+        let mut app = App::new(PathBuf::from("manager.mjs"), None, None);
+        let (_message_sender, message_receiver) = mpsc::channel();
+        let (cancel_sender, cancel_receiver) = mpsc::channel();
+        app.active_task = Some(ActiveTask {
+            kind: TaskKind::UpgradeCcu,
+            started: Instant::now(),
+            receiver: message_receiver,
+            stage: Some("download".to_string()),
+            stage_detail: None,
+            progress: None,
+            cancel_sender: Some(cancel_sender),
+            cancelling: false,
+        });
+        app.cancel_ccu_upgrade();
+        cancel_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        assert!(app.active_task.as_ref().unwrap().cancelling);
+
+        let (ready_sender, ready_receiver) = mpsc::channel();
+        app.active_task.as_mut().unwrap().stage = Some("ready".to_string());
+        app.active_task.as_mut().unwrap().cancel_sender = Some(ready_sender);
+        app.active_task.as_mut().unwrap().cancelling = false;
+        app.cancel_ccu_upgrade();
+        assert!(ready_receiver.try_recv().is_err());
+        assert_eq!(app.notice, "升级已进入安装接力阶段，不能再取消");
     }
 }
