@@ -56,10 +56,10 @@ export const FORK_INSTALL_STAGES = Object.freeze([
   "verify-fork",
   "extract-fork",
   "smoke-version",
-  "move-release",
   "prepare-bin",
   "path-add",
-  "state-switch"
+  "state-switch",
+  "move-release"
 ]);
 
 const ENGLISH_MESSAGES = Object.fromEntries(
@@ -747,6 +747,7 @@ export async function installForkFromProvider(options) {
   let stagingRoot = null;
   let pathAdded = false;
   let stateSwitched = false;
+  let releaseCommitted = false;
   try {
     const rawManifest = await runStage(
       options,
@@ -804,19 +805,10 @@ export async function installForkFromProvider(options) {
       releaseId,
       manifest.platform
     );
-    await runStage(options, "move-release", () =>
-      installImmutableDirectory({
-        source: extractedRelease,
-        destination: finalRelease,
-        compare: async () =>
-          await sameDirectory(extractedRelease, finalRelease, hashFile)
-      })
-    );
-
     const finalBinary = join(finalRelease, "package", "bin", "codex.exe");
     const [binaryHash, binaryStat] = await Promise.all([
-      hashFile(finalBinary),
-      stat(finalBinary)
+      hashFile(stagedBinary),
+      stat(stagedBinary)
     ]);
     const buildRecord = {
       releaseId,
@@ -852,6 +844,21 @@ export async function installForkFromProvider(options) {
       }
     });
     stateSwitched = true;
+    await runStage(options, "move-release", () =>
+      installImmutableDirectory({
+        source: extractedRelease,
+        destination: finalRelease,
+        compare: async () =>
+          await sameDirectory(extractedRelease, finalRelease, hashFile)
+      })
+    );
+    releaseCommitted = true;
+
+    const finalBinaryStat = await stat(finalBinary);
+    if (finalBinaryStat.mtimeMs !== buildRecord.mtimeMs) {
+      buildRecord.mtimeMs = finalBinaryStat.mtimeMs;
+      await writeState(statePath, nextState);
+    }
     const cleanup = await pruneInactiveReleases(
       installRoot,
       buildRecord.releaseId,
@@ -866,6 +873,22 @@ export async function installForkFromProvider(options) {
       ...cleanup
     };
   } catch (error) {
+    if (stateSwitched && !releaseCommitted) {
+      try {
+        if (oldState === null) {
+          await rm(statePath, { force: true });
+        } else {
+          await writeState(statePath, oldState);
+        }
+        stateSwitched = false;
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          "fork installation failed and state rollback failed",
+          { cause: error }
+        );
+      }
+    }
     if (pathAdded && !stateSwitched) {
       try {
         await removePathEntry(join(installRoot, "bin"));

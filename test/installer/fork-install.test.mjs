@@ -12,8 +12,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { installForkFromProvider } from "../../src/installer/install.mjs";
-import { readState } from "../../src/state/store.mjs";
+import {
+  installForkFromProvider,
+  pruneInactiveReleases
+} from "../../src/installer/install.mjs";
+import { readState, writeStateAtomic } from "../../src/state/store.mjs";
 
 function hash(bytes) {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
@@ -123,6 +126,70 @@ test("fork install defers cleanup when the running Codex locks the old release",
     (await readdir(join(installRoot, "releases"))).sort(),
     ["0.144.5-ccu.i18n.1", "0.144.5-ccu.i18n.2"]
   );
+});
+
+test(
+  "fork install hides the next release from an older cleanup worker until state switches",
+  async (t) => {
+    const installRoot = await mkdtemp(join(tmpdir(), "ccu-fork-install-race-"));
+    t.after(() => rm(installRoot, { recursive: true, force: true }));
+    await installRevision(installRoot, 1);
+    let cleanupRaced = false;
+
+    const second = await installRevision(installRoot, 2, {
+      writeStateAtomic: async (path, state) => {
+        if (state.active.releaseId === "0.144.5-ccu.i18n.2") {
+          assert.deepEqual(await readdir(join(installRoot, "releases")), [
+            "0.144.5-ccu.i18n.1"
+          ]);
+          await pruneInactiveReleases(installRoot, "0.144.5-ccu.i18n.1");
+          cleanupRaced = true;
+        }
+        await writeStateAtomic(path, state);
+      }
+    });
+
+    assert.equal(cleanupRaced, true);
+    assert.deepEqual(
+      await readFile(second.result.state.active.binaryPath),
+      second.binaryBytes
+    );
+    assert.deepEqual(await readdir(join(installRoot, "releases")), [
+      "0.144.5-ccu.i18n.2"
+    ]);
+  }
+);
+
+test("fork install restores the previous state when the final move loses a race", async (t) => {
+  const installRoot = await mkdtemp(join(tmpdir(), "ccu-fork-install-rollback-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  await installRevision(installRoot, 1);
+  const statePath = join(installRoot, "state.json");
+
+  await assert.rejects(
+    installRevision(installRoot, 2, {
+      writeStateAtomic: async (path, state) => {
+        await writeStateAtomic(path, state);
+        if (state.active.releaseId === "0.144.5-ccu.i18n.2") {
+          const conflict = join(
+            installRoot,
+            "releases",
+            state.active.releaseId,
+            state.active.platform,
+            "package",
+            "bin",
+            "codex.exe"
+          );
+          await mkdir(dirname(conflict), { recursive: true });
+          await writeFile(conflict, "conflicting release", "utf8");
+        }
+      }
+    }),
+    /immutable destination already exists with different content/
+  );
+
+  const stored = await readState(statePath);
+  assert.equal(stored.active.releaseId, "0.144.5-ccu.i18n.1");
 });
 
 test("fork install quarantines a strict markerless release residue before reinstalling", async (t) => {
