@@ -42,26 +42,31 @@ function color(value, label) {
   return value.toLowerCase();
 }
 
+function nullableColor(value, label) {
+  return value === null ? null : color(value, label);
+}
+
 export function validateThemePack(value) {
   assertRecord(value, "theme");
-  assertExactKeys(
+  assertAllowedKeys(
     value,
     ["schemaVersion", "type", "id", "displayName", "version", "statusLine", "welcome"],
+    ["statusCard", "dialog", "composer"],
     "theme"
   );
   if (value.schemaVersion !== 1 || value.type !== "theme") {
     throw new Error("unsupported theme schema or type");
   }
   const id = nonempty(value.id, "theme.id");
-  if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(id)) {
-    throw new Error("theme.id must use lowercase dotted or dashed segments");
+  if (!/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(id)) {
+    throw new Error("theme.id must use lowercase dotted, dashed, or underscored segments");
   }
 
   assertRecord(value.statusLine, "theme.statusLine");
   assertAllowedKeys(
     value.statusLine,
     ["separator", "progressWidth", "filled", "empty", "colors"],
-    ["modelReasoningStyle", "modelEmojis", "palette"],
+    ["modelReasoningStyle", "modelEmojis", "palette", "randomizePalette", "softenColors"],
     "theme.statusLine"
   );
   if (!Number.isSafeInteger(value.statusLine.progressWidth) || value.statusLine.progressWidth < 4 || value.statusLine.progressWidth > 30) {
@@ -94,13 +99,60 @@ export function validateThemePack(value) {
     ["model", "usage", "progress", "time", "quota", "separator"],
     "theme.statusLine.colors"
   );
+  const randomizePalette = value.statusLine.randomizePalette ?? true;
+  const softenColors = value.statusLine.softenColors ?? true;
+  if (typeof randomizePalette !== "boolean") {
+    throw new Error("theme.statusLine.randomizePalette must be a boolean");
+  }
+  if (typeof softenColors !== "boolean") {
+    throw new Error("theme.statusLine.softenColors must be a boolean");
+  }
 
   assertRecord(value.welcome, "theme.welcome");
-  assertExactKeys(
+  assertAllowedKeys(
     value.welcome,
     ["title", "version", "label", "model", "path", "permissions"],
+    ["border", "command", "badge"],
     "theme.welcome"
   );
+
+  let statusCard;
+  if (value.statusCard !== undefined) {
+    assertRecord(value.statusCard, "theme.statusCard");
+    assertExactKeys(
+      value.statusCard,
+      [
+        "border", "title", "version", "label", "model", "path", "permissions",
+        "usage", "progress", "percent", "limits", "link", "value"
+      ],
+      "theme.statusCard"
+    );
+    statusCard = Object.fromEntries(
+      Object.entries(value.statusCard).map(([key, entry]) => [
+        key,
+        color(entry, `theme.statusCard.${key}`)
+      ])
+    );
+  }
+
+  let dialog;
+  if (value.dialog !== undefined) {
+    assertRecord(value.dialog, "theme.dialog");
+    assertExactKeys(value.dialog, ["selection", "background"], "theme.dialog");
+    dialog = {
+      selection: color(value.dialog.selection, "theme.dialog.selection"),
+      background: nullableColor(value.dialog.background, "theme.dialog.background")
+    };
+  }
+
+  let composer;
+  if (value.composer !== undefined) {
+    assertRecord(value.composer, "theme.composer");
+    assertExactKeys(value.composer, ["background"], "theme.composer");
+    composer = {
+      background: nullableColor(value.composer.background, "theme.composer.background")
+    };
+  }
 
   return {
     schemaVersion: 1,
@@ -117,6 +169,8 @@ export function validateThemePack(value) {
       palette: palette.map((value, index) =>
         color(value, `theme.statusLine.palette[${index}]`)
       ),
+      randomizePalette,
+      softenColors,
       modelReasoningStyle,
       colors: Object.fromEntries(
         Object.entries(value.statusLine.colors).map(([key, value]) => [
@@ -130,6 +184,9 @@ export function validateThemePack(value) {
         key,
         color(value, `theme.welcome.${key}`)
       ])
-    )
+    ),
+    ...(statusCard === undefined ? {} : { statusCard }),
+    ...(dialog === undefined ? {} : { dialog }),
+    ...(composer === undefined ? {} : { composer })
   };
 }

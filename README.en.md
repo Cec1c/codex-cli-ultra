@@ -138,7 +138,7 @@ codex-cli-ultra/
 ├── docs/                    # Design, release contracts, and progress documents
 ├── packages/
 │   ├── languages/zh-CN/     # Simplified Chinese language pack
-│   └── themes/ccu-hermes/   # Hermes status-line theme
+│   └── themes/              # rainbow_color default and legacy Hermes themes
 ├── release-channels/
 │   └── stable.json          # Current stable fork Release metadata
 ├── research/                # Visible-text catalogs and version research

@@ -1466,12 +1466,12 @@ fn draw_language(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &
 fn draw_theme(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
     let installed = PathBuf::from(&app.status.install_root)
         .join("themes")
-        .join("ccu.hermes")
+        .join("rainbow_color")
         .join("theme.json")
         .is_file();
     let lines = vec![
         Line::from(vec![
-            Span::styled("Hermes 风格：", Style::default().fg(MUTED)),
+            Span::styled("Rainbow Color：", Style::default().fg(MUTED)),
             Span::styled(
                 if installed { "已安装" } else { "缺失" },
                 Style::default().fg(if installed { SUCCESS } else { DANGER }),
@@ -1481,21 +1481,22 @@ fn draw_theme(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App
         Line::from(vec![
             Span::styled(
                 "🦊 gpt-5.6-sol[xhigh]",
-                Style::default().fg(Color::Rgb(148, 226, 213)),
+                Style::default().fg(Color::Rgb(245, 224, 220)),
             ),
             Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
-            Span::styled("42.7K/353K", Style::default().fg(Color::Rgb(137, 220, 235))),
-            Span::styled(" │ ", Style::default().fg(Color::Rgb(245, 194, 231))),
+            Span::styled("42.7K/353K", Style::default().fg(Color::Rgb(245, 194, 231))),
+            Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
             Span::styled(
                 "[█░░░░░░░░░] 9%",
                 Style::default().fg(Color::Rgb(166, 227, 161)),
             ),
-            Span::styled(" │ ", Style::default().fg(Color::Rgb(250, 179, 135))),
+            Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
             Span::styled("⏱ 1s ⚡0s", Style::default().fg(Color::Rgb(249, 226, 175))),
-            Span::styled(" │ ", Style::default().fg(Color::Rgb(242, 205, 205))),
+            Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
         ]),
         Line::from(""),
-        Line::from("主题 schema 已支持随机模型 emoji、Hermes 调色板、进度条和欢迎页颜色。"),
+        Line::from("rainbow_color 使用固定 Claude Code 状态栏配色，并保留随机模型 emoji。"),
+        Line::from("Welcome、/status、弹窗与输入条统一使用 Sky 主色；Hermes 旧主题仍随包保留。"),
         Line::from("按 f 在后台同步主题；后续主题包放入 themes/<id>/theme.json。"),
     ];
     frame.render_widget(

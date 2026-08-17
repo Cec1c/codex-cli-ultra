@@ -17,8 +17,13 @@ import {
   enableHermesStatusLineConfig
 } from "./statusline-config.mjs";
 
+const PRIMARY_THEME_ID = "rainbow_color";
+const PRIMARY_THEME_DIRECTORY = "rainbow_color";
+const HERMES_THEME_ID = "ccu.hermes";
 const HERMES_THEME_DIRECTORY = "ccu-hermes";
 const LEGACY_THEME_ID = "ccu.deepseek";
+const PREVIOUS_THEME_IDS = new Set([HERMES_THEME_ID, LEGACY_THEME_ID]);
+const OWNED_THEME_IDS = new Set([PRIMARY_THEME_ID, HERMES_THEME_ID, LEGACY_THEME_ID]);
 
 async function exists(path, lstatImpl = lstat) {
   try {
@@ -104,7 +109,9 @@ async function resolveContentLayout(contentRoot) {
       language: repoLanguage,
       catalog: join(contentRoot, "research", "codex-0.144.5", "tui-messages.jsonl"),
       template: join(contentRoot, "templates", "languages", "messages.en-US.ftl"),
-      theme: join(contentRoot, "packages", "themes", HERMES_THEME_DIRECTORY),
+      themes: [PRIMARY_THEME_DIRECTORY, HERMES_THEME_DIRECTORY].map((directory) =>
+        join(contentRoot, "packages", "themes", directory)
+      ),
       quota: join(contentRoot, "packages", "quota.example.json")
     };
   }
@@ -112,7 +119,9 @@ async function resolveContentLayout(contentRoot) {
     language: packagedLanguage,
     catalog: join(contentRoot, "catalog", "tui-messages.jsonl"),
     template: join(contentRoot, "catalog", "messages.en-US.ftl"),
-    theme: join(contentRoot, "themes", HERMES_THEME_DIRECTORY),
+    themes: [PRIMARY_THEME_DIRECTORY, HERMES_THEME_DIRECTORY].map((directory) =>
+      join(contentRoot, "themes", directory)
+    ),
     quota: join(contentRoot, "quota.example.json")
   };
 }
@@ -122,7 +131,7 @@ async function cacheBundledContent({
   installRoot,
   layout,
   language,
-  theme,
+  themes,
   fsOps
 }) {
   const cacheRoot = join(installRoot, "content");
@@ -134,11 +143,13 @@ async function cacheBundledContent({
     join(cacheRoot, "languages", language.locale),
     fsOps
   );
-  await replaceDirectoryAtomic(
-    layout.theme,
-    join(cacheRoot, "themes", basename(layout.theme)),
-    fsOps
-  );
+  for (const themePath of themes) {
+    await replaceDirectoryAtomic(
+      themePath,
+      join(cacheRoot, "themes", basename(themePath)),
+      fsOps
+    );
+  }
   await replaceFileAtomic(
     layout.catalog,
     join(cacheRoot, "catalog", "tui-messages.jsonl"),
@@ -178,15 +189,19 @@ export async function syncBundledContent(options) {
     catalogPath: layout.catalog,
     templatePath: layout.template
   });
-  const theme = validateThemePack(
-    JSON.parse(await (options.readFile ?? readFile)(join(layout.theme, "theme.json"), "utf8"))
-  );
+  const themes = await Promise.all(layout.themes.map(async (themePath) =>
+    validateThemePack(
+      JSON.parse(await (options.readFile ?? readFile)(join(themePath, "theme.json"), "utf8"))
+    )
+  ));
+  const theme = themes.find(({ id }) => id === PRIMARY_THEME_ID);
+  if (theme === undefined) throw new Error(`missing primary theme: ${PRIMARY_THEME_ID}`);
   const cachedContentRoot = await cacheBundledContent({
     contentRoot,
     installRoot,
     layout,
     language,
-    theme,
+    themes: layout.themes,
     fsOps: options.fsOps
   });
 
@@ -195,11 +210,13 @@ export async function syncBundledContent(options) {
     join(installRoot, "languages", language.locale),
     options.fsOps
   );
-  await replaceDirectoryAtomic(
-    layout.theme,
-    join(installRoot, "themes", theme.id),
-    options.fsOps
-  );
+  for (let index = 0; index < themes.length; index += 1) {
+    await replaceDirectoryAtomic(
+      layout.themes[index],
+      join(installRoot, "themes", themes[index].id),
+      options.fsOps
+    );
+  }
 
   const makeDirectory = options.fsOps?.mkdir ?? mkdir;
   const read = options.readFile ?? readFile;
@@ -221,11 +238,11 @@ export async function syncBundledContent(options) {
   const currentTheme = themePreferenceExists
     ? (await read(themePreference, "utf8")).trim()
     : null;
-  if (!themePreferenceExists || currentTheme === LEGACY_THEME_ID) {
+  if (!themePreferenceExists || PREVIOUS_THEME_IDS.has(currentTheme)) {
     await write(themePreference, `${theme.id}\n`, "utf8");
   }
   const requestedStatusLinePreset =
-    options.statusLinePreset === LEGACY_THEME_ID
+    PREVIOUS_THEME_IDS.has(options.statusLinePreset)
       ? theme.id
       : options.statusLinePreset;
   if (
@@ -245,12 +262,12 @@ export async function syncBundledContent(options) {
     requestedStatusLinePreset === null &&
     statusLinePreferenceExists
   ) {
-    if ([theme.id, LEGACY_THEME_ID].includes(currentStatusLinePreset)) {
+    if (OWNED_THEME_IDS.has(currentStatusLinePreset)) {
       await remove(statusLinePreference, { force: true });
     }
   } else if (
     requestedStatusLinePreset === undefined &&
-    currentStatusLinePreset === LEGACY_THEME_ID
+    PREVIOUS_THEME_IDS.has(currentStatusLinePreset)
   ) {
     await write(statusLinePreference, `${theme.id}\n`, "utf8");
   }

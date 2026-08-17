@@ -50,10 +50,10 @@ test("uninstall removes CCU PATH and preferences before falling back to official
   });
   await Promise.all([
     writeFile(join(codexHome, "ui-language"), "zh-CN\n", "utf8"),
-    writeFile(join(codexHome, "ui-theme"), "ccu.deepseek\n", "utf8"),
+    writeFile(join(codexHome, "ui-theme"), "rainbow_color\n", "utf8"),
     writeFile(
       join(codexHome, "ui-statusline-preset"),
-      "ccu.deepseek\n",
+      "rainbow_color\n",
       "utf8"
     )
   ]);

@@ -56,6 +56,45 @@ test("theme validator accepts Hermes emoji and palette metadata", () => {
   assert.deepEqual(validated.statusLine.palette, ["#f5e0dc", "#94e2d5"]);
 });
 
+test("theme validator accepts rainbow_color surfaces without background fills", () => {
+  const source = themePack({
+    randomizePalette: false,
+    softenColors: false
+  });
+  source.id = "rainbow_color";
+  source.welcome = {
+    ...source.welcome,
+    border: "#89DCEB",
+    command: "#89DCEB",
+    badge: "#F5C2E7"
+  };
+  source.statusCard = {
+    border: "#89DCEB",
+    title: "#89DCEB",
+    version: "#F5E0DC",
+    label: "#89DCEB",
+    model: "#F2CDCD",
+    path: "#A6E3A1",
+    permissions: "#FAB387",
+    usage: "#89DCEB",
+    progress: "#A6E3A1",
+    percent: "#74C7EC",
+    limits: "#F9E2AF",
+    link: "#89DCEB",
+    value: "#CDD6F4"
+  };
+  source.dialog = { selection: "#89DCEB", background: null };
+  source.composer = { background: null };
+
+  const validated = validateThemePack(source);
+  assert.equal(validated.id, "rainbow_color");
+  assert.equal(validated.statusLine.randomizePalette, false);
+  assert.equal(validated.statusLine.softenColors, false);
+  assert.equal(validated.welcome.border, "#89dceb");
+  assert.deepEqual(validated.dialog, { selection: "#89dceb", background: null });
+  assert.deepEqual(validated.composer, { background: null });
+});
+
 test("theme validator rejects unknown model reasoning formats", () => {
   assert.throws(
     () => validateThemePack(themePack({ modelReasoningStyle: "template" })),
@@ -95,4 +134,28 @@ test("bundled Hermes theme uses the Macchiato-inspired color roles", async () =>
     "#f5bde6",
     "#c6a0f6"
   ]);
+});
+
+test("bundled rainbow_color theme matches the approved V3 palette", async () => {
+  const source = JSON.parse(
+    await readFile(
+      new URL("../packages/themes/rainbow_color/theme.json", import.meta.url),
+      "utf8"
+    )
+  );
+  const validated = validateThemePack(source);
+
+  assert.equal(validated.id, "rainbow_color");
+  assert.deepEqual(validated.statusLine.colors, {
+    model: "#f5e0dc",
+    usage: "#f5c2e7",
+    progress: "#a6e3a1",
+    time: "#f9e2af",
+    quota: "#fab387",
+    separator: "#cba6f7"
+  });
+  assert.equal(validated.welcome.border, "#89dceb");
+  assert.equal(validated.statusCard.label, "#89dceb");
+  assert.equal(validated.dialog.background, null);
+  assert.equal(validated.composer.background, null);
 });

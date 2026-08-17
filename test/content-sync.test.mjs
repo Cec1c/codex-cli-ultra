@@ -51,12 +51,21 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
     /status-line-item-context-tokens-description = Current tokens used/
   );
   const theme = JSON.parse(
-    await readFile(join(installRoot, "themes", "ccu.hermes", "theme.json"), "utf8")
+    await readFile(join(installRoot, "themes", "rainbow_color", "theme.json"), "utf8")
   );
   assert.equal(theme.statusLine.separator, " │ ");
   assert.equal(theme.statusLine.modelReasoningStyle, "bracketed");
   assert.equal(theme.statusLine.modelEmojis.length, 20);
-  assert.equal(theme.statusLine.palette.length, 14);
+  assert.equal(theme.statusLine.palette.length, 12);
+  assert.equal(theme.statusLine.randomizePalette, false);
+  assert.equal(theme.statusLine.softenColors, false);
+  assert.equal(theme.welcome.border, "#89DCEB");
+  assert.equal(
+    JSON.parse(
+      await readFile(join(installRoot, "themes", "ccu.hermes", "theme.json"), "utf8")
+    ).id,
+    "ccu.hermes"
+  );
   const quotaExample = JSON.parse(
     await readFile(join(installRoot, "quota.example.json"), "utf8")
   );
@@ -87,13 +96,13 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
   const themedResult = await syncBundledContent({
     contentRoot: join(installRoot, "content"),
     installRoot,
-    statusLinePreset: "ccu.hermes",
+    statusLinePreset: "rainbow_color",
     env: { CODEX_HOME: codexHome }
   });
   assert.equal(themedResult.theme.statusLinePresetEnabled, true);
   assert.equal(
     await readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
-    "ccu.hermes\n"
+    "rainbow_color\n"
   );
   assert.match(
     await readFile(join(codexHome, "config.toml"), "utf8"),
@@ -128,6 +137,8 @@ test("installer guards recursive content replacement with an absolute child-path
   assert.match(packager, /Release ZIP/);
   assert.match(source, /messages\.en-US\.ftl/);
   assert.match(packager, /messages\.en-US\.ftl/);
+  assert.match(source, /packages\\themes\\rainbow_color/);
+  assert.match(packager, /packages\\themes\\rainbow_color/);
   assert.match(source, /fork-release/);
   assert.match(source, /--enable-statusline/);
   assert.match(source, /--disable-statusline/);
@@ -149,7 +160,7 @@ test("installer guards recursive content replacement with an absolute child-path
   assert.match(packager, /uninstall\.cmd/);
 });
 
-test("content sync migrates the legacy DeepSeek preset and applies Hermes config", async (t) => {
+test("content sync migrates the legacy DeepSeek preset and applies rainbow config", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "ccu-content-legacy-theme-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const codexHome = join(root, "codex-home");
@@ -171,10 +182,10 @@ test("content sync migrates the legacy DeepSeek preset and applies Hermes config
     installRoot,
     env: { CODEX_HOME: codexHome }
   });
-  assert.equal(await readFile(join(codexHome, "ui-theme"), "utf8"), "ccu.hermes\n");
+  assert.equal(await readFile(join(codexHome, "ui-theme"), "utf8"), "rainbow_color\n");
   assert.equal(
     await readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
-    "ccu.hermes\n"
+    "rainbow_color\n"
   );
   assert.equal(result.theme.statusLinePresetEnabled, true);
   assert.match(
