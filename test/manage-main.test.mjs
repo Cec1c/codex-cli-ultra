@@ -177,7 +177,7 @@ test("update passes the latest validated fork release to the installer", async (
       contentOptions = options;
       return {
         language: { locale: "zh-CN", messages: 134 },
-        theme: { id: "ccu.hermes", displayName: "Hermes 风格" },
+        theme: { id: "rainbow_color", displayName: "Rainbow Color" },
         codexHome: "C:\\Users\\me\\.codex"
       };
     },
@@ -219,7 +219,7 @@ test("current install schedules cleanup for a release locked by the active sessi
       contentRefreshed = true;
       return {
         language: { locale: "zh-CN", messages: 134 },
-        theme: { id: "ccu.hermes", displayName: "Hermes 风格" },
+        theme: { id: "rainbow_color", displayName: "Rainbow Color" },
         codexHome: "C:\\Users\\me\\.codex"
       };
     },
@@ -240,7 +240,7 @@ test("current install schedules cleanup for a release locked by the active sessi
   assert.deepEqual(report.deferredReleases, ["0.144.5-ccu.i18n.0"]);
   assert.equal(report.cleanupScheduled, true);
   assert.equal(cleanupScheduled, true);
-  assert.equal(report.content.theme.id, "ccu.hermes");
+  assert.equal(report.content.theme.id, "rainbow_color");
   assert.equal(binRefreshed, true);
   assert.equal(contentRefreshed, true);
 });
@@ -260,13 +260,13 @@ test("hidden cleanup command waits for inactive releases without user output", a
   assert.equal(called, true);
 });
 
-test("fresh install defaults to Hermes colors and honors explicit overrides", async () => {
+test("fresh install defaults to Rainbow Color and honors explicit overrides", async () => {
   const latest = manifest(2);
   const cases = [
-    { args: ["install", "--json"], expected: "ccu.hermes" },
+    { args: ["install", "--json"], expected: "rainbow_color" },
     {
       args: ["install", "--enable-statusline", "--json"],
-      expected: "ccu.hermes"
+      expected: "rainbow_color"
     },
     {
       args: ["install", "--disable-statusline", "--json"],
@@ -305,9 +305,9 @@ test("fresh install defaults to Hermes colors and honors explicit overrides", as
         return {
           language: { locale: "zh-CN", messages: 1396 },
           theme: {
-            id: "ccu.hermes",
-            displayName: "Hermes 风格",
-            statusLinePresetEnabled: options.statusLinePreset === "ccu.hermes"
+            id: "rainbow_color",
+            displayName: "Rainbow Color",
+            statusLinePresetEnabled: options.statusLinePreset === "rainbow_color"
           },
           codexHome: "C:\\Users\\me\\.codex"
         };

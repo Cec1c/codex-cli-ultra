@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "type": "theme",
+  "id": "rainbow_color",
+  "displayName": "Rainbow Color",
+  "version": "1.0.0",
+  "statusLine": {
+    "separator": " │ ",
+    "progressWidth": 10,
+    "filled": "█",
+    "empty": "░",
+    "modelEmojis": [
+      "🦊",
+      "🐱",
+      "🐶",
+      "🐼",
+      "🐨",
+      "🐰",
+      "🦁",
+      "🐯",
+      "🐸",
+      "🐵",
+      "🦄",
+      "🐙",
+      "🦋",
+      "🌟",
+      "🔥",
+      "💎",
+      "🎯",
+      "🚀",
+      "⚡",
+      "🌈"
+    ],
+    "palette": [
+      "#F5E0DC",
+      "#F2CDCD",
+      "#F5C2E7",
+      "#CBA6F7",
+      "#FAB387",
+      "#F9E2AF",
+      "#A6E3A1",
+      "#94E2D5",
+      "#89DCEB",
+      "#74C7EC",
+      "#CDD6F4",
+      "#6C7086"
+    ],
+    "randomizePalette": false,
+    "softenColors": false,
+    "modelReasoningStyle": "bracketed",
+    "colors": {
+      "model": "#F5E0DC",
+      "usage": "#F5C2E7",
+      "progress": "#A6E3A1",
+      "time": "#F9E2AF",
+      "quota": "#FAB387",
+      "separator": "#CBA6F7"
+    }
+  },
+  "welcome": {
+    "title": "#89DCEB",
+    "version": "#F5E0DC",
+    "label": "#89DCEB",
+    "model": "#F2CDCD",
+    "path": "#A6E3A1",
+    "permissions": "#FAB387",
+    "border": "#89DCEB",
+    "command": "#89DCEB",
+    "badge": "#F5C2E7"
+  },
+  "statusCard": {
+    "border": "#89DCEB",
+    "title": "#89DCEB",
+    "version": "#F5E0DC",
+    "label": "#89DCEB",
+    "model": "#F2CDCD",
+    "path": "#A6E3A1",
+    "permissions": "#FAB387",
+    "usage": "#89DCEB",
+    "progress": "#A6E3A1",
+    "percent": "#74C7EC",
+    "limits": "#F9E2AF",
+    "link": "#89DCEB",
+    "value": "#CDD6F4"
+  },
+  "dialog": {
+    "selection": "#89DCEB",
+    "background": null
+  },
+  "composer": {
+    "background": null
+  }
+}

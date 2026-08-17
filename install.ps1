@@ -227,9 +227,9 @@ elseif ($DisableStatusLine) {
 }
 elseif (-not $NonInteractive -and [Environment]::UserInteractive -and -not $existingCcuState) {
     Write-Host ''
-    Write-Host 'Hermes 彩色状态栏（全新安装默认启用）：🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s │'
+    Write-Host 'Rainbow Color 彩色状态栏（全新安装默认启用）：🦊 gpt-5.6-sol[xhigh] │ 42.7K/353K │ [█░░░░░░░░░] 9% │ ⏱ 1s ⚡0s │'
     while ($true) {
-        $answer = Read-Host '是否启用 CCU Hermes 四段式状态栏？[Y/n]'
+        $answer = Read-Host '是否启用 CCU Rainbow Color 四段式状态栏？[Y/n]'
         if ([string]::IsNullOrWhiteSpace($answer) -or $answer -match '^(?i:y|yes|是)$') {
             $true
             break
@@ -279,6 +279,7 @@ else {
     New-Item -ItemType Directory -Path (Join-Path $temporaryContent 'themes') -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $temporaryContent 'catalog') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\languages\zh-CN') -Destination (Join-Path $temporaryContent 'languages\zh-CN') -Recurse
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\themes\rainbow_color') -Destination (Join-Path $temporaryContent 'themes\rainbow_color') -Recurse
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'packages\themes\ccu-hermes') -Destination (Join-Path $temporaryContent 'themes\ccu-hermes') -Recurse
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'research\codex-0.144.5\tui-messages.jsonl') -Destination (Join-Path $temporaryContent 'catalog\tui-messages.jsonl')
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'templates\languages\messages.en-US.ftl') -Destination (Join-Path $temporaryContent 'catalog\messages.en-US.ftl')

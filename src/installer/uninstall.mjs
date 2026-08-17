@@ -65,8 +65,8 @@ export async function uninstallCcu(options = {}) {
   const removedPreferences = [];
   for (const [name, expected] of [
     ["ui-language", "zh-CN"],
-    ["ui-theme", ["ccu.hermes", "ccu.deepseek"]],
-    ["ui-statusline-preset", ["ccu.hermes", "ccu.deepseek"]]
+    ["ui-theme", ["rainbow_color", "ccu.hermes", "ccu.deepseek"]],
+    ["ui-statusline-preset", ["rainbow_color", "ccu.hermes", "ccu.deepseek"]]
   ]) {
     if (
       await removeManagedPreference(join(codexHome, name), expected, options)

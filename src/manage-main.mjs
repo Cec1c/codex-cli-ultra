@@ -91,7 +91,7 @@ function resolveStatusLinePreset(args) {
   if (enable && disable) {
     throw new Error("choose only one of --enable-statusline and --disable-statusline");
   }
-  if (enable) return "ccu.hermes";
+  if (enable) return "rainbow_color";
   if (disable) return null;
   return undefined;
 }
@@ -731,7 +731,7 @@ export async function manageMain(options = {}) {
     const requestedStatusLinePreset = resolveStatusLinePreset(args.slice(1));
     const statusLinePreset =
       requestedStatusLinePreset === undefined && current.installedManifest === null
-        ? "ccu.hermes"
+        ? "rainbow_color"
         : requestedStatusLinePreset;
     if (
       current.installedManifest !== null &&

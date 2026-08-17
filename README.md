@@ -140,7 +140,7 @@ codex-cli-ultra/
 ├── docs/                    # 设计、发布合同和项目进度文档
 ├── packages/
 │   ├── languages/zh-CN/     # 简体中文语言包
-│   └── themes/ccu-hermes/   # Hermes 状态栏主题
+│   └── themes/              # rainbow_color 默认主题与 Hermes 旧主题
 ├── release-channels/
 │   └── stable.json          # 当前稳定 fork Release 元数据
 ├── research/                # Codex 可见文本目录与版本调查结果
