@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  compareCcuVersions,
   compareStableVersions,
   resolveLatestCcuRelease,
   resolveLatestUpstreamRelease
@@ -57,4 +58,11 @@ test("stable version comparison is numeric", () => {
   assert.equal(compareStableVersions("0.1.2", "0.1.10"), -1);
   assert.equal(compareStableVersions("0.144.6", "0.144.6"), 0);
   assert.equal(compareStableVersions("1.0.0", "0.999.999"), 1);
+});
+
+test("CCU version comparison orders Alpha builds without downgrading them", () => {
+  assert.equal(compareCcuVersions("0.1.8-alpha.1", "0.1.8-alpha.2"), -1);
+  assert.equal(compareCcuVersions("0.1.8-alpha.2", "0.1.8"), -1);
+  assert.equal(compareCcuVersions("0.1.8-alpha.1", "0.1.7"), 1);
+  assert.equal(compareCcuVersions("0.1.8", "0.1.8"), 0);
 });

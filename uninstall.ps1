@@ -13,7 +13,7 @@ $installRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 $manager = Join-Path $installRoot 'bin\codex-ultra.mjs'
 Write-Host ''
 Write-Host 'Codex CLI Ultra 一键卸载' -ForegroundColor Yellow
-Write-Host '不会结束当前 Codex；新命令会立即回退到官方英文版。' -ForegroundColor DarkGray
+Write-Host '不会结束当前 Codex；若安装前存在官方版，新命令会回到该版本。' -ForegroundColor DarkGray
 
 if (-not (Test-Path -LiteralPath $manager -PathType Leaf)) {
     Write-Host "未找到已安装的 CCU 管理器：$manager" -ForegroundColor Yellow
@@ -29,4 +29,4 @@ if ($LASTEXITCODE -ne 0) {
     throw "codex-ultra uninstall failed with exit code $LASTEXITCODE"
 }
 
-Write-Host '卸载指令已完成。请打开新终端运行 codex --version 验证英文原版。' -ForegroundColor Green
+Write-Host '卸载指令已完成。请打开新终端检查 command -v/where codex；安装前有官方版时再运行 codex --version。' -ForegroundColor Green

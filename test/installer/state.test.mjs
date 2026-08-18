@@ -103,12 +103,14 @@ test("valid state preserves only launch-stable facts in a deep clone", () => {
   assert.equal(validState.active.releaseId, "0.144.4-ultra.1");
 });
 
-test("nullable active and locale plus an exact last-known-good pair are accepted", () => {
+test("nullable official, active, and locale plus an exact last-known-good pair are accepted", () => {
   const inactive = validateState({
     ...cloneState(),
+    official: null,
     active: null,
     locale: null
   });
+  assert.equal(inactive.official, null);
   assert.equal(inactive.active, null);
   assert.equal(inactive.locale, null);
 

@@ -49,7 +49,7 @@
 - 已创建 GitHub fork `https://github.com/Cec1c/codex`；本地部分克隆位于 `.upstream/codex`，由 Ultra 的 `.gitignore` 默认排除。`origin` 指向个人 fork，`upstream` 指向 `openai/codex`。
 - 官方 Codex 版本变化时，完整性正常的 Ultra 可进入 `optimistic coexistence` 模式继续运行，同时明确提示不宣称与新版官方 Codex 功能对齐。
 - installer 使用 fork Release manifest 与 i18n API 合同，支持同上游 revision 更新和跨上游版本更新。
-- 仅保留官方 npm 英文备份与一个当前 CCU Release；launcher PATH 优先级保证 `codex` 默认进入 CCU。
+- 官方 npm Codex 改为可选回退目标；没有官方版时使用 `official = null` 的 standalone 状态，并只保留一个当前 CCU Release。launcher PATH 优先级保证 `codex` 默认进入 CCU。
 - Rust 管理器提供状态、语言包、主题包页面；内容同步会把历史 `zh-Hans` 偏好迁移为 `zh-CN`。
 
 ## FTL 模板与中文包收口

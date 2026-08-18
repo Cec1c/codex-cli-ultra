@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const installScript = join(projectRoot, "install.ps1");
 const windowsOnly = { skip: process.platform !== "win32" };
+const unixOnly = { skip: process.platform === "win32" };
 
 async function runInstallerPreflight(statusLineArguments) {
   try {
@@ -75,6 +76,34 @@ test("interactive installer presents Rainbow Color as the default", async () => 
     /else \{\r?\n\s+\$null\r?\n\}\r?\n\$statusLineMessage/
   );
 });
+
+test(
+  "Unix installer rejects the source directory as its install root",
+  unixOnly,
+  async () => {
+    await assert.rejects(
+      execFileAsync(
+        "bash",
+        [
+          installScript.replace(/install\.ps1$/, "install.sh"),
+          "--install-root",
+          projectRoot,
+          "--skip-build",
+          "--non-interactive"
+        ],
+        { cwd: projectRoot }
+      ),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(
+          `${error.stdout ?? ""}\n${error.stderr ?? ""}`,
+          /Install root must not be the installer source directory\./
+        );
+        return true;
+      }
+    );
+  }
+);
 
 test(
   "PowerShell installer rejects conflicting status-line modes",

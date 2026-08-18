@@ -73,24 +73,24 @@ CODEX_CCU_LANGUAGE_PACK_ROOT
 - `/language` 本身不访问网络，也不负责安装或更新语言包。
 - 整包加载失败时使用英文；单个键或参数格式失败时只对该条消息回退英文。
 
-## 5. 官方版与二开版共存
+## 5. 可选官方版与二开版共存
 
-CCU 不覆盖或修改官方 Codex 安装目录，而是登记两个独立目标：
+CCU 不要求预装官方 Codex，也不覆盖或修改其安装目录。存在官方版时登记两个独立目标；不存在时以 `official = null` 的 standalone 状态管理 fork：
 
 ```text
-official -> OpenAI 官方 codex
+official -> OpenAI 官方 codex（可选）
 fork     -> Cec1c/codex 的 CCU i18n 构建
 ```
 
 JS 执行器负责：
 
-1. 发现已有官方 Codex。
+1. 尝试发现已有官方 Codex；未安装时继续 standalone 安装。
 2. 下载并校验 fork release 中对应平台的二进制。
 3. 保存活动目标和上一已知可用目标。
 4. 通过 CCU 自己的 shim/launcher 决定默认 `codex` 指向。
-5. 支持显式启动官方版、二开版、回滚和 doctor 检查。
+5. 官方版存在时支持故障回退；无官方版时直接保持已校验 fork 可用。
 
-因此“默认使用二开”不等于替换官方安装，升级失败也不会破坏官方 Codex。
+因此“默认使用二开”不等于替换官方安装；官方版存在时升级失败不会破坏它，不存在时也不会阻止 CCU 首次安装。
 
 ## 6. fork 自动跟踪与发布
 

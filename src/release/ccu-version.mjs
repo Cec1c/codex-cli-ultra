@@ -1,12 +1,12 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
+const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:-alpha\.[1-9]\d*)?$/;
 
 function parseVersion(version) {
   const match = VERSION_PATTERN.exec(version);
   if (!match) throw new Error(`invalid CCU version: ${version}`);
-  return match.slice(1).map(Number);
+  return match.slice(1, 4).map(Number);
 }
 
 export function nextPatchVersion(version) {

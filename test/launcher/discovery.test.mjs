@@ -11,7 +11,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { discoverOfficialCodex } from "../../src/discovery/official-codex.mjs";
+import {
+  discoverOfficialCodex,
+  discoverOptionalOfficialCodex
+} from "../../src/discovery/official-codex.mjs";
 
 const PLATFORM_PACKAGE = "@openai/codex-win32-x64";
 const TARGET = "x86_64-pc-windows-msvc";
@@ -166,6 +169,32 @@ test("refuses to execute npm from relative or network PATH entries", async () =>
   assert.equal(execCalled, false);
 });
 
+test("optional discovery accepts a missing npm command or official package", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codex-ultra-optional-official-"));
+  const installRoot = join(root, "ultra");
+  assert.equal(
+    await discoverOptionalOfficialCodex({
+      installRoot,
+      env: { PATH: "C:\\Windows\\System32" }
+    }),
+    null
+  );
+
+  const npmRoot = join(root, "node_modules");
+  await mkdir(npmRoot, { recursive: true });
+  assert.equal(
+    await discoverOptionalOfficialCodex({ npmRoot, installRoot }),
+    null
+  );
+  await assert.rejects(
+    discoverOptionalOfficialCodex({
+      installRoot: "\\\\server\\share\\ultra",
+      env: { PATH: "C:\\Windows\\System32" }
+    }),
+    /Codex Ultra install root is unsafe|install root must be an absolute local path/
+  );
+});
+
 test("rejects canonical package or install paths that resolve to a network share", async () => {
   const root = await mkdtemp(join(tmpdir(), "codex-ultra-network-realpath-"));
   const fixture = await createOfficialFixture({ root });
@@ -273,6 +302,13 @@ test("rejects package manifests that do not identify official Codex", async () =
   );
   await assert.rejects(
     discoverOfficialCodex({
+      npmRoot: fixture.npmRoot,
+      installRoot: join(root, "ultra")
+    }),
+    /official Codex package has an unexpected name/
+  );
+  await assert.rejects(
+    discoverOptionalOfficialCodex({
       npmRoot: fixture.npmRoot,
       installRoot: join(root, "ultra")
     }),

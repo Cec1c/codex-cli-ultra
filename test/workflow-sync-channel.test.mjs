@@ -26,13 +26,32 @@ test("stable channel workflow commits a newly created untracked manifest", async
 });
 
 test("release workflow verifies the published ZIP and SHA256 sidecar", async () => {
-  const workflow = await readFile(
-    new URL("../.github/workflows/release.yml", import.meta.url),
-    "utf8"
-  );
+  const [workflow, verifier] = await Promise.all([
+    readFile(
+      new URL("../.github/workflows/release.yml", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../scripts/verify-release-artifacts.mjs", import.meta.url),
+      "utf8"
+    )
+  ]);
 
   assert.match(workflow, /gh release create[\s\S]*--verify-tag/);
+  assert.match(workflow, /!v\*-alpha\.\*/);
+  assert.match(workflow, /Alpha CCU releases require an exact Alpha fork tag/);
+  assert.match(workflow, /--prerelease/);
   assert.match(workflow, /gh release download/);
-  assert.match(workflow, /Get-FileHash[\s\S]*SHA256/);
-  assert.match(workflow, /downloaded release asset failed SHA256 verification/);
+  assert.match(workflow, /verify-release-artifacts\.mjs/);
+  for (const platform of [
+    "windows-x64",
+    "linux-x64",
+    "linux-arm64",
+    "macos-x64",
+    "macos-arm64"
+  ]) {
+    assert.match(workflow, new RegExp(platform));
+  }
+  assert.match(verifier, /sha256File/);
+  assert.match(verifier, /SHA-256 sidecar does not match its archive/);
 });

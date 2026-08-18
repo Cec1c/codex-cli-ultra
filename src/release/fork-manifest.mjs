@@ -1,6 +1,16 @@
-import { I18N_API_VERSION, PLATFORM } from "../config/constants.mjs";
+import {
+  I18N_API_VERSION,
+  PLATFORM,
+  RUNTIME_PLATFORM
+} from "../config/constants.mjs";
 
-export const FORK_MANIFEST_NAME = "ccu-fork-manifest.json";
+export function forkManifestName(runtime = RUNTIME_PLATFORM) {
+  return runtime.isWindows
+    ? "ccu-fork-manifest.json"
+    : `ccu-fork-manifest-${runtime.id}.json`;
+}
+
+export const FORK_MANIFEST_NAME = forkManifestName();
 
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -102,10 +112,19 @@ export function validateForkManifest(value, expected = {}) {
   if (upstreamTag !== `rust-v${upstreamVersion}`) {
     throw new Error("upstreamTag does not match upstreamVersion");
   }
-  if (releaseTag !== `ccu-rust-v${upstreamVersion}-r${ultraRevision}`) {
+  const stableReleaseTag = `ccu-rust-v${upstreamVersion}-r${ultraRevision}`;
+  const alphaReleasePattern = new RegExp(
+    `^${stableReleaseTag.replaceAll(".", "\\.")}-alpha\\.[1-9][0-9]*$`
+  );
+  if (releaseTag !== stableReleaseTag && !alphaReleasePattern.test(releaseTag)) {
     throw new Error("releaseTag does not match the CCU release contract");
   }
-  if (displayVersion !== `${upstreamVersion}-ccu.i18n.${ultraRevision}`) {
+  const currentDisplayVersion = `v${upstreamVersion}-CCU.R${ultraRevision}`;
+  const legacyDisplayVersion = `${upstreamVersion}-ccu.i18n.${ultraRevision}`;
+  if (
+    displayVersion !== currentDisplayVersion &&
+    displayVersion !== legacyDisplayVersion
+  ) {
     throw new Error("displayVersion does not match the CCU version contract");
   }
 
