@@ -22,8 +22,18 @@ const PRIMARY_THEME_DIRECTORY = "rainbow_color";
 const HERMES_THEME_ID = "ccu.hermes";
 const HERMES_THEME_DIRECTORY = "ccu-hermes";
 const LEGACY_THEME_ID = "ccu.deepseek";
-const PREVIOUS_THEME_IDS = new Set([HERMES_THEME_ID, LEGACY_THEME_ID]);
-const OWNED_THEME_IDS = new Set([PRIMARY_THEME_ID, HERMES_THEME_ID, LEGACY_THEME_ID]);
+const LEGACY_ICE_THEME_ID = "ccu.ice-banner";
+const PREVIOUS_THEME_IDS = new Set([
+  HERMES_THEME_ID,
+  LEGACY_THEME_ID,
+  LEGACY_ICE_THEME_ID
+]);
+const OWNED_THEME_IDS = new Set([
+  PRIMARY_THEME_ID,
+  HERMES_THEME_ID,
+  LEGACY_THEME_ID,
+  LEGACY_ICE_THEME_ID
+]);
 
 async function exists(path, lstatImpl = lstat) {
   try {
@@ -238,7 +248,8 @@ export async function syncBundledContent(options) {
   const currentTheme = themePreferenceExists
     ? (await read(themePreference, "utf8")).trim()
     : null;
-  if (!themePreferenceExists || PREVIOUS_THEME_IDS.has(currentTheme)) {
+  const migratingPreviousTheme = PREVIOUS_THEME_IDS.has(currentTheme);
+  if (!themePreferenceExists || migratingPreviousTheme) {
     await write(themePreference, `${theme.id}\n`, "utf8");
   }
   const requestedStatusLinePreset =
@@ -267,7 +278,8 @@ export async function syncBundledContent(options) {
     }
   } else if (
     requestedStatusLinePreset === undefined &&
-    PREVIOUS_THEME_IDS.has(currentStatusLinePreset)
+    (PREVIOUS_THEME_IDS.has(currentStatusLinePreset) ||
+      (!statusLinePreferenceExists && migratingPreviousTheme))
   ) {
     await write(statusLinePreference, `${theme.id}\n`, "utf8");
   }

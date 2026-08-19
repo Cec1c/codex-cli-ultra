@@ -194,6 +194,40 @@ test("content sync migrates the legacy DeepSeek preset and applies rainbow confi
   );
 });
 
+test("content sync migrates the owned ice theme and enables the rainbow status line", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "ccu-content-ice-theme-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const codexHome = join(root, "codex-home");
+  const installRoot = join(root, "install");
+  await writeFile(join(root, "placeholder"), "", "utf8");
+  await syncBundledContent({
+    contentRoot: projectRoot,
+    installRoot,
+    env: { CODEX_HOME: codexHome }
+  });
+  await Promise.all([
+    writeFile(join(codexHome, "ui-theme"), "ccu.ice-banner\n", "utf8"),
+    writeFile(join(codexHome, "config.toml"), "[tui]\nstatus_line = []\n", "utf8")
+  ]);
+
+  const result = await syncBundledContent({
+    contentRoot: join(installRoot, "content"),
+    installRoot,
+    env: { CODEX_HOME: codexHome }
+  });
+
+  assert.equal(await readFile(join(codexHome, "ui-theme"), "utf8"), "rainbow_color\n");
+  assert.equal(
+    await readFile(join(codexHome, "ui-statusline-preset"), "utf8"),
+    "rainbow_color\n"
+  );
+  assert.equal(result.theme.statusLinePresetEnabled, true);
+  assert.match(
+    await readFile(join(codexHome, "config.toml"), "utf8"),
+    /"context-progress"/
+  );
+});
+
 test("PowerShell installer lets the core claim ownership before copying local payloads", async () => {
   const source = await readFile(join(projectRoot, "install.ps1"), "utf8");
   const installCall = source.lastIndexOf("Invoke-CcuInstall");
