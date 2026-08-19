@@ -19,6 +19,7 @@ import {
 const LINUX = resolveRuntimePlatform({ platform: "linux", arch: "x64" });
 const LINUX_ARM = resolveRuntimePlatform({ platform: "linux", arch: "arm64" });
 const MAC_ARM = resolveRuntimePlatform({ platform: "darwin", arch: "arm64" });
+const WINDOWS = resolveRuntimePlatform({ platform: "win32", arch: "x64" });
 const execFileAsync = promisify(execFile);
 
 test("runtime platform descriptors cover Linux and both macOS architectures", () => {
@@ -163,6 +164,38 @@ test("Linux launch selection accepts only the platform-specific installed layout
   );
 });
 
+test("Windows wrappers default every CCU entry point to one Codex home", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ccu-windows-bin-"));
+  try {
+    const managerSource = join(root, "manager-source.mjs");
+    const launcherSource = join(root, "launcher-source.mjs");
+    const binDirectory = join(root, "bin");
+    await Promise.all([
+      writeFile(managerSource, ""),
+      writeFile(launcherSource, "")
+    ]);
+    await installManagementBin({
+      runtime: WINDOWS,
+      binDirectory,
+      managerSource,
+      launcherSource
+    });
+
+    for (const name of ["codex.cmd", "codex-ultra.cmd"]) {
+      const wrapper = await readFile(join(binDirectory, name), "utf8");
+      assert.match(wrapper, /if not defined CODEX_HOME/);
+      assert.match(wrapper, /%USERPROFILE%\\\.codex/);
+    }
+    for (const name of ["codex.ps1", "codex-ultra.ps1"]) {
+      const wrapper = await readFile(join(binDirectory, name), "utf8");
+      assert.match(wrapper, /-not \$env:CODEX_HOME/);
+      assert.match(wrapper, /Join-Path \$env:USERPROFILE '\.codex'/);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("POSIX management wrappers are executable and forward arguments", async () => {
   const root = await mkdtemp(join(tmpdir(), "ccu-posix-bin-"));
   try {
@@ -187,6 +220,7 @@ test("POSIX management wrappers are executable and forward arguments", async () 
     const wrapper = await readFile(join(binDirectory, "codex"), "utf8");
     assert.match(wrapper, /^#!\/bin\/sh/);
     assert.match(wrapper, /"\$@"/);
+    assert.match(wrapper, /CODEX_HOME=/);
     if (process.platform !== "win32") {
       assert.equal((await stat(join(binDirectory, "codex"))).mode & 0o111, 0o111);
     }
@@ -194,6 +228,7 @@ test("POSIX management wrappers are executable and forward arguments", async () 
       join(binDirectory, "codex-ultra"),
       "utf8"
     );
+    assert.match(managerWrapper, /CODEX_HOME=/);
     assert.match(managerWrapper, /CODEX_CCU_CONTENT_ROOT/);
     if (process.platform !== "win32") {
       const launcherRun = await execFileAsync(join(binDirectory, "codex"), [
