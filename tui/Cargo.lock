@@ -87,7 +87,7 @@ dependencies = [
 
 [[package]]
 name = "ccu-manager"
-version = "0.2.0-alpha.4"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
