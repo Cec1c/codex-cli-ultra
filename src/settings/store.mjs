@@ -26,10 +26,11 @@ export function validateProxyUrl(value) {
   } catch (error) {
     throw new Error("proxy URL must be a valid URL", { cause: error });
   }
-  if (!new Set(["http:", "https:"]).has(url.protocol)) {
-    throw new Error("proxy URL must use http or https");
+  if (!new Set(["http:", "https:", "socks:", "socks5:"]).has(url.protocol)) {
+    throw new Error("proxy URL must use http, https, socks, or socks5");
   }
-  if (!url.hostname || url.pathname !== "/" || url.search || url.hash) {
+  const hasUnexpectedPath = url.pathname !== "" && url.pathname !== "/";
+  if (!url.hostname || !url.port || hasUnexpectedPath || url.search || url.hash) {
     throw new Error("proxy URL must contain only scheme, host, and port");
   }
   return url.toString().replace(/\/$/, "");

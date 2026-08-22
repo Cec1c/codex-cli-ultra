@@ -514,3 +514,37 @@ test("upgrade streams JSONL events and forwards the selected target", async () =
   assert.equal(events[1].percent, 50);
   assert.equal(events[2].result.handoff.scheduled, true);
 });
+
+test("upgrade quick dispatches to the lightweight updater", async () => {
+  let quickOptions;
+  const stdin = {};
+  const stdout = { write() {} };
+  const stderr = { write() {} };
+  const code = await manageMain({
+    args: [
+      "upgrade",
+      "quick",
+      "--target",
+      "v0.2.1",
+      "--manager-pid",
+      "4321"
+    ],
+    installRoot,
+    stdin,
+    stdout,
+    stderr,
+    runQuickUpdate: async (options) => {
+      quickOptions = options;
+      return { changed: false, exited: true };
+    },
+    upgradeCcu: async () => assert.fail("quick mode must not enter the normal upgrader")
+  });
+
+  assert.equal(code, 0);
+  assert.equal(quickOptions.installRoot, installRoot);
+  assert.equal(quickOptions.targetVersion, "0.2.1");
+  assert.equal(quickOptions.managerPid, 4321);
+  assert.equal(quickOptions.stdin, stdin);
+  assert.equal(quickOptions.stdout, stdout);
+  assert.equal(quickOptions.stderr, stderr);
+});

@@ -24,14 +24,30 @@ async function readLimitedJson(response) {
   }
 }
 
-function releaseApiUrl(repository) {
+function releaseApiUrl(repository, releaseTag) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
     throw new Error("repository must use owner/name syntax");
+  }
+  if (releaseTag !== undefined) {
+    if (!isSafeReleaseTag(releaseTag)) {
+      throw new Error("release tag contains unsupported characters");
+    }
+    return `https://api.github.com/repos/${repository}/releases/tags/${encodeURIComponent(releaseTag)}`;
   }
   return `https://api.github.com/repos/${repository}/releases/latest`;
 }
 
+function isSafeReleaseTag(value) {
+  return typeof value === "string" && /^v[A-Za-z0-9._-]+$/.test(value);
+}
+
 async function resolveLatestVersion(options) {
+  if (
+    options.releaseTag !== undefined &&
+    !options.tagPattern.test(options.releaseTag)
+  ) {
+    throw new Error(`${options.repository} requested release tag does not match the expected contract`);
+  }
   const headers = new Headers({
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
@@ -41,7 +57,7 @@ async function resolveLatestVersion(options) {
     headers.set("Authorization", `Bearer ${options.token}`);
   }
   const response = await (options.fetchImpl ?? fetch)(
-    releaseApiUrl(options.repository),
+    releaseApiUrl(options.repository, options.releaseTag),
     {
       method: "GET",
       headers,
@@ -55,12 +71,23 @@ async function resolveLatestVersion(options) {
     );
   }
   const release = await readLimitedJson(response);
-  if (
-    release?.draft === true ||
-    release?.prerelease === true ||
-    typeof release?.tag_name !== "string"
-  ) {
+  if (release?.draft === true || typeof release?.tag_name !== "string") {
+    throw new Error(`${options.repository} release metadata is invalid`);
+  }
+  if (options.releaseTag === undefined && release?.prerelease === true) {
     throw new Error(`${options.repository} latest release is not stable`);
+  }
+  if (
+    options.releaseTag !== undefined &&
+    release.tag_name !== options.releaseTag
+  ) {
+    throw new Error(`${options.repository} release tag does not match the requested tag`);
+  }
+  if (options.releaseTag !== undefined) {
+    const expectedPrerelease = options.releaseTag.includes("-alpha.");
+    if (release.prerelease !== expectedPrerelease) {
+      throw new Error(`${options.repository} release prerelease state does not match its tag`);
+    }
   }
   const match = options.tagPattern.exec(release.tag_name);
   if (!match) {
@@ -79,10 +106,14 @@ async function resolveLatestVersion(options) {
 
 export async function resolveLatestCcuRelease(options = {}) {
   const runtime = options.runtime ?? RUNTIME_PLATFORM;
+  const releaseTag = options.releaseTag;
   const result = await resolveLatestVersion({
     ...options,
     repository: options.repository ?? "Cec1c/codex-cli-ultra",
-    tagPattern: /^v([0-9]+\.[0-9]+\.[0-9]+)$/
+    releaseTag,
+    tagPattern: releaseTag === undefined
+      ? /^v([0-9]+\.[0-9]+\.[0-9]+)$/
+      : /^v([0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.[1-9]\d*)?)$/
   });
   const updateManifest = result.assets.find(
     (asset) => asset?.name === ccuUpdateManifestName(runtime)

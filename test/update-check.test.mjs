@@ -56,3 +56,41 @@ test("CCU update check falls back to the public latest manifest after API failur
   assert.equal(cached.packageReady, true);
   assert.equal(cached.checkedWithProxy, true);
 });
+
+test("an explicit Alpha target falls back to its exact release manifest", async () => {
+  const requests = [];
+  let requestedReleaseTag;
+  const alphaManifest = {
+    ...manifest,
+    ccuVersion: "0.2.0-alpha.3",
+    releaseTag: "v0.2.0-alpha.3",
+    asset: {
+      ...manifest.asset,
+      name: "codex-cli-ultra-v0.2.0-alpha.3-windows-x64.zip"
+    }
+  };
+  const checked = await checkForCcuUpdate({
+    installRoot: String.raw`C:\ccu`,
+    targetVersion: "0.2.0-alpha.3",
+    settings: defaultSettings(),
+    networkClient: {
+      proxyEnabled: false,
+      async fetch(url) {
+        requests.push(String(url));
+        return new Response(JSON.stringify(alphaManifest), { status: 200 });
+      }
+    },
+    resolveLatestCcuRelease: async (options) => {
+      requestedReleaseTag = options.releaseTag;
+      throw new Error("API unavailable");
+    },
+    writeUpdateCacheAtomic: async (_installRoot, value) => value
+  });
+
+  assert.equal(requestedReleaseTag, "v0.2.0-alpha.3");
+  assert.deepEqual(requests, [
+    "https://github.com/Cec1c/codex-cli-ultra/releases/download/v0.2.0-alpha.3/ccu-update-manifest.json"
+  ]);
+  assert.equal(checked.latest.version, "0.2.0-alpha.3");
+  assert.equal(checked.manifest.releaseTag, "v0.2.0-alpha.3");
+});

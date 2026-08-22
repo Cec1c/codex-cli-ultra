@@ -53,7 +53,7 @@ ccu-manager
 - `c` 能查询三个版本通道；
 - `o` 能使用默认浏览器打开 `https://github.com/Cec1c/codex-cli-ultra/releases`；
 - 状态栏开关、内容同步和 TUI 中英文显示正常；
-- 若有比当前版本更新的测试 Release，执行一次 CCU 自动更新，确认 Manager 退出后完成切换并重新打开。
+- 若有比当前版本更新的测试 Release，执行一次 CCU 自动更新，确认它显示四项快捷更新菜单而不是进入全屏 Manager；选择更新后应显示 Sky 蓝进度、完成安装接力且不重新打开 Manager。
 
 再启动一次 `codex --yolo`，确认中文界面、键盘输入、窗口缩放和退出均正常。
 

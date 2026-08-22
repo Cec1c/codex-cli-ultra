@@ -44,3 +44,23 @@ test("proxy settings reject URLs that can carry request paths", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("proxy settings accept a SOCKS5 endpoint and require an explicit port", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ccu-settings-socks-"));
+  try {
+    await updateProxySettings(root, {
+      proxyEnabled: true,
+      proxyUrl: "socks5://127.0.0.1:10808"
+    });
+    assert.deepEqual((await readSettings(root)).network, {
+      proxyEnabled: true,
+      proxyUrl: "socks5://127.0.0.1:10808"
+    });
+    await assert.rejects(
+      updateProxySettings(root, { proxyUrl: "https://127.0.0.1" }),
+      /scheme, host, and port/
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

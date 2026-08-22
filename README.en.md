@@ -124,21 +124,22 @@ Use [`Cec1c/codex`](https://github.com/Cec1c/codex) when building the fork from 
 
 ## CCU Manager
 
-`ccu-manager` is the Ratatui management interface for version checks, local fork installation, CCU-I18N updates, content synchronization, and removal. Network and filesystem tasks run on background threads.
+`ccu-manager` is the Ratatui management interface. Version `0.2.0-alpha.3` keeps only four emoji-labeled pages in the left rail: `📦 Versions & Install`, `💬 Language Packs`, `🎨 Theme Packs`, and `🔌 Network Proxy`; the Home and About pages have been removed. It covers version checks, local fork installation, full CCU self-update, language/theme synchronization, proxy controls, and safe removal. Network and filesystem tasks run on background threads. See [CCUM Next TUI](docs/CCUM_NEXT_TUI.md) for the migration contract.
 
-<p align="center">
-  <img src="docs/assets/readme/manager.webp" alt="CCU Manager TUI" width="900">
-</p>
+When the Codex managed-update prompt calls `ccu-manager --upgrade --target <version>`, the executable opens a cross-platform quick updater instead of the full-screen Manager. Its choices are automatic proxy detection and update (recommended), direct update, manual proxy configuration and update, or exit. Automatic mode checks `7890 / 10809 / 10808 / 7891 / 1080 / 2080 / 2081` in order and accepts only listeners owned by known proxy applications such as Clash, Mihomo, v2rayN, Xray, and sing-box. Failure falls back to manual proxy input. Downloads use CCU Sky blue with a progress bar, percentage, transferred bytes, speed, and ETA.
 
 | Key | Action |
 | --- | --- |
 | `r` | Refresh local status |
 | `c` | Query remote CCU, CCU-I18N, and OpenAI Codex versions |
 | `i` | Install a detected local fork Release |
-| `u` | Update CCU-I18N |
+| `u` | Update the complete CCU with real bytes, speed, percent, and ETA |
 | `f` | Synchronize language and theme content |
+| `p` / `Shift+P` / `t` | Toggle proxy, edit proxy URL, and test connectivity |
 | `o` | Open the CCU Release page in a browser |
 | `x` | Remove CCU after confirmation |
+| `Arrows` / `jklh` / `Tab` | Navigate pages and move focus |
+| `?` | Open contextual help |
 | `q` | Exit |
 
 ## Architecture
@@ -230,7 +231,7 @@ node src/cli.mjs language validate `
 
 | Channel | Current example | Updated when |
 | --- | --- | --- |
-| CCU | `v0.1.16-alpha.1` | Installer, manager, content, or documentation changes |
+| CCU | `v0.2.0-alpha.3` | Installer, manager, content, or documentation changes |
 | CCU-I18N fork | `0.147.0-ccu.i18n.4` (Alpha multiplatform build) | Codex source or the i18n interface changes |
 | OpenAI Codex | `0.147.0` | A new official stable version is released |
 
@@ -241,7 +242,7 @@ Automation checks upstream stable Releases every six hours. A CCU-only update do
 | Item | Status |
 | --- | --- |
 | Supported platforms | Windows x64; Linux x64/ARM64; macOS Intel/Apple Silicon |
-| CCU | `v0.1.16-alpha.1` |
+| CCU | `v0.2.0-alpha.3` |
 | CCU-I18N | `0.147.0-ccu.i18n.4` (Alpha multiplatform build) |
 | Reference locale | Simplified Chinese (`zh-CN`) |
 | FTL coverage | 1,396 actively used message keys |

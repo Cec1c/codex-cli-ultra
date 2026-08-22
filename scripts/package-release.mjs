@@ -146,6 +146,7 @@ await mkdir(join(stage, "content", "languages"), { recursive: true });
 await mkdir(join(stage, "content", "themes"), { recursive: true });
 await mkdir(join(stage, "content", "catalog"), { recursive: true });
 await mkdir(join(stage, "fork-release"), { recursive: true });
+await mkdir(join(stage, "docs"), { recursive: true });
 
 await copy(join(root, "dist", "codex-ultra.mjs"), join(stage, "bin", "codex-ultra.mjs"));
 await copy(join(root, "dist", "launcher.mjs"), join(stage, "bin", "launcher.mjs"));
@@ -189,6 +190,10 @@ if (RUNTIME_PLATFORM.isWindows) {
 for (const name of ["README.md", "README.en.md", "LICENSE"]) {
   await copy(join(root, name), join(stage, name));
 }
+await copy(
+  join(root, "docs", "CCUM_NEXT_TUI.md"),
+  join(stage, "docs", "CCUM_NEXT_TUI.md")
+);
 
 await createZip(stage, zipPath);
 const packageHash = await sha256File(zipPath);

@@ -36,6 +36,8 @@ async function readUpdateManifest(manifestUrl, options, network, expected = {}) 
 export async function checkForCcuUpdate(options = {}) {
   const runtime = options.runtime ?? RUNTIME_PLATFORM;
   const manifestName = ccuUpdateManifestName(runtime);
+  const targetVersion = options.targetVersion?.replace(/^v/, "");
+  const targetTag = targetVersion ? `v${targetVersion}` : undefined;
   const settings =
     options.settings ??
     await (options.readSettings ?? readSettings)(options.installRoot);
@@ -47,12 +49,15 @@ export async function checkForCcuUpdate(options = {}) {
       latest = await (options.resolveLatestCcuRelease ?? resolveLatestCcuRelease)({
         fetchImpl: network.fetch,
         token: options.githubToken,
-        runtime
+        runtime,
+        releaseTag: targetTag
       });
     } catch (apiError) {
       const manifestUrl =
         options.latestManifestUrl ??
-        `${CCU_RELEASES_URL}/latest/download/${manifestName}`;
+        (targetTag
+          ? `${CCU_RELEASES_URL}/download/${targetTag}/${manifestName}`
+          : `${CCU_RELEASES_URL}/latest/download/${manifestName}`);
       try {
         manifest = await readUpdateManifest(
           manifestUrl,
@@ -107,7 +112,7 @@ export async function resolveCcuUpdatePackage(options = {}) {
   const checked = await checkForCcuUpdate(options);
   if (options.targetVersion && checked.latest.version !== options.targetVersion) {
     throw new Error(
-      `requested CCU ${options.targetVersion}, but latest stable is ${checked.latest.version}`
+      `requested CCU ${options.targetVersion}, but resolved release is ${checked.latest.version}`
     );
   }
   if (!checked.latest.updateManifestUrl || !checked.manifest) {

@@ -54,6 +54,37 @@ test("latest release metadata rejects prereleases and unexpected tags", async ()
   );
 });
 
+test("an explicit CCU target resolves the exact Alpha prerelease", async () => {
+  const requests = [];
+  const release = await resolveLatestCcuRelease({
+    releaseTag: "v0.2.0-alpha.3",
+    fetchImpl: async (url) => {
+      requests.push(String(url));
+      return releaseResponse("v0.2.0-alpha.3", {
+        prerelease: true,
+        assets: [{
+          name: "ccu-update-manifest.json",
+          browser_download_url: "https://example.test/ccu-update-manifest.json"
+        }]
+      });
+    }
+  });
+
+  assert.equal(release.version, "0.2.0-alpha.3");
+  assert.equal(
+    release.updateManifestUrl,
+    "https://example.test/ccu-update-manifest.json"
+  );
+  assert.match(requests[0], /releases\/tags\/v0\.2\.0-alpha\.3$/);
+  await assert.rejects(
+    resolveLatestCcuRelease({
+      releaseTag: "v0.2.0-alpha.3",
+      fetchImpl: async () => releaseResponse("v0.2.0-alpha.3")
+    }),
+    /prerelease state/
+  );
+});
+
 test("stable version comparison is numeric", () => {
   assert.equal(compareStableVersions("0.1.2", "0.1.10"), -1);
   assert.equal(compareStableVersions("0.144.6", "0.144.6"), 0);

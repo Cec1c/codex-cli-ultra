@@ -154,9 +154,35 @@ test("POSIX CCU upgrade handoff uses a private shell script and preserves instal
   assert.deepEqual(spawns[0][1], [writes[0][0]]);
   assert.equal(spawns[0][2].detached, true);
   assert.equal(spawns[0][2].env.CCU_MANAGER_PID, "42");
+  assert.equal(spawns[0][2].env.CCU_REOPEN_MANAGER, "1");
   assert.equal(spawns[0][2].env.CCU_INSTALL_SCRIPT, staged.installScript);
   assert.equal(
     spawns[0][2].env.CCU_INSTALLED_MANAGER,
     "/home/alice/.local/share/codex-cli-ultra/bin/ccu-manager"
   );
+});
+
+test("quick update handoff does not reopen the full Manager TUI", async () => {
+  const writes = [];
+  const spawns = [];
+  await scheduleCcuUpgradeApply({
+    changed: true,
+    manifest: { ccuVersion: "0.1.6" },
+    installScript: "/tmp/ccu/package/install.sh",
+    downloadPath: "/tmp/ccu/update.zip.part",
+    stagingRoot: "/tmp/ccu/stage-1"
+  }, {
+    runtime: LINUX,
+    installRoot: "/home/alice/.local/share/codex-cli-ultra",
+    reopenManager: false,
+    mkdir: async () => {},
+    writeFile: async (...args) => writes.push(args),
+    spawn: (...args) => {
+      spawns.push(args);
+      return { pid: 123, once() {}, unref() {} };
+    }
+  });
+
+  assert.match(writes[0][1], /CCU_REOPEN_MANAGER:-0/);
+  assert.equal(spawns[0][2].env.CCU_REOPEN_MANAGER, "0");
 });

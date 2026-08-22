@@ -1,8 +1,8 @@
 [package]
 name = "ccu-manager"
-version = "0.1.0"
+version = "0.2.0-alpha.3"
 edition = "2024"
-description = "Codex CLI Ultra 的 Ratatui 管理界面"
+description = "Codex CLI Ultra Manager Next TUI"
 
 [dependencies]
 anyhow = "1"

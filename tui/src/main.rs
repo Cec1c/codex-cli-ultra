@@ -9,27 +9,45 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use clap::Parser;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use clap::{Parser, ValueEnum};
+use crossterm::cursor::Show;
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Tabs, Wrap};
 use serde::{Deserialize, Serialize};
 
-const ACCENT: Color = Color::Cyan;
-const HEADING: Color = Color::Yellow;
-const SUCCESS: Color = Color::Green;
-const DANGER: Color = Color::Red;
-const TEXT: Color = Color::White;
-const MUTED: Color = Color::DarkGray;
+mod ui;
+
 const RELEASES_URL: &str = "https://github.com/Cec1c/codex-cli-ultra/releases";
+
+struct TerminalRestoreGuard {
+    armed: bool,
+}
+
+impl TerminalRestoreGuard {
+    fn new() -> Self {
+        Self { armed: true }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for TerminalRestoreGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let _ = disable_raw_mode();
+        let mut stdout = io::stdout();
+        let _ = execute!(stdout, LeaveAlternateScreen, Show);
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -42,13 +60,22 @@ struct Args {
     release_dir: Option<PathBuf>,
     #[arg(long)]
     print_status: bool,
-    /// 打开完整 CCU 升级流程。
+    /// 将 TUI 渲染为纯文本，供自动化布局检查使用。
+    #[arg(long, hide = true)]
+    render_preview: bool,
+    #[arg(long, hide = true, requires = "render_preview")]
+    preview_page: Option<Page>,
+    #[arg(long, hide = true, default_value_t = 120)]
+    preview_width: u16,
+    #[arg(long, hide = true, default_value_t = 36)]
+    preview_height: u16,
+    /// 打开跨平台 CCU 快捷更新流程。
     #[arg(long)]
     upgrade: bool,
     /// 指定由升级提示发现的目标 CCU 版本。
     #[arg(long, requires = "upgrade")]
     target: Option<String>,
-    /// 打开 Manager 后立即开始升级。
+    /// 兼容旧版 Codex 接力参数；快捷更新流程始终直接打开。
     #[arg(long, requires = "upgrade")]
     auto_start: bool,
 }
@@ -157,29 +184,57 @@ struct LocalForkRelease {
     manifest: LocalForkManifest,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum Page {
-    Status,
+    Versions,
     Language,
     Theme,
+    Network,
 }
 
 impl Page {
+    const ALL: [Self; 4] = [Self::Versions, Self::Language, Self::Theme, Self::Network];
+
     fn index(self) -> usize {
         match self {
-            Self::Status => 0,
+            Self::Versions => 0,
             Self::Language => 1,
             Self::Theme => 2,
+            Self::Network => 3,
         }
     }
 
     fn next(self) -> Self {
+        Self::ALL[(self.index() + 1) % Self::ALL.len()]
+    }
+
+    fn previous(self) -> Self {
+        Self::ALL[(self.index() + Self::ALL.len() - 1) % Self::ALL.len()]
+    }
+
+    fn label(self) -> &'static str {
         match self {
-            Self::Status => Self::Language,
-            Self::Language => Self::Theme,
-            Self::Theme => Self::Status,
+            Self::Versions => "版本与安装",
+            Self::Language => "语言包",
+            Self::Theme => "主题包",
+            Self::Network => "网络代理",
         }
     }
+
+    fn icon(self) -> &'static str {
+        match self {
+            Self::Versions => "📦",
+            Self::Language => "💬",
+            Self::Theme => "🎨",
+            Self::Network => "🔌",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Focus {
+    Navigation,
+    Content,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,6 +245,7 @@ enum TaskKind {
     UpgradeCcu,
     ToggleProxy,
     SetProxy,
+    TestProxy,
     SyncContent,
     Uninstall,
 }
@@ -203,6 +259,7 @@ impl TaskKind {
             Self::UpgradeCcu => "升级完整 CCU",
             Self::ToggleProxy => "切换 Manager 代理",
             Self::SetProxy => "保存 Manager 代理地址",
+            Self::TestProxy => "测试 Manager 代理",
             Self::SyncContent => "同步语言包与主题",
             Self::Uninstall => "卸载 CCU",
         }
@@ -216,6 +273,7 @@ impl TaskKind {
             Self::UpgradeCcu => "CCU 升级包已准备完成",
             Self::ToggleProxy => "Manager 代理开关已保存",
             Self::SetProxy => "Manager 代理地址已保存",
+            Self::TestProxy => "代理连接测试成功",
             Self::SyncContent => "语言包与主题包已原子同步",
             Self::Uninstall => "卸载已提交；退出 TUI 后后台清理会继续完成",
         }
@@ -285,7 +343,7 @@ enum TaskMessage {
         detail: Option<String>,
     },
     Progress(DownloadProgress),
-    Completion(TaskCompletion),
+    Completion(Box<TaskCompletion>),
 }
 
 struct ActiveTask {
@@ -305,18 +363,21 @@ struct App {
     explicit_release_dir: Option<PathBuf>,
     local_release: Option<LocalForkRelease>,
     page: Page,
+    focus: Focus,
     status: StatusSnapshot,
     notice: String,
     failed: bool,
     active_task: Option<ActiveTask>,
     uninstall_armed: bool,
     proxy_input: Option<String>,
+    help_open: bool,
     upgrade_target: Option<String>,
     exit_requested: bool,
 }
 
 impl App {
     fn new(manager: PathBuf, content_root: Option<PathBuf>, release_dir: Option<PathBuf>) -> Self {
+        let content_root = discover_content_root(&manager, content_root);
         let local_release =
             discover_local_release(&manager, content_root.as_deref(), release_dir.as_deref());
         Self {
@@ -324,13 +385,15 @@ impl App {
             content_root,
             explicit_release_dir: release_dir,
             local_release,
-            page: Page::Status,
+            page: Page::Versions,
+            focus: Focus::Navigation,
             status: StatusSnapshot::default(),
             notice: "r 刷新本地，c 后台同步远程版本，i 安装本地包".to_string(),
             failed: false,
             active_task: None,
             uninstall_armed: false,
             proxy_input: None,
+            help_open: false,
             upgrade_target: None,
             exit_requested: false,
         }
@@ -418,12 +481,12 @@ impl App {
         thread::spawn(move || {
             let result = run_task(&manager, content_root.as_deref(), kind, &args)
                 .map_err(|error| friendly_error(&error.to_string()));
-            let _ = sender.send(TaskMessage::Completion(TaskCompletion {
+            let _ = sender.send(TaskMessage::Completion(Box::new(TaskCompletion {
                 kind,
                 result,
                 exit_after_handoff: false,
                 success_notice: None,
-            }));
+            })));
         });
         self.active_task = Some(ActiveTask {
             kind,
@@ -488,7 +551,7 @@ impl App {
                     success_notice: None,
                 },
             };
-            let _ = sender.send(TaskMessage::Completion(completion));
+            let _ = sender.send(TaskMessage::Completion(Box::new(completion)));
         });
         self.active_task = Some(ActiveTask {
             kind: TaskKind::UpgradeCcu,
@@ -515,6 +578,27 @@ impl App {
         self.proxy_input = Some(self.status.network.proxy_url.clone());
         self.notice = "输入代理地址，Enter 保存，Esc 取消".to_string();
         self.failed = false;
+    }
+
+    fn test_proxy(&mut self) {
+        self.start_task(
+            TaskKind::TestProxy,
+            vec![
+                "proxy".to_string(),
+                "test".to_string(),
+                "--json".to_string(),
+            ],
+        );
+    }
+
+    fn move_navigation(&mut self, forward: bool) {
+        self.page = if forward {
+            self.page.next()
+        } else {
+            self.page.previous()
+        };
+        self.focus = Focus::Navigation;
+        self.uninstall_armed = false;
     }
 
     fn cancel_ccu_upgrade(&mut self) {
@@ -607,7 +691,7 @@ impl App {
                         active.progress = Some(progress);
                     }
                 }
-                TaskMessage::Completion(value) => completion = Some(value),
+                TaskMessage::Completion(value) => completion = Some(*value),
             }
         }
         if completion.is_none() && disconnected {
@@ -699,6 +783,23 @@ impl App {
             vec!["uninstall".to_string(), "--json".to_string()],
         );
     }
+}
+
+fn discover_content_root(manager: &Path, explicit: Option<PathBuf>) -> Option<PathBuf> {
+    if explicit.is_some() {
+        return explicit;
+    }
+    let root = manager.parent().and_then(Path::parent)?;
+    let packaged = root.join("content");
+    if packaged.join("languages").is_dir() && packaged.join("themes").is_dir() {
+        return Some(packaged);
+    }
+    if root.join("packages").join("languages").is_dir()
+        && root.join("packages").join("themes").is_dir()
+    {
+        return Some(root.to_path_buf());
+    }
+    None
 }
 
 fn run_manager_command(
@@ -916,7 +1017,7 @@ fn open_url(url: &str) -> Result<()> {
         if !status.success() {
             bail!("Windows 默认浏览器命令返回 {status}");
         }
-        return Ok(());
+        Ok(())
     }
     #[cfg(target_os = "macos")]
     {
@@ -1019,34 +1120,77 @@ fn resolve_manager(args: &Args) -> Result<PathBuf> {
     bail!("找不到 codex-ultra.mjs，请使用 --manager 指定路径")
 }
 
+fn quick_upgrade_args(target: Option<&str>, manager_pid: u32) -> Vec<String> {
+    let mut args = vec![
+        "upgrade".to_string(),
+        "quick".to_string(),
+        "--manager-pid".to_string(),
+        manager_pid.to_string(),
+    ];
+    if let Some(target) = target {
+        args.push("--target".to_string());
+        args.push(target.trim_start_matches('v').to_string());
+    }
+    args
+}
+
+fn run_quick_upgrade(
+    manager: &Path,
+    content_root: Option<&Path>,
+    target: Option<&str>,
+) -> Result<()> {
+    let mut command = Command::new("node");
+    command
+        .arg(manager)
+        .args(quick_upgrade_args(target, std::process::id()));
+    if let Some(content_root) = content_root {
+        command.env("CODEX_CCU_CONTENT_ROOT", content_root);
+    }
+    let status = command.status().context("无法启动 CCU 快捷更新脚本")?;
+    if !status.success() {
+        bail!("CCU 快捷更新脚本退出码 {status}");
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let manager = resolve_manager(&args)?;
+    if args.upgrade {
+        let _legacy_auto_start = args.auto_start;
+        return run_quick_upgrade(
+            &manager,
+            args.content_root.as_deref(),
+            args.target.as_deref(),
+        );
+    }
     let mut app = App::new(manager, args.content_root, args.release_dir);
     app.refresh_now(false);
     if args.print_status {
         println!("{}", serde_json::to_string_pretty(&app.status)?);
         return Ok(());
     }
-    if args.upgrade {
-        app.upgrade_target = args
-            .target
-            .map(|target| target.trim_start_matches('v').to_string());
-        app.notice = "完整 CCU 升级已就绪；可先按 p/Shift+P 调整代理，再按 u 开始".to_string();
-        if args.auto_start {
-            app.start_ccu_upgrade();
+    if args.render_preview {
+        if let Some(page) = args.preview_page {
+            app.page = page;
         }
+        print!(
+            "{}",
+            ui::render_preview(&app, args.preview_width, args.preview_height)?
+        );
+        return Ok(());
     }
-
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
+    let mut restore_guard = TerminalRestoreGuard::new();
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let run_result = run(&mut terminal, &mut app);
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
+    restore_guard.disarm();
     run_result
 }
 
@@ -1066,547 +1210,121 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
         if key.kind != KeyEventKind::Press {
             continue;
         }
-        if app.handle_proxy_input(key.code) {
-            continue;
-        }
-        if !matches!(key.code, KeyCode::Char('x')) {
-            app.uninstall_armed = false;
-        }
-        match key.code {
-            KeyCode::Esc => {
-                if app
-                    .active_task
-                    .as_ref()
-                    .is_some_and(|active| active.kind == TaskKind::UpgradeCcu)
-                {
-                    app.cancel_ccu_upgrade();
-                } else if app.active_task.is_some() {
-                    app.notice = "后台任务仍在运行，请等待完成后退出".to_string();
-                    app.failed = false;
-                } else {
-                    return Ok(());
-                }
-            }
-            KeyCode::Char('q') => {
-                if app.active_task.is_some() {
-                    app.notice = "后台任务仍在运行，请等待完成后退出".to_string();
-                    app.failed = false;
-                } else {
-                    return Ok(());
-                }
-            }
-            KeyCode::Tab => app.page = app.page.next(),
-            KeyCode::Char('1') => app.page = Page::Status,
-            KeyCode::Char('2') => app.page = Page::Language,
-            KeyCode::Char('3') => app.page = Page::Theme,
-            KeyCode::Char('r') => {
-                app.refresh_local_release();
-                app.start_task(
-                    TaskKind::RefreshLocal,
-                    vec!["status".to_string(), "--json".to_string()],
-                );
-            }
-            KeyCode::Char('c') => app.start_task(
-                TaskKind::CheckOnline,
-                vec![
-                    "status".to_string(),
-                    "--check".to_string(),
-                    "--json".to_string(),
-                ],
-            ),
-            KeyCode::Char('i') => app.install_local(),
-            KeyCode::Char('u') => app.start_ccu_upgrade(),
-            KeyCode::Char('o') => app.open_release_page(),
-            KeyCode::Char('P') => app.begin_proxy_edit(),
-            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                app.begin_proxy_edit();
-            }
-            KeyCode::Char('p') => app.start_task(
-                TaskKind::ToggleProxy,
-                vec![
-                    "proxy".to_string(),
-                    "toggle".to_string(),
-                    "--json".to_string(),
-                ],
-            ),
-            KeyCode::Char('f') => app.start_task(
-                TaskKind::SyncContent,
-                vec![
-                    "content".to_string(),
-                    "sync".to_string(),
-                    "--json".to_string(),
-                ],
-            ),
-            KeyCode::Char('x') => app.request_uninstall(),
-            _ => {}
+        if handle_key(app, key) {
+            return Ok(());
         }
     }
+}
+
+fn handle_key(app: &mut App, key: KeyEvent) -> bool {
+    if app.handle_proxy_input(key.code) {
+        return false;
+    }
+    if app.help_open {
+        if matches!(key.code, KeyCode::Esc | KeyCode::Char('?')) {
+            app.help_open = false;
+        }
+        return false;
+    }
+    if app.uninstall_armed {
+        match key.code {
+            KeyCode::Enter | KeyCode::Char('x') => app.request_uninstall(),
+            KeyCode::Esc => {
+                app.uninstall_armed = false;
+                app.notice = "已取消卸载".to_string();
+                app.failed = false;
+            }
+            _ => {}
+        }
+        return false;
+    }
+    match key.code {
+        KeyCode::Char('?') => app.help_open = true,
+        KeyCode::Esc => {
+            if app
+                .active_task
+                .as_ref()
+                .is_some_and(|active| active.kind == TaskKind::UpgradeCcu)
+            {
+                app.cancel_ccu_upgrade();
+            } else if app.active_task.is_some() {
+                app.notice = "后台任务仍在运行，请等待完成后退出".to_string();
+                app.failed = false;
+            } else if app.focus == Focus::Content {
+                app.focus = Focus::Navigation;
+            } else {
+                return true;
+            }
+        }
+        KeyCode::Char('q') => {
+            if app.active_task.is_some() {
+                app.notice = "后台任务仍在运行，请等待完成后退出".to_string();
+                app.failed = false;
+            } else {
+                return true;
+            }
+        }
+        KeyCode::Tab => app.move_navigation(true),
+        KeyCode::BackTab => app.move_navigation(false),
+        KeyCode::Up | KeyCode::Char('k') if app.focus == Focus::Navigation => {
+            app.move_navigation(false)
+        }
+        KeyCode::Down | KeyCode::Char('j') if app.focus == Focus::Navigation => {
+            app.move_navigation(true)
+        }
+        KeyCode::Left | KeyCode::Char('h') => app.focus = Focus::Navigation,
+        KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter => app.focus = Focus::Content,
+        KeyCode::Char('1') => app.page = Page::Versions,
+        KeyCode::Char('2') => app.page = Page::Language,
+        KeyCode::Char('3') => app.page = Page::Theme,
+        KeyCode::Char('4') => app.page = Page::Network,
+        KeyCode::Char('r') => {
+            app.refresh_local_release();
+            app.start_task(
+                TaskKind::RefreshLocal,
+                vec!["status".to_string(), "--json".to_string()],
+            );
+        }
+        KeyCode::Char('c') => app.start_task(
+            TaskKind::CheckOnline,
+            vec![
+                "status".to_string(),
+                "--check".to_string(),
+                "--json".to_string(),
+            ],
+        ),
+        KeyCode::Char('i') => app.install_local(),
+        KeyCode::Char('u') => app.start_ccu_upgrade(),
+        KeyCode::Char('o') => app.open_release_page(),
+        KeyCode::Char('P') => app.begin_proxy_edit(),
+        KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            app.begin_proxy_edit();
+        }
+        KeyCode::Char('p') => app.start_task(
+            TaskKind::ToggleProxy,
+            vec![
+                "proxy".to_string(),
+                "toggle".to_string(),
+                "--json".to_string(),
+            ],
+        ),
+        KeyCode::Char('t') => app.test_proxy(),
+        KeyCode::Char('f') => app.start_task(
+            TaskKind::SyncContent,
+            vec![
+                "content".to_string(),
+                "sync".to_string(),
+                "--json".to_string(),
+            ],
+        ),
+        KeyCode::Char('x') => app.request_uninstall(),
+        _ => {}
+    }
+    false
 }
 
 fn draw(frame: &mut ratatui::Frame, app: &App) {
-    let chunks = Layout::vertical([
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Min(12),
-        Constraint::Length(3),
-        Constraint::Length(4),
-    ])
-    .split(frame.area());
-
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                " CCU Manager ",
-                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!("v{}", app.status.ccu_version),
-                Style::default().fg(MUTED),
-            ),
-            Span::raw("  "),
-            Span::styled(
-                if app.status.fork.installed {
-                    "CCU-I18N 已安装"
-                } else {
-                    "CCU-I18N 未安装"
-                },
-                Style::default().fg(if app.status.fork.installed {
-                    SUCCESS
-                } else {
-                    HEADING
-                }),
-            ),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(ACCENT)),
-        ),
-        chunks[0],
-    );
-
-    frame.render_widget(
-        Tabs::new(["1 状态/安装", "2 语言包", "3 主题包"])
-            .select(app.page.index())
-            .divider(" │ ")
-            .style(Style::default().fg(MUTED))
-            .highlight_style(Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-        chunks[1],
-    );
-
-    match app.page {
-        Page::Status => draw_status(frame, chunks[2], app),
-        Page::Language => draw_language(frame, chunks[2], app),
-        Page::Theme => draw_theme(frame, chunks[2], app),
-    }
-
-    draw_progress(frame, chunks[3], app);
-
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled(
-                    if app.failed { "错误：" } else { "状态：" },
-                    Style::default().fg(if app.failed { DANGER } else { MUTED }),
-                ),
-                Span::styled(
-                    &app.notice,
-                    Style::default().fg(if app.failed { DANGER } else { TEXT }),
-                ),
-            ]),
-            Line::from(Span::styled(
-                "Tab/1-3 切换  r 刷新  c 检查版本  u 升级  o 打开Release  p 代理开关  Shift+P 配置  升级中 Esc 取消  q 退出",
-                Style::default().fg(MUTED),
-            )),
-        ])
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(MUTED)),
-        )
-        .wrap(Wrap { trim: true }),
-        chunks[4],
-    );
-}
-
-fn draw_progress(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
-    if let Some(active) = &app.active_task {
-        if let Some(progress) = &active.progress {
-            let percent = progress.percent.unwrap_or(0.0).clamp(0.0, 100.0);
-            let stage = active
-                .stage
-                .as_deref()
-                .map(stage_label)
-                .unwrap_or("下载 CCU 安装包");
-            let transferred = format_bytes(progress.transferred_bytes as f64);
-            let total = progress
-                .total_bytes
-                .map(|bytes| format_bytes(bytes as f64))
-                .unwrap_or_else(|| "未知".to_string());
-            let current_speed = format_speed(progress.instant_bytes_per_second);
-            let average_speed = format_speed(progress.average_bytes_per_second);
-            let eta = format_eta(progress.eta_seconds);
-            frame.render_widget(
-                Gauge::default()
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title(" 真实下载进度 ")
-                            .border_style(Style::default().fg(ACCENT)),
-                    )
-                    .gauge_style(Style::default().fg(ACCENT).bg(Color::Black))
-                    .percent(percent.round() as u16)
-                    .label(format!(
-                        "{stage} {percent:.1}% · {transferred}/{total} · 当前 {current_speed} · 平均 {average_speed} · 剩余 {eta}"
-                    )),
-                area,
-            );
-            return;
-        }
-        let cycle = (active.started.elapsed().as_millis() / 35) % 200;
-        let percent = if cycle <= 100 { cycle } else { 200 - cycle } as u16;
-        let detail = active
-            .stage
-            .as_deref()
-            .map(stage_label)
-            .unwrap_or_else(|| active.kind.label());
-        frame.render_widget(
-            Gauge::default()
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(" 后台任务 ")
-                        .border_style(Style::default().fg(ACCENT)),
-                )
-                .gauge_style(Style::default().fg(ACCENT).bg(Color::Black))
-                .percent(percent)
-                .label(format!(
-                    "{} · {:.1}s · 正在等待下一阶段",
-                    detail,
-                    active.started.elapsed().as_secs_f32()
-                )),
-            area,
-        );
-    } else {
-        frame.render_widget(
-            Paragraph::new("后台任务空闲")
-                .block(Block::default().borders(Borders::ALL).title(" 任务进度 "))
-                .style(Style::default().fg(MUTED)),
-            area,
-        );
-    }
-}
-
-fn stage_label(stage: &str) -> &str {
-    match stage {
-        "check" => "检查升级清单",
-        "download" => "下载 CCU 安装包",
-        "verify" => "校验大小与 SHA-256",
-        "extract" => "安全解压升级包",
-        "ready" => "准备安装接力",
-        _ => stage,
-    }
-}
-
-fn format_bytes(bytes: f64) -> String {
-    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
-    let mut value = bytes.max(0.0);
-    let mut unit = 0;
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{value:.0} {}", UNITS[unit])
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
-}
-
-fn format_speed(bytes_per_second: Option<f64>) -> String {
-    bytes_per_second
-        .filter(|value| value.is_finite() && *value >= 0.0)
-        .map(|value| format!("{}/s", format_bytes(value)))
-        .unwrap_or_else(|| "-".to_string())
-}
-
-fn format_eta(seconds: Option<f64>) -> String {
-    let Some(seconds) = seconds.filter(|value| value.is_finite() && *value >= 0.0) else {
-        return "--".to_string();
-    };
-    let seconds = seconds.round() as u64;
-    if seconds < 60 {
-        format!("{seconds}秒")
-    } else if seconds < 3600 {
-        format!("{}分{:02}秒", seconds / 60, seconds % 60)
-    } else {
-        format!("{}时{:02}分", seconds / 3600, (seconds % 3600) / 60)
-    }
-}
-
-fn value_or_dash(value: Option<&str>) -> &str {
-    match value {
-        Some(value) if !value.is_empty() => value,
-        _ => "-",
-    }
-}
-
-fn draw_status(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
-    let local_package = app
-        .local_release
-        .as_ref()
-        .map(|release| release.manifest.display_version.as_str());
-    let local_package_upstream = app
-        .local_release
-        .as_ref()
-        .map(|release| release.manifest.upstream_version.as_str());
-    let remote_fork = app
-        .status
-        .latest
-        .as_ref()
-        .map(|release| release.display_version.as_str());
-    let remote_ccu = app
-        .status
-        .latest_ccu
-        .as_ref()
-        .map(|release| release.version.as_str());
-    let remote_upstream = app
-        .status
-        .latest_upstream
-        .as_ref()
-        .map(|release| release.version.as_str());
-    let rows = vec![
-        version_row(
-            "CCU 管理器：",
-            value_or_dash(Some(&app.status.ccu_version)),
-            value_or_dash(remote_ccu),
-            app.status.ccu_update_available,
-        ),
-        version_row(
-            "CCU-I18N：",
-            if app.status.fork.installed {
-                &app.status.fork.display_version
-            } else {
-                "未安装"
-            },
-            value_or_dash(remote_fork),
-            app.status.update_available,
-        ),
-        version_row(
-            "Codex 原版：",
-            if app.status.official.installed {
-                &app.status.official.version
-            } else {
-                "未发现"
-            },
-            value_or_dash(remote_upstream),
-            app.status.upstream_update_available,
-        ),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("本地 fork 包：", Style::default().fg(MUTED)),
-            Span::styled(
-                value_or_dash(local_package),
-                Style::default().fg(if local_package.is_some() {
-                    SUCCESS
-                } else {
-                    HEADING
-                }),
-            ),
-            Span::styled("  i 安装", Style::default().fg(MUTED)),
-        ]),
-        Line::from(vec![
-            Span::styled("本地包上游：", Style::default().fg(MUTED)),
-            Span::styled(
-                value_or_dash(local_package_upstream),
-                Style::default().fg(TEXT),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("fork 上游基线：", Style::default().fg(MUTED)),
-            Span::styled(
-                value_or_dash(Some(&app.status.fork.upstream_version)),
-                Style::default().fg(HEADING),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("i18n API：", Style::default().fg(MUTED)),
-            Span::styled(
-                app.status
-                    .fork
-                    .i18n_api_version
-                    .map_or_else(|| "-".to_string(), |value| value.to_string()),
-                Style::default().fg(TEXT),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("安装目录：", Style::default().fg(MUTED)),
-            Span::styled(&app.status.install_root, Style::default().fg(TEXT)),
-        ]),
-        Line::from(vec![
-            Span::styled("Manager 代理：", Style::default().fg(MUTED)),
-            Span::styled(
-                if app.status.network.proxy_enabled {
-                    "已开启"
-                } else {
-                    "未开启"
-                },
-                Style::default().fg(if app.status.network.proxy_enabled {
-                    SUCCESS
-                } else {
-                    HEADING
-                }),
-            ),
-            Span::styled(
-                format!("  {}", app.status.network.proxy_url),
-                Style::default().fg(TEXT),
-            ),
-            Span::styled("  p 切换  Shift+P 配置", Style::default().fg(MUTED)),
-        ]),
-        Line::from(Span::styled(
-            "国内特殊网络环境建议打开代理；默认指向本地 7890 端口，地址可配置并会被记住。",
-            Style::default().fg(HEADING),
-        )),
-        app.proxy_input.as_ref().map_or_else(
-            || Line::from(""),
-            |input| {
-                Line::from(vec![
-                    Span::styled("代理地址 > ", Style::default().fg(ACCENT)),
-                    Span::styled(
-                        input,
-                        Style::default().fg(TEXT).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled("  Enter 保存 / Esc 取消", Style::default().fg(MUTED)),
-                ])
-            },
-        ),
-        Line::from(""),
-        Line::from(Span::styled(
-            "c 同步三路版本；u 下载校验并升级（Esc 取消，改代理后可续传）；o 打开对应 Release。",
-            Style::default().fg(MUTED),
-        )),
-        Line::from(Span::styled(
-            "磁盘策略：保留官方英文 Codex 与当前 CCU-I18N；x 需要二次确认。",
-            Style::default().fg(MUTED),
-        )),
-    ];
-    frame.render_widget(
-        Paragraph::new(rows)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" 安装、卸载与版本同步 ")
-                    .border_style(Style::default().fg(ACCENT)),
-            )
-            .wrap(Wrap { trim: true }),
-        area,
-    );
-}
-
-fn version_row<'a>(
-    label: &'a str,
-    local: &'a str,
-    remote: &'a str,
-    update_available: bool,
-) -> Line<'a> {
-    Line::from(vec![
-        Span::styled(label, Style::default().fg(MUTED)),
-        Span::styled(local, Style::default().fg(ACCENT)),
-        Span::styled("  远端：", Style::default().fg(MUTED)),
-        Span::styled(
-            remote,
-            Style::default().fg(if update_available { HEADING } else { SUCCESS }),
-        ),
-        Span::styled(
-            if update_available {
-                "  有新版"
-            } else {
-                "  已同步"
-            },
-            Style::default().fg(if update_available { HEADING } else { MUTED }),
-        ),
-    ])
-}
-
-fn draw_language(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
-    let installed = PathBuf::from(&app.status.install_root)
-        .join("languages")
-        .join("zh-CN")
-        .join("messages.ftl")
-        .is_file();
-    let lines = vec![
-        Line::from(vec![
-            Span::styled("简体中文 FTL：", Style::default().fg(MUTED)),
-            Span::styled(
-                if installed { "已安装" } else { "缺失" },
-                Style::default().fg(if installed { SUCCESS } else { DANGER }),
-            ),
-        ]),
-        Line::from(""),
-        Line::from("按 f 在后台从当前 CCU 内容包原子同步语言包。"),
-        Line::from("Codex 内可使用 /language 查看或切换语言；切换后重启生效。"),
-        Line::from("损坏、缺键、参数不匹配或 API 不兼容时，fork 会逐条回退英文。"),
-    ];
-    frame.render_widget(
-        Paragraph::new(lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" FTL 语言包 ")
-                    .border_style(Style::default().fg(ACCENT)),
-            )
-            .wrap(Wrap { trim: true }),
-        area,
-    );
-}
-
-fn draw_theme(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
-    let installed = PathBuf::from(&app.status.install_root)
-        .join("themes")
-        .join("rainbow_color")
-        .join("theme.json")
-        .is_file();
-    let lines = vec![
-        Line::from(vec![
-            Span::styled("Rainbow Color：", Style::default().fg(MUTED)),
-            Span::styled(
-                if installed { "已安装" } else { "缺失" },
-                Style::default().fg(if installed { SUCCESS } else { DANGER }),
-            ),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                "🦊 gpt-5.6-sol[xhigh]",
-                Style::default().fg(Color::Rgb(245, 224, 220)),
-            ),
-            Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
-            Span::styled("42.7K/353K", Style::default().fg(Color::Rgb(245, 194, 231))),
-            Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
-            Span::styled(
-                "[█░░░░░░░░░] 9%",
-                Style::default().fg(Color::Rgb(166, 227, 161)),
-            ),
-            Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
-            Span::styled("⏱ 1s ⚡0s", Style::default().fg(Color::Rgb(249, 226, 175))),
-            Span::styled(" │ ", Style::default().fg(Color::Rgb(203, 166, 247))),
-        ]),
-        Line::from(""),
-        Line::from("rainbow_color 使用固定 Claude Code 状态栏配色，并保留随机模型 emoji。"),
-        Line::from("Welcome、/status、弹窗与输入条统一使用 Sky 主色；Hermes 旧主题仍随包保留。"),
-        Line::from("按 f 在后台同步主题；后续主题包放入 themes/<id>/theme.json。"),
-    ];
-    frame.render_widget(
-        Paragraph::new(lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" 主题包 ")
-                    .border_style(Style::default().fg(ACCENT)),
-            )
-            .wrap(Wrap { trim: true }),
-        area,
-    );
+    ui::draw(frame, app);
 }
 
 #[cfg(test)]
@@ -1626,6 +1344,77 @@ mod tests {
         assert_eq!(parsed.network.proxy_url, "http://127.0.0.1:7890");
         assert_eq!(parsed.latest_ccu.unwrap().version, "0.1.3");
         assert_eq!(parsed.latest_upstream.unwrap().version, "0.144.6");
+    }
+
+    #[test]
+    fn new_navigation_and_overlay_keys_are_stateful() {
+        let mut app = App::new(PathBuf::from("manager.mjs"), None, None);
+        assert_eq!(app.page, Page::Versions);
+        assert_eq!(app.focus, Focus::Navigation);
+
+        assert!(!handle_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)
+        ));
+        assert_eq!(app.page, Page::Language);
+        assert!(!handle_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)
+        ));
+        assert_eq!(app.focus, Focus::Content);
+        assert!(!handle_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
+        ));
+        assert_eq!(app.focus, Focus::Navigation);
+
+        assert!(!handle_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE)
+        ));
+        assert!(app.help_open);
+        assert!(!handle_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
+        ));
+        assert!(!app.help_open);
+        assert!(handle_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
+        ));
+    }
+
+    #[test]
+    fn managed_update_handoff_opens_the_quick_script() {
+        assert_eq!(
+            quick_upgrade_args(Some("v0.2.1"), 42),
+            vec![
+                "upgrade",
+                "quick",
+                "--manager-pid",
+                "42",
+                "--target",
+                "0.2.1",
+            ]
+        );
+    }
+
+    #[test]
+    fn uninstall_confirmation_is_a_real_modal_state() {
+        let mut app = App::new(PathBuf::from("manager.mjs"), None, None);
+        app.status.fork.installed = true;
+        app.status.fork.display_version = "0.149.0-ccu.i18n.1".to_string();
+        assert!(!handle_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE)
+        ));
+        assert!(app.uninstall_armed);
+        assert!(!handle_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)
+        ));
+        assert!(!app.uninstall_armed);
+        assert_eq!(app.notice, "已取消卸载");
     }
 
     #[test]
@@ -1669,6 +1458,35 @@ mod tests {
         .unwrap();
         assert_eq!(found.manifest.display_version, "0.144.6-ccu.i18n.2");
         assert_eq!(found.manifest.upstream_version, "0.144.6");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn discovers_packaged_and_source_content_roots() {
+        let root =
+            std::env::temp_dir().join(format!("ccu-manager-content-root-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let packaged_manager = root.join("package").join("bin").join("codex-ultra.mjs");
+        fs::create_dir_all(root.join("package").join("content").join("languages")).unwrap();
+        fs::create_dir_all(root.join("package").join("content").join("themes")).unwrap();
+        assert_eq!(
+            discover_content_root(&packaged_manager, None),
+            Some(root.join("package").join("content"))
+        );
+
+        let source_manager = root.join("source").join("dist").join("codex-ultra.mjs");
+        fs::create_dir_all(root.join("source").join("packages").join("languages")).unwrap();
+        fs::create_dir_all(root.join("source").join("packages").join("themes")).unwrap();
+        assert_eq!(
+            discover_content_root(&source_manager, None),
+            Some(root.join("source"))
+        );
+
+        let explicit = root.join("explicit");
+        assert_eq!(
+            discover_content_root(&source_manager, Some(explicit.clone())),
+            Some(explicit)
+        );
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -1736,8 +1554,41 @@ console.log(JSON.stringify({type:"result",result:{changed:true,handoff:{schedule
             _ => None,
         });
         assert_eq!(progress.unwrap().percent, Some(50.0));
-        assert_eq!(format_speed(Some(2.0 * 1024.0 * 1024.0)), "2.0 MiB/s");
-        assert_eq!(format_eta(Some(125.0)), "2分05秒");
+        assert_eq!(ui::format_speed(Some(2.0 * 1024.0 * 1024.0)), "2.0 MiB/s");
+        assert_eq!(ui::format_eta(Some(125.0)), "2分05秒");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn auto_start_upgrade_drives_progress_to_install_handoff() {
+        let root =
+            std::env::temp_dir().join(format!("ccu-manager-auto-upgrade-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let manager = root.join("manager.mjs");
+        fs::write(
+            &manager,
+            r#"
+console.log(JSON.stringify({type:"stage",stage:"download",detail:"ccu.zip"}));
+console.log(JSON.stringify({type:"progress",transferredBytes:10485760,totalBytes:10485760,percent:100,instantBytesPerSecond:2097152,averageBytesPerSecond:1572864,etaSeconds:0}));
+console.log(JSON.stringify({type:"stage",stage:"verify",detail:"sha256"}));
+console.log(JSON.stringify({type:"stage",stage:"extract",detail:"package"}));
+console.log(JSON.stringify({type:"stage",stage:"ready",detail:"handoff"}));
+console.log(JSON.stringify({type:"result",result:{changed:true,handoff:{scheduled:true}}}));
+"#,
+        )
+        .unwrap();
+        let mut app = App::new(manager, None, None);
+        app.upgrade_target = Some("0.2.1".to_string());
+        app.start_ccu_upgrade();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !app.exit_requested && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(20));
+            app.poll_task();
+        }
+        assert!(app.exit_requested);
+        assert!(app.active_task.is_none());
+        assert!(app.notice.contains("接力安装"));
         let _ = fs::remove_dir_all(&root);
     }
 

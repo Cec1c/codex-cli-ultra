@@ -35,7 +35,7 @@ try {
   $result.status = 'succeeded'
   $result.message = 'CCU upgrade completed'
   $result | ConvertTo-Json | Set-Content -LiteralPath $env:CCU_JOB_RESULT -Encoding utf8
-  if (Test-Path -LiteralPath $env:CCU_INSTALLED_MANAGER -PathType Leaf) {
+  if ($env:CCU_REOPEN_MANAGER -eq '1' -and (Test-Path -LiteralPath $env:CCU_INSTALLED_MANAGER -PathType Leaf)) {
     Start-Process -FilePath $env:CCU_INSTALLED_MANAGER -WorkingDirectory $env:CCU_INSTALL_ROOT
   }
   Remove-Item -LiteralPath $env:CCU_DOWNLOAD_PATH -Force -ErrorAction SilentlyContinue
@@ -58,7 +58,7 @@ if [ "$manager_pid" -gt 0 ] 2>/dev/null; then
 fi
 if bash "$CCU_INSTALL_SCRIPT" --non-interactive --preserve-statusline; then
   printf '{"schemaVersion":1,"status":"succeeded","targetVersion":"%s","message":"CCU upgrade completed"}\n' "$CCU_TARGET_VERSION" > "$CCU_JOB_RESULT"
-  if [ -x "$CCU_INSTALLED_MANAGER" ]; then
+  if [ "\${CCU_REOPEN_MANAGER:-0}" = "1" ] && [ -x "$CCU_INSTALLED_MANAGER" ]; then
     (cd "$CCU_INSTALL_ROOT" && nohup "$CCU_INSTALLED_MANAGER" >/dev/null 2>&1 &)
   fi
   rm -f -- "$CCU_DOWNLOAD_PATH"
@@ -207,6 +207,7 @@ export async function scheduleCcuUpgradeApply(staged, options = {}) {
       ...(options.env ?? process.env),
       CCU_TARGET_VERSION: staged.manifest.ccuVersion,
       CCU_MANAGER_PID: String(options.managerPid ?? 0),
+      CCU_REOPEN_MANAGER: options.reopenManager === false ? "0" : "1",
       CCU_INSTALL_SCRIPT: staged.installScript,
       CCU_INSTALL_ROOT: options.installRoot,
       CCU_INSTALLED_MANAGER: pathApi.join(

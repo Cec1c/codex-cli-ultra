@@ -124,21 +124,22 @@ npm ci
 
 ## CCU Manager
 
-`ccu-manager` 是 CCU 的 Ratatui 管理界面，用于检查版本、安装本地 fork Release、更新 CCU-I18N、同步内容和卸载。网络与文件任务在后台线程执行。
+`ccu-manager` 是 CCU 的 Ratatui 管理界面。`0.2.0-alpha.3` 的左侧导航只保留 `📦 版本与安装`、`💬 语言包`、`🎨 主题包` 和 `🔌 网络代理` 四页，不再提供首页和关于页。它覆盖版本检查、本地 fork 安装、完整 CCU 自更新、语言包/主题同步、代理和安全卸载；网络与文件任务在后台线程执行，详见 [CCUM Next TUI 迁移说明](docs/CCUM_NEXT_TUI.md)。
 
-<p align="center">
-  <img src="docs/assets/readme/manager.webp" alt="CCU Manager TUI" width="900">
-</p>
+当 Codex 的自动升级提示调用 `ccu-manager --upgrade --target <version>` 时，不再进入全屏 Manager，而是直接打开跨平台快捷更新菜单：自动检测代理并更新（推荐）、直接更新、手动配置代理并更新、退出。自动模式按 `7890 / 10809 / 10808 / 7891 / 1080 / 2080 / 2081` 的顺序检查监听端口，并且只接受 Clash、Mihomo、v2rayN、Xray、sing-box 等常见代理进程；失败时自动回退到手动代理。下载过程使用 CCU Sky 蓝显示进度条、百分比、字节、速度和 ETA。
 
 | 按键 | 操作 |
 | --- | --- |
 | `r` | 刷新本地状态 |
 | `c` | 查询 CCU、CCU-I18N 和 OpenAI Codex 的远程版本 |
 | `i` | 安装检测到的本地 fork Release |
-| `u` | 更新 CCU-I18N |
+| `u` | 完整更新 CCU，并显示真实字节、速度、百分比和 ETA |
 | `f` | 同步语言包和主题 |
+| `p` / `Shift+P` / `t` | 开关代理、编辑代理地址、测试连接 |
 | `o` | 在浏览器中打开 CCU Release 页面 |
 | `x` | 二次确认卸载 |
+| `↑↓←→` / `jklh` / `Tab` | 导航页面与切换焦点 |
+| `?` | 打开上下文帮助 |
 | `q` | 退出 |
 
 ## 工作原理
@@ -232,7 +233,7 @@ node src/cli.mjs language validate `
 
 | 通道 | 当前版本示例 | 更新条件 |
 | --- | --- | --- |
-| CCU | `v0.1.16-alpha.1` | 安装器、管理器、内容包或文档发生变化 |
+| CCU | `v0.2.0-alpha.3` | 安装器、管理器、内容包或文档发生变化 |
 | CCU-I18N fork | `0.147.0-ccu.i18n.4`（Alpha 多平台构建） | Codex 源码或 i18n 接口发生变化 |
 | OpenAI Codex | `0.147.0` | 官方发布新的稳定版本 |
 
@@ -243,7 +244,7 @@ node src/cli.mjs language validate `
 | 项目 | 状态 |
 | --- | --- |
 | 支持平台 | Windows x64；Linux x64/ARM64；macOS Intel/Apple Silicon |
-| CCU | `v0.1.16-alpha.1` |
+| CCU | `v0.2.0-alpha.3` |
 | CCU-I18N | `0.147.0-ccu.i18n.4`（Alpha 多平台构建） |
 | 参考语言包 | 简体中文 `zh-CN` |
 | FTL 覆盖 | 1,396 个实际使用的消息键 |

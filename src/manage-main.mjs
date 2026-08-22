@@ -50,6 +50,7 @@ import {
   readUpdateCache,
   updateCheckIsDue
 } from "./update/cache.mjs";
+import { runQuickUpdate } from "./update/quick.mjs";
 import { upgradeCcu } from "./update/upgrade.mjs";
 import { CCU_VERSION } from "./version.mjs";
 
@@ -57,6 +58,7 @@ const USAGE = [
   "Usage:",
   "  codex-ultra version [--json]",
   "  codex-ultra status [--check] [--json]",
+  "  codex-ultra upgrade quick [--target VERSION] [--manager-pid PID]",
   "  codex-ultra upgrade [--target VERSION] [--manager-pid PID] [--events jsonl] [--json]",
   "  codex-ultra upgrade check [--json]",
   "  codex-ultra upgrade dismiss VERSION [--json]",
@@ -651,6 +653,17 @@ export async function manageMain(options = {}) {
     const managerPid = managerPidText === undefined ? 0 : Number(managerPidText);
     if (!Number.isSafeInteger(managerPid) || managerPid < 0) {
       throw new Error("--manager-pid must be a non-negative integer");
+    }
+    if (action === "quick") {
+      await (options.runQuickUpdate ?? runQuickUpdate)({
+        ...context,
+        stdin: options.stdin ?? process.stdin,
+        stdout,
+        stderr,
+        targetVersion,
+        managerPid
+      });
+      return 0;
     }
     const events = eventMode === "jsonl" ? createEventReporter(stdout) : null;
     const report = await (options.upgradeCcu ?? upgradeCcu)({
