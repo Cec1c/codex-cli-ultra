@@ -23,6 +23,7 @@ $result = [ordered]@{
   targetVersion = $env:CCU_TARGET_VERSION
   message = $null
 }
+$result | ConvertTo-Json | Set-Content -LiteralPath $env:CCU_JOB_RESULT -Encoding utf8
 try {
   $managerPid = 0
   if ([int]::TryParse($env:CCU_MANAGER_PID, [ref]$managerPid) -and $managerPid -gt 0) {
@@ -53,6 +54,7 @@ catch {
 const POSIX_APPLY_SCRIPT = String.raw`#!/bin/sh
 set -u
 manager_pid="\${CCU_MANAGER_PID:-0}"
+printf '{"schemaVersion":1,"status":"running","targetVersion":"%s","message":null}\n' "$CCU_TARGET_VERSION" > "$CCU_JOB_RESULT"
 if [ "$manager_pid" -gt 0 ] 2>/dev/null; then
   while kill -0 "$manager_pid" 2>/dev/null; do sleep 1; done
 fi
@@ -184,6 +186,16 @@ export async function scheduleCcuUpgradeApply(staged, options = {}) {
     runtime.isWindows ? APPLY_SCRIPT : POSIX_APPLY_SCRIPT,
     runtime.isWindows ? "utf8" : { encoding: "utf8", mode: 0o700 }
   );
+  await (options.writeFile ?? writeFile)(
+    resultPath,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      status: "scheduled",
+      targetVersion: staged.manifest.ccuVersion,
+      message: null
+    }, null, 2)}\n`,
+    { encoding: "utf8", flag: "wx" }
+  );
   const spawnProcess = options.spawn ?? spawn;
   const executable = runtime.isWindows
     ? options.pwshExecutable ?? "pwsh.exe"
@@ -200,7 +212,7 @@ export async function scheduleCcuUpgradeApply(staged, options = {}) {
       ]
     : [scriptPath];
   const child = spawnProcess(executable, args, {
-    detached: true,
+    detached: !runtime.isWindows,
     windowsHide: true,
     stdio: "ignore",
     env: {
@@ -220,7 +232,24 @@ export async function scheduleCcuUpgradeApply(staged, options = {}) {
       CCU_STAGE_ROOT: staged.stagingRoot
     }
   });
-  child.once?.("error", () => {});
+  try {
+    await new Promise((resolveSpawn, rejectSpawn) => {
+      child.once("spawn", resolveSpawn);
+      child.once("error", rejectSpawn);
+    });
+  } catch (error) {
+    await (options.writeFile ?? writeFile)(
+      resultPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        status: "failed",
+        targetVersion: staged.manifest.ccuVersion,
+        message: `failed to start update helper: ${error.message}`
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    throw error;
+  }
   child.unref?.();
   return {
     scheduled: true,
