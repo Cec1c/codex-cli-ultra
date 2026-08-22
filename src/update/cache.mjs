@@ -3,7 +3,8 @@ import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 export const UPDATE_CACHE_SCHEMA_VERSION = 1;
-const STABLE_VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+$/;
+const CCU_VERSION_PATTERN =
+  /^[0-9]+\.[0-9]+\.[0-9]+(?:-alpha\.[1-9][0-9]*)?$/;
 
 export function updateCachePath(installRoot) {
   return join(installRoot, "update-cache.json");
@@ -13,9 +14,9 @@ export function dismissalsDirectory(installRoot) {
   return join(installRoot, "update-dismissals");
 }
 
-export function validateStableVersion(value, label = "version") {
-  if (typeof value !== "string" || !STABLE_VERSION_PATTERN.test(value)) {
-    throw new Error(`${label} must be a stable x.y.z version`);
+export function validateCcuVersion(value, label = "version") {
+  if (typeof value !== "string" || !CCU_VERSION_PATTERN.test(value)) {
+    throw new Error(`${label} must be x.y.z or x.y.z-alpha.N`);
   }
   return value;
 }
@@ -31,7 +32,7 @@ export function validateUpdateCache(value) {
   if (!Number.isFinite(checkedAt.getTime())) {
     throw new Error("update cache checkedAt must be an ISO timestamp");
   }
-  const latestCcuVersion = validateStableVersion(
+  const latestCcuVersion = validateCcuVersion(
     value.latestCcuVersion,
     "latestCcuVersion"
   );
@@ -106,7 +107,7 @@ export function updateCheckIsDue(cache, settings, now = new Date()) {
 function dismissalPath(installRoot, version) {
   return join(
     dismissalsDirectory(installRoot),
-    `${validateStableVersion(version)}.dismissed`
+    `${validateCcuVersion(version)}.dismissed`
   );
 }
 
@@ -121,7 +122,7 @@ export async function dismissUpdateVersion(installRoot, version, fsOps = {}) {
   } catch (error) {
     if (error?.code !== "EEXIST") throw error;
   }
-  return { version: validateStableVersion(version), dismissed: true };
+  return { version: validateCcuVersion(version), dismissed: true };
 }
 
 export async function isUpdateVersionDismissed(installRoot, version, fsOps = {}) {

@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { defaultSettings } from "../src/settings/store.mjs";
 import { checkForCcuUpdate } from "../src/update/check.mjs";
+import { readUpdateCache } from "../src/update/cache.mjs";
 
 const manifest = {
   schemaVersion: 1,
@@ -58,6 +62,7 @@ test("CCU update check falls back to the public latest manifest after API failur
 });
 
 test("an explicit Alpha target falls back to its exact release manifest", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ccu-alpha-update-check-"));
   const requests = [];
   let requestedReleaseTag;
   const alphaManifest = {
@@ -69,28 +74,32 @@ test("an explicit Alpha target falls back to its exact release manifest", async 
       name: "codex-cli-ultra-v0.2.0-alpha.3-windows-x64.zip"
     }
   };
-  const checked = await checkForCcuUpdate({
-    installRoot: String.raw`C:\ccu`,
-    targetVersion: "0.2.0-alpha.3",
-    settings: defaultSettings(),
-    networkClient: {
-      proxyEnabled: false,
-      async fetch(url) {
-        requests.push(String(url));
-        return new Response(JSON.stringify(alphaManifest), { status: 200 });
+  try {
+    const checked = await checkForCcuUpdate({
+      installRoot: root,
+      targetVersion: "0.2.0-alpha.3",
+      settings: defaultSettings(),
+      networkClient: {
+        proxyEnabled: false,
+        async fetch(url) {
+          requests.push(String(url));
+          return new Response(JSON.stringify(alphaManifest), { status: 200 });
+        }
+      },
+      resolveLatestCcuRelease: async (options) => {
+        requestedReleaseTag = options.releaseTag;
+        throw new Error("API unavailable");
       }
-    },
-    resolveLatestCcuRelease: async (options) => {
-      requestedReleaseTag = options.releaseTag;
-      throw new Error("API unavailable");
-    },
-    writeUpdateCacheAtomic: async (_installRoot, value) => value
-  });
+    });
 
-  assert.equal(requestedReleaseTag, "v0.2.0-alpha.3");
-  assert.deepEqual(requests, [
-    "https://github.com/Cec1c/codex-cli-ultra/releases/download/v0.2.0-alpha.3/ccu-update-manifest.json"
-  ]);
-  assert.equal(checked.latest.version, "0.2.0-alpha.3");
-  assert.equal(checked.manifest.releaseTag, "v0.2.0-alpha.3");
+    assert.equal(requestedReleaseTag, "v0.2.0-alpha.3");
+    assert.deepEqual(requests, [
+      "https://github.com/Cec1c/codex-cli-ultra/releases/download/v0.2.0-alpha.3/ccu-update-manifest.json"
+    ]);
+    assert.equal(checked.latest.version, "0.2.0-alpha.3");
+    assert.equal(checked.manifest.releaseTag, "v0.2.0-alpha.3");
+    assert.equal((await readUpdateCache(root)).latestCcuVersion, "0.2.0-alpha.3");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

@@ -57,6 +57,15 @@ test("update cache throttles checks and dismisses only the selected version", as
     await dismissUpdateVersion(root, "0.1.5");
     assert.equal(await isUpdateVersionDismissed(root, "0.1.5"), true);
     assert.equal(await isUpdateVersionDismissed(root, "0.1.6"), false);
+
+    const alphaCache = await writeUpdateCacheAtomic(root, {
+      ...cache,
+      latestCcuVersion: "0.2.0-alpha.4",
+      latestCcuTag: "v0.2.0-alpha.4"
+    });
+    assert.deepEqual(await readUpdateCache(root), alphaCache);
+    await dismissUpdateVersion(root, "0.2.0-alpha.4");
+    assert.equal(await isUpdateVersionDismissed(root, "0.2.0-alpha.4"), true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
