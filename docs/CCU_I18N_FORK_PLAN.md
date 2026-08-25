@@ -175,7 +175,7 @@ CCU 只信任这个 manifest，不根据文件名猜版本；更新顺序先比�
 - 建立上游同步工作流、冲突告警和构建矩阵。
 - 发布机器可读 release manifest、各平台二进制和哈希。
 - CCU 以 manifest 为唯一下载契约，不猜测 asset 名称。
-- 第一批只启用 GitHub 托管的 Windows x64 runner；Linux/macOS 在 Windows 发布链稳定后扩展。
+- 正式发布矩阵启用 GitHub 托管的 Windows x64、Linux x64/ARM64 和 macOS Intel/Apple Silicon runner；每个平台单独校验 fork manifest、资产大小和 SHA256。
 
 ### 阶段 D：共存管理器
 
@@ -235,7 +235,7 @@ SHA256 f0ae0373cff88ae773edb42faddb04c58485a67e005353a177612dea7e1d099d
 
 ### 阶段 B/C 新增进度
 
-- fork 已新增 `CCU i18n release` workflow：轮询上游稳定 Release、从上游 tag 重放 fork 独有提交、冲突开 issue、Windows x64 测试构建并发布机器 manifest。
+- fork 已新增 `CCU i18n release` workflow：轮询上游稳定 Release、从上游 tag 重放 fork 独有提交、冲突开 issue，并为 Windows x64、Linux x64/ARM64 和 macOS Intel/Apple Silicon 发布机器 manifest。
 - fork CLI 已支持编译期 `CODEX_CCU_BUILD_VERSION`，官方构建未设置时仍保持原版 Cargo 版本行为。
 - CCU 已新增 fork manifest 校验和 GitHub latest Release 解析，支持同一上游版本 `r1 -> r2` 与跨上游版本比较。
 - CCU 管理执行器已接入 `version`、`status --check`、`install`、`update`，安装状态显示 fork 显示版本、上游 tag/commit、fork commit 和 i18n API。

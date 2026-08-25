@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       fork_tag:
-        description: Optional exact fork Release tag; required for Alpha builds
+        description: Optional exact fork Release tag; required only for Alpha builds
         required: false
         type: string
 
@@ -103,7 +103,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ inputs.tag || github.ref }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
           cache: npm
@@ -141,7 +141,7 @@ jobs:
             --directory artifacts \
             --version "$RELEASE_VERSION" \
             --platform "${{ matrix.platform }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ccu-release-${{ matrix.platform }}
           path: |
@@ -159,10 +159,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ inputs.tag || github.ref }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: ccu-release-*
           path: artifacts
@@ -183,11 +183,11 @@ jobs:
           PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
         run: |
           set -euo pipefail
-          release_tier="Alpha test build"
-          release_flags=(--prerelease)
-          if [[ "$PRERELEASE" != "true" ]]; then
-            release_tier="Stable build"
-            release_flags=(--latest)
+          release_tier="Stable build"
+          release_flags=(--latest)
+          if [[ "$PRERELEASE" == "true" ]]; then
+            release_tier="Alpha test build"
+            release_flags=(--prerelease)
           fi
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" artifacts/* \
@@ -201,9 +201,17 @@ jobs:
               --notes "$release_tier. Self-contained packages for Windows x64, Linux x64/ARM64, and macOS Intel/Apple Silicon. Each package includes the matching verified CCU i18n fork, Simplified Chinese FTL, Rainbow Color theme, and the CCU Manager." \
               "${release_flags[@]}"
           fi
-          actual_prerelease="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
+          release_json="$(
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft,isPrerelease
+          )"
+          actual_prerelease="$(jq -r .isPrerelease <<<"$release_json")"
           if [[ "$actual_prerelease" != "$PRERELEASE" ]]; then
             echo "Release prerelease state is $actual_prerelease, expected $PRERELEASE" >&2
+            exit 1
+          fi
+          if [[ "$(jq -r .isDraft <<<"$release_json")" != "false" ]]; then
+            echo "Published Release must not be a draft" >&2
             exit 1
           fi
       - name: Download and verify published assets

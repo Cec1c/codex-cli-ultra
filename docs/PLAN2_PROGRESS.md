@@ -17,7 +17,7 @@
 - 上游新 Release 不能通过跨仓库 `release` 事件直接触发；fork 使用每 6 小时轮询和手动触发。
 - fork release tag 使用 `ccu-rust-vX.Y.Z-rN`，二进制版本使用 `X.Y.Z-ccu.i18n.N`。
 - release 分支从上游 `rust-vX.Y.Z` tag 建立，再重放 fork 独有提交；冲突时开 issue 并停止，不 force-push。
-- fork 发布 `ccu-fork-manifest.json`、Windows x64 ZIP 和 SHA256；CCU 从 `Cec1c/codex` latest Release 读取 manifest。
+- fork 发布各平台 `ccu-fork-manifest*.json`、二进制 ZIP 和 SHA256；CCU 从 `Cec1c/codex` latest Release 读取当前平台 manifest。
 - CCU 的 `version/status` 同时显示 CCU 版本、fork 显示版本、上游版本/tag/commit、fork commit 和 i18n API。
 - `update` 先比较上游版本，再比较同上游版本的 revision，因此支持 `0.144.5 r1 -> r2` 和 `0.144.5 -> 0.145.0`。
 

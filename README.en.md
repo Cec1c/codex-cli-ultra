@@ -83,7 +83,7 @@ cd codex-cli-ultra-v*-linux-x64
 source ~/.bashrc  # use source ~/.zshrc for zsh
 ```
 
-The multi-platform Release pipeline is being landed. If the latest Release does not yet contain your Unix asset, use the source installation below rather than another platform's binary.
+Stable Releases include self-contained assets for all five supported platforms. Download only the ZIP matching your operating system and architecture; never use another platform's binary.
 
 To remove CCU and return to the official English build:
 
@@ -230,9 +230,9 @@ node src/cli.mjs language validate `
 
 | Channel | Current example | Updated when |
 | --- | --- | --- |
-| CCU | `v0.1.16-alpha.1` | Installer, manager, content, or documentation changes |
-| CCU-I18N fork | `0.147.0-ccu.i18n.4` (Alpha multiplatform build) | Codex source or the i18n interface changes |
-| OpenAI Codex | `0.147.0` | A new official stable version is released |
+| CCU | `v0.1.18` | Installer, manager, content, or documentation changes |
+| CCU-I18N fork | `0.149.0-ccu.i18n.2` | Codex source or the i18n interface changes |
+| OpenAI Codex | `0.149.0` | A new official stable version is released |
 
 Automation checks upstream stable Releases every six hours. A CCU-only update does not rebuild the fork; a new fork Release is created only when fork code must change.
 
@@ -241,8 +241,8 @@ Automation checks upstream stable Releases every six hours. A CCU-only update do
 | Item | Status |
 | --- | --- |
 | Supported platforms | Windows x64; Linux x64/ARM64; macOS Intel/Apple Silicon |
-| CCU | `v0.1.16-alpha.1` |
-| CCU-I18N | `0.147.0-ccu.i18n.4` (Alpha multiplatform build) |
+| CCU | `v0.1.18` |
+| CCU-I18N | `0.149.0-ccu.i18n.2` |
 | Reference locale | Simplified Chinese (`zh-CN`) |
 | FTL coverage | 1,396 actively used message keys |
 | Fallback | Built-in English per message |

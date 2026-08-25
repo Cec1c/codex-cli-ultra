@@ -2,20 +2,20 @@
 
 ## 目标
 
-用户只从 `Cec1c/codex-cli-ultra` Release 下载一个 Windows x64 ZIP，解压后启动其中的安装脚本，即可让新终端中的 `codex` 命令稳定指向带中文 FTL 的 CCU Codex。安装过程不要求用户另外前往 fork Release 下载二进制。
+用户只从 `Cec1c/codex-cli-ultra` Release 下载与自身系统和架构匹配的 ZIP，解压后启动其中的安装脚本，即可让新终端中的 `codex` 命令稳定指向带中文 FTL 的 CCU Codex。每次正式 Release 都同时构建 Windows x64、Linux x64、Linux ARM64、macOS Intel 和 macOS Apple Silicon 五个平台；安装过程不要求用户另外前往 fork Release 下载二进制。
 
 ## 目标包结构
 
 ```text
-codex-cli-ultra-v0.1.2-windows-x64/
-├─ install.ps1
-├─ install.cmd
-├─ uninstall.ps1
-├─ uninstall.cmd
+codex-cli-ultra-v0.1.18-<platform>/
+├─ install.ps1 / install.cmd       # Windows x64
+├─ install.sh                       # Linux/macOS
+├─ uninstall.ps1 / uninstall.cmd   # Windows x64
+├─ uninstall.sh                     # Linux/macOS
 ├─ bin/
 │  ├─ codex-ultra.mjs
 │  ├─ launcher.mjs
-│  └─ ccu-manager.exe
+│  └─ ccu-manager[.exe]
 ├─ fork-release/
 │  ├─ ccu-fork-manifest.json
 │  └─ codex-ccu-i18n-*.zip
@@ -33,7 +33,7 @@ codex-cli-ultra-v0.1.2-windows-x64/
 
 ## 安装行为
 
-1. 优先读取安装包内的 fork manifest 和 `codex.exe`，默认安装不访问网络。
+1. 优先读取安装包内的 fork manifest 和当前平台的 `codex[.exe]`，默认安装不访问网络。
 2. 校验内部 fork ZIP、manifest、FTL、英文模板、主题和内容目录。
 3. 发现已有官方 npm Codex 时记录为英文备份，但不修改或删除它。
 4. 即使没有预装官方 npm Codex，也允许 CCU 二进制完成首次安装；是否额外打包官方英文二进制作为离线备份，在下一期实现前单独确认。
@@ -44,7 +44,7 @@ codex-cli-ultra-v0.1.2-windows-x64/
 
 ## 卸载行为
 
-1. `uninstall.cmd` 或 `codex-ultra uninstall` 先从用户 PATH 移除 CCU `bin`。
+1. `uninstall.cmd`/`uninstall.sh` 或 `codex-ultra uninstall` 先从用户 PATH 移除 CCU `bin`。
 2. 将活动 CCU 版本清空，删除由 CCU 管理的语言、主题和状态栏偏好，并安全恢复状态栏配置备份。
 3. 无文件锁时，管理器先将安装根原子重命名为 tombstone 并立即删除；存在运行中会话锁时，再由隐藏 PowerShell 清理器等待锁释放后完成同一原子流程。调度失败不会误报成功，也不会部分删除原目录。
 4. 不删除、不修改官方 npm Codex，也不结束当前正在运行的 Codex。
@@ -70,4 +70,4 @@ ccu-manager --print-status
 - 重复运行安装脚本结果幂等；
 - 正常稳定状态只保留当前 CCU 与一份官方英文备份。
 
-v0.1.2 已按此合同完成本机自包含打包、幂等安装、可选 Hermes 配置、卸载回退和安装根清理验证。
+v0.1.18 已按此合同完成 Windows x64、Linux x64、Linux ARM64、macOS Intel 和 macOS Apple Silicon 的构建矩阵、manifest/哈希校验、幂等安装、卸载回退和安装根清理验证；正式 Release 默认标记为 stable，只有显式 Alpha 标签才发布 prerelease。

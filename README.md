@@ -83,7 +83,7 @@ cd codex-cli-ultra-v*-linux-x64
 source ~/.bashrc  # zsh 使用 source ~/.zshrc
 ```
 
-多平台 Release 流水线正在落地；若最新 Release 尚无对应 Unix 资产，请使用下面的源码安装方式，不要下载其他平台的二进制。
+正式 Release 默认同时提供五个平台的自包含资产；请只下载与当前系统和架构匹配的 ZIP，不要使用其他平台的二进制。
 
 卸载 CCU 并恢复官方英文版：
 
@@ -232,9 +232,9 @@ node src/cli.mjs language validate `
 
 | 通道 | 当前版本示例 | 更新条件 |
 | --- | --- | --- |
-| CCU | `v0.1.16-alpha.1` | 安装器、管理器、内容包或文档发生变化 |
-| CCU-I18N fork | `0.147.0-ccu.i18n.4`（Alpha 多平台构建） | Codex 源码或 i18n 接口发生变化 |
-| OpenAI Codex | `0.147.0` | 官方发布新的稳定版本 |
+| CCU | `v0.1.18` | 安装器、管理器、内容包或文档发生变化 |
+| CCU-I18N fork | `0.149.0-ccu.i18n.2` | Codex 源码或 i18n 接口发生变化 |
+| OpenAI Codex | `0.149.0` | 官方发布新的稳定版本 |
 
 自动化每 6 小时检查上游稳定 Release。CCU 的独立更新不会触发 fork 重新编译；只有 fork 代码需要变化时才创建新的 fork Release。
 
@@ -243,8 +243,8 @@ node src/cli.mjs language validate `
 | 项目 | 状态 |
 | --- | --- |
 | 支持平台 | Windows x64；Linux x64/ARM64；macOS Intel/Apple Silicon |
-| CCU | `v0.1.16-alpha.1` |
-| CCU-I18N | `0.147.0-ccu.i18n.4`（Alpha 多平台构建） |
+| CCU | `v0.1.18` |
+| CCU-I18N | `0.149.0-ccu.i18n.2` |
 | 参考语言包 | 简体中文 `zh-CN` |
 | FTL 覆盖 | 1,396 个实际使用的消息键 |
 | 回退机制 | 按消息回退到内置英文 |
