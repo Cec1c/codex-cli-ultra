@@ -105,3 +105,42 @@ test("uninstall preserves preferences not owned by CCU", async (t) => {
     "my.custom.theme\n"
   );
 });
+
+test("standalone uninstall preserves a null official target", async (t) => {
+  const installRoot = await mkdtemp(join(tmpdir(), "ccu-uninstall-standalone-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const statePath = join(installRoot, "state.json");
+  await writeStateAtomic(statePath, {
+    schemaVersion: 1,
+    official: null,
+    active: {
+      releaseId: "0.144.6-ccu.i18n.1",
+      upstreamVersion: "0.144.6",
+      ultraRevision: 1,
+      platform: "x86_64-pc-windows-msvc",
+      binaryPath: join(
+        installRoot,
+        "releases",
+        "0.144.6-ccu.i18n.1",
+        "x86_64-pc-windows-msvc",
+        "package",
+        "bin",
+        "codex.exe"
+      ),
+      size: 1,
+      mtimeMs: 1,
+      sha256: `sha256:${"a".repeat(64)}`
+    },
+    locale: null,
+    lastKnownGood: null
+  });
+
+  const result = await uninstallCcu({
+    installRoot,
+    removePathEntry: async () => ({ changed: true })
+  });
+  const stored = await readState(statePath);
+  assert.equal(result.official, null);
+  assert.equal(stored.official, null);
+  assert.equal(stored.active, null);
+});

@@ -17,7 +17,7 @@
 - 上游新 Release 不能通过跨仓库 `release` 事件直接触发；fork 使用每 6 小时轮询和手动触发。
 - fork release tag 使用 `ccu-rust-vX.Y.Z-rN`，二进制版本使用 `X.Y.Z-ccu.i18n.N`。
 - release 分支从上游 `rust-vX.Y.Z` tag 建立，再重放 fork 独有提交；冲突时开 issue 并停止，不 force-push。
-- fork 发布 `ccu-fork-manifest.json`、Windows x64 ZIP 和 SHA256；CCU 从 `Cec1c/codex` latest Release 读取 manifest。
+- fork 发布各平台 `ccu-fork-manifest*.json`、二进制 ZIP 和 SHA256；CCU 从 `Cec1c/codex` latest Release 读取当前平台 manifest。
 - CCU 的 `version/status` 同时显示 CCU 版本、fork 显示版本、上游版本/tag/commit、fork commit 和 i18n API。
 - `update` 先比较上游版本，再比较同上游版本的 revision，因此支持 `0.144.5 r1 -> r2` 和 `0.144.5 -> 0.145.0`。
 
@@ -49,7 +49,7 @@
 - 已创建 GitHub fork `https://github.com/Cec1c/codex`；本地部分克隆位于 `.upstream/codex`，由 Ultra 的 `.gitignore` 默认排除。`origin` 指向个人 fork，`upstream` 指向 `openai/codex`。
 - 官方 Codex 版本变化时，完整性正常的 Ultra 可进入 `optimistic coexistence` 模式继续运行，同时明确提示不宣称与新版官方 Codex 功能对齐。
 - installer 使用 fork Release manifest 与 i18n API 合同，支持同上游 revision 更新和跨上游版本更新。
-- 仅保留官方 npm 英文备份与一个当前 CCU Release；launcher PATH 优先级保证 `codex` 默认进入 CCU。
+- 官方 npm Codex 改为可选回退目标；没有官方版时使用 `official = null` 的 standalone 状态，并只保留一个当前 CCU Release。launcher PATH 优先级保证 `codex` 默认进入 CCU。
 - Rust 管理器提供状态、语言包、主题包页面；内容同步会把历史 `zh-Hans` 偏好迁移为 `zh-CN`。
 
 ## FTL 模板与中文包收口

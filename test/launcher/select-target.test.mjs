@@ -204,6 +204,17 @@ test("selection checks local version sources before Ultra metadata", async () =>
   ]);
 });
 
+test("standalone state launches Ultra without an official-missing warning", async () => {
+  const state = { ...structuredClone(exactState), official: null };
+  const { result, calls } = await select({ state });
+
+  assert.equal(result.kind, "ultra");
+  assert.equal(result.reason, "ultra-standalone");
+  assert.equal(result.path, exactState.active.binaryPath);
+  assert.equal(result.notice, null);
+  assert.deepEqual(calls, [`stat:${exactState.active.binaryPath}`]);
+});
+
 test("an incomplete official upgrade keeps a verified Ultra available", async () => {
   const readers = createReaders({
     officialVersion: "0.145.0",

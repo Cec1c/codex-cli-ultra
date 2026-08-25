@@ -4,9 +4,11 @@
 
 [![Release](https://img.shields.io/github/v/release/Cec1c/codex-cli-ultra?display_name=tag&style=flat-square)](https://github.com/Cec1c/codex-cli-ultra/releases/latest)
 ![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square&logo=windows11&logoColor=white)
+![Linux x64 / ARM64](https://img.shields.io/badge/Linux-x64%20%2F%20ARM64-FCC624?style=flat-square&logo=linux&logoColor=black)
+![macOS Intel / Apple Silicon](https://img.shields.io/badge/macOS-Intel%20%2F%20Apple%20Silicon-000000?style=flat-square&logo=apple&logoColor=white)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
 
-Codex-Cli-Ultra (CCU) provides external FTL language packs, Windows installation management, and optional interface extensions for Codex CLI. Simplified Chinese is the current reference implementation.
+Codex-Cli-Ultra (CCU) provides external FTL language packs, cross-platform installation management, and optional interface extensions for Codex CLI. Simplified Chinese is the current reference implementation.
 
 [Latest Release](https://github.com/Cec1c/codex-cli-ultra/releases/latest) · [Contributing](CONTRIBUTING.md) · [Codex i18n fork](https://github.com/Cec1c/codex)
 
@@ -37,10 +39,12 @@ The terminal background, font, and colors are provided by a separate terminal co
 
 ### Requirements
 
-- Windows x64
-- PowerShell 7
+- Windows x64, Linux x64/ARM64, or macOS Intel/Apple Silicon
 - Node.js 24 or newer
-- Official Codex installed through npm
+- Official Codex is optional; when present, CCU records it as a failure fallback
+- PowerShell 7 on Windows; Bash on Linux and macOS
+
+Optional: install official Codex first if you want to retain it as a fallback:
 
 ```powershell
 npm install -g @openai/codex
@@ -48,9 +52,9 @@ npm install -g @openai/codex
 
 ### Release installation (recommended)
 
-1. Download `codex-cli-ultra-v*-windows-x64.zip` and its `.sha256` from [Releases](https://github.com/Cec1c/codex-cli-ultra/releases/latest).
+1. Download the ZIP for your platform and its `.sha256` from [Releases](https://github.com/Cec1c/codex-cli-ultra/releases/latest).
 2. Verify the SHA256 and extract the ZIP.
-3. Run `install.cmd`.
+3. Run `install.cmd` on Windows or `./install.sh` on Linux/macOS.
 4. Open a new terminal and verify the installation:
 
 ```powershell
@@ -61,11 +65,31 @@ codex --yolo
 
 The Release ZIP includes a fork binary verified against its manifest, file size, and SHA256.
 
+| System | Release suffix | Installer |
+| --- | --- | --- |
+| Windows x64 | `windows-x64.zip` | `install.cmd` |
+| Linux x64 | `linux-x64.zip` | `./install.sh` |
+| Linux ARM64 | `linux-arm64.zip` | `./install.sh` |
+| macOS Intel | `macos-x64.zip` | `./install.sh` |
+| macOS Apple Silicon | `macos-arm64.zip` | `./install.sh` |
+
+Linux/macOS example:
+
+```bash
+sha256sum -c codex-cli-ultra-v*-linux-x64.zip.sha256  # use shasum -a 256 -c on macOS
+unzip codex-cli-ultra-v*-linux-x64.zip
+cd codex-cli-ultra-v*-linux-x64
+./install.sh
+source ~/.bashrc  # use source ~/.zshrc for zsh
+```
+
+Stable Releases include self-contained assets for all five supported platforms. Download only the ZIP matching your operating system and architecture; never use another platform's binary.
+
 To remove CCU and return to the official English build:
 
 ```powershell
 codex-ultra uninstall
-# or run uninstall.cmd from the Release package
+# or run uninstall.cmd / ./uninstall.sh from the Release package
 ```
 
 ### Source installation
@@ -79,11 +103,20 @@ npm ci
 .\install.ps1
 ```
 
+Linux/macOS:
+
+```bash
+git clone https://github.com/Cec1c/codex-cli-ultra.git
+cd codex-cli-ultra
+npm ci
+./install.sh
+```
+
 This repository builds the CCU manager, not the complete Codex Rust project. CCU-I18N still requires a fork binary that follows the Release manifest contract.
 
 The installer resolves the fork Release in this order:
 
-1. A directory passed through `-ForkReleaseDir`;
+1. A directory passed through `-ForkReleaseDir` on Windows or `--fork-release-dir` on Linux/macOS;
 2. `fork-release/` in the repository root;
 3. The latest stable asset from [`Cec1c/codex` Releases](https://github.com/Cec1c/codex/releases).
 
@@ -104,6 +137,7 @@ Use [`Cec1c/codex`](https://github.com/Cec1c/codex) when building the fork from 
 | `i` | Install a detected local fork Release |
 | `u` | Update CCU-I18N |
 | `f` | Synchronize language and theme content |
+| `o` | Open the CCU Release page in a browser |
 | `x` | Remove CCU after confirmation |
 | `q` | Exit |
 
@@ -128,7 +162,7 @@ CCU-I18N fork ── i18n API + built-in English fallback
 CCU manager ── install / update / uninstall / sync
 ```
 
-The official npm Codex remains installed as an English fallback. The launcher selects the verified fork from local state and falls back to the official binary when that state is invalid.
+Official npm Codex is an optional fallback. Without it, CCU installs in standalone mode and launches the verified fork directly. The launcher falls back to an official binary only when one was recorded and the fork state is invalid.
 
 ## Repository structure
 
@@ -156,8 +190,8 @@ codex-cli-ultra/
 ├── templates/languages/     # English FTL template
 ├── test/                    # Node.js tests
 ├── tui/                     # Rust Ratatui manager
-├── install.ps1 / install.cmd
-└── uninstall.ps1 / uninstall.cmd
+├── install.ps1 / install.cmd / install.sh
+└── uninstall.ps1 / uninstall.cmd / uninstall.sh
 ```
 
 `dist/`, `tui/target/`, and `artifacts/` are generated build outputs rather than maintenance entry points for languages or themes.
@@ -197,8 +231,8 @@ node src/cli.mjs language validate `
 | Channel | Current example | Updated when |
 | --- | --- | --- |
 | CCU | `v0.1.18` | Installer, manager, content, or documentation changes |
-| CCU-I18N fork | `0.144.6-ccu.i18n.2` | Codex source or the i18n interface changes |
-| OpenAI Codex | `0.144.6` | A new official stable version is released |
+| CCU-I18N fork | `0.149.0-ccu.i18n.2` | Codex source or the i18n interface changes |
+| OpenAI Codex | `0.149.0` | A new official stable version is released |
 
 Automation checks upstream stable Releases every six hours. A CCU-only update does not rebuild the fork; a new fork Release is created only when fork code must change.
 
@@ -206,13 +240,15 @@ Automation checks upstream stable Releases every six hours. A CCU-only update do
 
 | Item | Status |
 | --- | --- |
-| Supported platform | Windows x64 |
+| Supported platforms | Windows x64; Linux x64/ARM64; macOS Intel/Apple Silicon |
 | CCU | `v0.1.18` |
-| CCU-I18N | `0.144.6-ccu.i18n.2` |
+| CCU-I18N | `0.149.0-ccu.i18n.2` |
 | Reference locale | Simplified Chinese (`zh-CN`) |
 | FTL coverage | 1,396 actively used message keys |
 | Fallback | Built-in English per message |
-| Customization | Fresh installs enable the Macchiato-colored Hermes status line by default; upgrades preserve existing choices |
+| Customization | Fresh installs enable the Rainbow Color status line by default; upgrades preserve existing choices and retain the legacy Hermes theme |
+
+Windows x64 regression and a real Linux x64 install/remove smoke test have passed. Linux ARM64 and both macOS architectures are wired into the build matrix; macOS still requires real-device acceptance using the [macOS test checklist](docs/macos-testing.md).
 
 ## Contributing
 
