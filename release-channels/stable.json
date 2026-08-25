@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "channel": "stable",
   "source": "Cec1c/codex",
-  "syncedAt": "2026-08-22T13:17:46.574Z",
+  "syncedAt": "2026-08-25T13:33:12.991Z",
   "release": {
     "schemaVersion": 1,
     "type": "codex-ccu-i18n-build",
@@ -14,11 +14,11 @@
     "forkCommit": "8d2b2b22601ad3f48642dbe30dd193cb98a800f4",
     "ultraRevision": 2,
     "i18nApiVersion": 1,
-    "platform": "x86_64-pc-windows-msvc",
+    "platform": "x86_64-unknown-linux-gnu",
     "asset": {
-      "name": "codex-ccu-i18n-0.149.0-r2-x86_64-pc-windows-msvc.zip",
-      "size": 130894008,
-      "sha256": "sha256:8a6023b54db55084c91724b306b2f4c765fa8dc19dcbd6a7d7b1485d99fc9a0e"
+      "name": "codex-ccu-i18n-0.149.0-r2-x86_64-unknown-linux-gnu.zip",
+      "size": 352171423,
+      "sha256": "sha256:316092b1240dc5d43067ff03dd8d467a90a18390c4690253e0c7e84518fe0677"
     }
   }
 }
