@@ -69,6 +69,29 @@ function resolvedPackage(provider) {
   };
 }
 
+function resolvedForkUpdatePackage(provider) {
+  return {
+    latest: { tag: "v0.1.23", version: "0.1.23" },
+    manifest: {
+      ...updateManifest(),
+      ccuVersion: "0.1.23",
+      releaseTag: "v0.1.23",
+      bundledFork: {
+        ...updateManifest().bundledFork,
+        releaseTag: "ccu-rust-v0.153.4-r1",
+        displayVersion: "0.153.4-ccu.i18n.1",
+        upstreamVersion: "0.153.4"
+      },
+      asset: {
+        ...updateManifest().asset,
+        name: `codex-cli-ultra-v0.1.23-${RUNTIME.id}.zip`
+      }
+    },
+    provider,
+    ownsNetworkClient: false
+  };
+}
+
 test("an Alpha manager does not downgrade itself to an older stable release", async () => {
   const report = await stageCcuUpgrade({
     installRoot: "/tmp/ccu-alpha-version-check",
@@ -81,6 +104,27 @@ test("an Alpha manager does not downgrade itself to an older stable release", as
   });
   assert.equal(report.changed, false);
   assert.equal(report.message, "CCU is already current or newer");
+});
+
+test("an Alpha manager applies a lower CCU package when its bundled fork is newer", async () => {
+  const installRoot = await mkdtemp(join(tmpdir(), "ccu-alpha-fork-update-"));
+  const report = await stageCcuUpgrade({
+    installRoot,
+    currentVersion: "0.2.0-alpha.4",
+    currentForkVersion: "0.148.0",
+    resolveCcuUpdatePackage: async () => resolvedForkUpdatePackage({
+      async materializeAsset(_name, destination) {
+        await writeFile(destination, "good");
+      }
+    }),
+    sha256File: async () => ({ size: 4, sha256: SHA256 }),
+    extractZipSecure: async () => {},
+    findPackageRoot: async (stagingRoot) => join(stagingRoot, "package")
+  });
+
+  assert.equal(report.changed, true);
+  assert.equal(report.manifest.ccuVersion, "0.1.23");
+  await rm(installRoot, { recursive: true, force: true });
 });
 
 test("CCU upgrade forwards real progress through verify and extract stages", async () => {

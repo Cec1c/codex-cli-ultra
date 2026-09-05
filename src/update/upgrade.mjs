@@ -85,6 +85,23 @@ function emitStage(options, stage, detail = null) {
   options.onStage?.({ stage, detail });
 }
 
+function parseStableVersion(version) {
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
+    return null;
+  }
+  return version.split(".").map(Number);
+}
+
+function isBundledForkNewer(currentVersion, targetManifest) {
+  const current = parseStableVersion(currentVersion);
+  const target = parseStableVersion(targetManifest.bundledFork?.upstreamVersion);
+  if (!current || !target) return false;
+  for (let index = 0; index < 3; index += 1) {
+    if (target[index] !== current[index]) return target[index] > current[index];
+  }
+  return false;
+}
+
 export async function stageCcuUpgrade(options = {}) {
   if (!options.installRoot) throw new Error("installRoot is required");
   const runtime = options.runtime ?? RUNTIME_PLATFORM;
@@ -106,9 +123,11 @@ export async function stageCcuUpgrade(options = {}) {
         `CCU ${options.currentVersion ?? CCU_VERSION} cannot apply updates that require manager ${manifest.minimumManagerVersion}`
       );
     }
-    if (
-      compareCcuVersions(options.currentVersion ?? CCU_VERSION, manifest.ccuVersion) >= 0
-    ) {
+    const currentVersion = options.currentVersion ?? CCU_VERSION;
+    const managerIsCurrentOrNewer =
+      compareCcuVersions(currentVersion, manifest.ccuVersion) >= 0;
+    const forkIsNewer = isBundledForkNewer(options.currentForkVersion, manifest);
+    if (managerIsCurrentOrNewer && !forkIsNewer) {
       return {
         changed: false,
         manifest,

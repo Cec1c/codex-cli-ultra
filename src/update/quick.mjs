@@ -348,6 +348,7 @@ async function performUpgrade(options, settings) {
       settings,
       currentVersion: options.currentVersion ?? CCU_VERSION,
       targetVersion: options.targetVersion,
+      currentForkVersion: options.currentForkVersion,
       managerPid: options.managerPid ?? 0,
       reopenManager: false,
       onStage: renderer.onStage,

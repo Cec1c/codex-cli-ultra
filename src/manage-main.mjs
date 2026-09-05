@@ -654,6 +654,16 @@ export async function manageMain(options = {}) {
     if (!Number.isSafeInteger(managerPid) || managerPid < 0) {
       throw new Error("--manager-pid must be a non-negative integer");
     }
+    let currentForkVersion;
+    try {
+      const currentStatus = await collectStatus(context);
+      currentForkVersion = currentStatus.fork.installed
+        ? currentStatus.fork.upstreamVersion
+        : undefined;
+    } catch {
+      // Upgrade tests and damaged installs can still resolve a package without
+      // a readable state file; omit the fork-aware downgrade exception there.
+    }
     if (action === "quick") {
       await (options.runQuickUpdate ?? runQuickUpdate)({
         ...context,
@@ -661,7 +671,8 @@ export async function manageMain(options = {}) {
         stdout,
         stderr,
         targetVersion,
-        managerPid
+        managerPid,
+        currentForkVersion
       });
       return 0;
     }
@@ -671,6 +682,7 @@ export async function manageMain(options = {}) {
       currentVersion: CCU_VERSION,
       targetVersion,
       managerPid,
+      currentForkVersion,
       onStage: events?.stage,
       onProgress: events?.progress
     });
