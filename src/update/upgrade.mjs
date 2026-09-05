@@ -11,7 +11,7 @@ import {
   validateCcuUpdateManifest
 } from "../release/ccu-update-manifest.mjs";
 import { sha256File } from "../release/hash.mjs";
-import { compareCcuVersions } from "../release/github-version.mjs";
+import { shouldApplyCcuUpdate } from "../release/github-version.mjs";
 import { CCU_VERSION } from "../version.mjs";
 import { resolveCcuUpdatePackage } from "./check.mjs";
 
@@ -104,9 +104,15 @@ export async function stageCcuUpgrade(options = {}) {
         `CCU ${options.currentVersion ?? CCU_VERSION} cannot apply updates that require manager ${manifest.minimumManagerVersion}`
       );
     }
-    if (
-      compareCcuVersions(options.currentVersion ?? CCU_VERSION, manifest.ccuVersion) >= 0
-    ) {
+    const currentVersion = options.currentVersion ?? CCU_VERSION;
+    if (!shouldApplyCcuUpdate(
+      currentVersion,
+      manifest.ccuVersion,
+      {
+        currentForkVersion: options.currentForkVersion,
+        candidateForkVersion: manifest.bundledFork.upstreamVersion
+      }
+    )) {
       return {
         changed: false,
         manifest,

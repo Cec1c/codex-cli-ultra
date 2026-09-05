@@ -482,6 +482,8 @@ test("upgrade streams JSONL events and forwards the selected target", async () =
       "jsonl"
     ],
     installRoot,
+    readState: async () => state,
+    readFile: async () => JSON.stringify(manifest(1)),
     upgradeCcu: async (options) => {
       upgradeOptions = options;
       options.onStage({ stage: "download", detail: "ccu.zip" });
@@ -504,6 +506,7 @@ test("upgrade streams JSONL events and forwards the selected target", async () =
 
   assert.equal(code, 0);
   assert.equal(upgradeOptions.targetVersion, "0.1.6");
+  assert.equal(upgradeOptions.currentForkVersion, "0.144.5");
   assert.equal(upgradeOptions.managerPid, 4321);
   const events = output.trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.deepEqual(events.map((event) => event.type), [

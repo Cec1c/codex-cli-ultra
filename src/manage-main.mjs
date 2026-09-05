@@ -29,8 +29,8 @@ import {
 } from "./release/fork-manifest.mjs";
 import { resolveLatestForkRelease } from "./release/github-fork.mjs";
 import {
-  compareCcuVersions,
   compareStableVersions,
+  shouldApplyCcuUpdate,
   resolveLatestCcuRelease,
   resolveLatestUpstreamRelease
 } from "./release/github-version.mjs";
@@ -413,7 +413,14 @@ async function collectRemoteStatus(status, options) {
     if (ccuResult.status === "fulfilled") {
       status.latestCcu = ccuResult.value;
       status.ccuUpdateAvailable =
-        compareCcuVersions(CCU_VERSION, ccuResult.value.version) < 0;
+        shouldApplyCcuUpdate(
+          CCU_VERSION,
+          ccuResult.value.version,
+          {
+            currentForkVersion: status.fork.upstreamVersion,
+            candidateForkVersion: status.latest?.upstreamVersion
+          }
+        );
     } else {
       status.onlineErrors.push(remoteError("ccu", ccuResult));
     }
@@ -616,11 +623,27 @@ export async function manageMain(options = {}) {
         }
       }
       const checked = await (options.checkForCcuUpdate ?? checkForCcuUpdate)(context);
+      let currentForkVersion;
+      try {
+        const currentStatus = await collectStatus(context);
+        currentForkVersion = currentStatus.fork.installed
+          ? currentStatus.fork.upstreamVersion
+          : undefined;
+      } catch {
+        // A missing or damaged state file must not prevent a package check.
+      }
       const report = {
         currentVersion: CCU_VERSION,
         latestVersion: checked.latest.version,
         updateAvailable:
-          compareCcuVersions(CCU_VERSION, checked.latest.version) < 0,
+          shouldApplyCcuUpdate(
+            CCU_VERSION,
+            checked.latest.version,
+            {
+              currentForkVersion,
+              candidateForkVersion: checked.manifest?.bundledFork?.upstreamVersion
+            }
+          ),
         releaseUrl: checked.latest.url,
         packageReady: checked.manifest !== null,
         cache: checked.cache
@@ -652,11 +675,22 @@ export async function manageMain(options = {}) {
     if (!Number.isSafeInteger(managerPid) || managerPid < 0) {
       throw new Error("--manager-pid must be a non-negative integer");
     }
+    let currentForkVersion;
+    try {
+      const currentStatus = await collectStatus(context);
+      currentForkVersion = currentStatus.fork.installed
+        ? currentStatus.fork.upstreamVersion
+        : undefined;
+    } catch {
+      // Upgrade tests and damaged installs can still resolve a package without
+      // a readable state file; omit the fork-aware exception there.
+    }
     const events = eventMode === "jsonl" ? createEventReporter(stdout) : null;
     const report = await (options.upgradeCcu ?? upgradeCcu)({
       ...context,
       currentVersion: CCU_VERSION,
       targetVersion,
+      currentForkVersion,
       managerPid,
       onStage: events?.stage,
       onProgress: events?.progress
