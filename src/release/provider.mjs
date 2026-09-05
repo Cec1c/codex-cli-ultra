@@ -263,14 +263,14 @@ export class HttpReleaseProvider {
     return headers;
   }
 
-  async #fetch(url, timeoutMs, extraHeaders = {}) {
+  async #fetch(url, timeoutMs, extraHeaders = {}, signal) {
     let current = validateHttpsGitHubUrl(url, "request URL");
     for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
       const response = await this.fetchImpl(current, {
         method: "GET",
         headers: this.#requestHeaders(current, extraHeaders),
         redirect: "manual",
-        signal: AbortSignal.timeout(timeoutMs)
+        signal: signal ?? AbortSignal.timeout(timeoutMs)
       });
       if (REDIRECT_STATUSES.has(response.status)) {
         if (redirectCount === MAX_REDIRECTS) {
@@ -351,39 +351,61 @@ export class HttpReleaseProvider {
       });
       return resolve(destination);
     }
-    const response = await this.#fetch(
-      assetUrl,
-      this.assetTimeoutMs,
-      initialBytes > 0 ? { Range: `bytes=${initialBytes}-` } : {}
-    );
-    if (response.body === null) {
-      throw new Error("HTTP response has no body");
-    }
-    let append = initialBytes > 0 && response.status === 206;
-    if (append) {
-      const range = response.headers.get("content-range");
-      const match = /^bytes (\d+)-\d+\/(\d+|\*)$/.exec(range ?? "");
-      if (!match || Number(match[1]) !== initialBytes) {
-        throw new Error("resume response has an invalid Content-Range");
+    const controller = new AbortController();
+    let timeoutHandle;
+    const refreshTimeout = () => {
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      timeoutHandle = setTimeout(
+        () => controller.abort(new Error("asset download timed out")),
+        this.assetTimeoutMs
+      );
+      timeoutHandle.unref?.();
+    };
+    refreshTimeout();
+    try {
+      const response = await this.#fetch(
+        assetUrl,
+        this.assetTimeoutMs,
+        initialBytes > 0 ? { Range: `bytes=${initialBytes}-` } : {},
+        controller.signal
+      );
+      if (response.body === null) {
+        throw new Error("HTTP response has no body");
       }
-    } else if (initialBytes > 0) {
-      await rm(destination, { force: true });
-      initialBytes = 0;
-      append = false;
+      let append = initialBytes > 0 && response.status === 206;
+      if (append) {
+        const range = response.headers.get("content-range");
+        const match = /^bytes (\d+)-\d+\/(\d+|\*)$/.exec(range ?? "");
+        if (!match || Number(match[1]) !== initialBytes) {
+          throw new Error("resume response has an invalid Content-Range");
+        }
+      } else if (initialBytes > 0) {
+        await rm(destination, { force: true });
+        initialBytes = 0;
+        append = false;
+      }
+      const declaredLength = parseContentLength(response.headers);
+      const totalBytes = Number.isSafeInteger(options.expectedSize)
+        ? options.expectedSize
+        : declaredLength !== null
+          ? initialBytes + declaredLength
+          : null;
+      async function* withActivityTimeout() {
+        for await (const chunk of Readable.fromWeb(response.body)) {
+          refreshTimeout();
+          yield chunk;
+        }
+      }
+      return await writeReadable(withActivityTimeout(), destination, {
+        append,
+        keepPartial: options.resume === true,
+        initialBytes,
+        totalBytes,
+        onProgress: options.onProgress,
+        now: options.now
+      });
+    } finally {
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     }
-    const declaredLength = parseContentLength(response.headers);
-    const totalBytes = Number.isSafeInteger(options.expectedSize)
-      ? options.expectedSize
-      : declaredLength !== null
-        ? initialBytes + declaredLength
-        : null;
-    return await writeReadable(Readable.fromWeb(response.body), destination, {
-      append,
-      keepPartial: options.resume === true,
-      initialBytes,
-      totalBytes,
-      onProgress: options.onProgress,
-      now: options.now
-    });
   }
 }
