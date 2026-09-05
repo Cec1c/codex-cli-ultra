@@ -1,6 +1,6 @@
 [package]
 name = "ccu-manager"
-version = "0.2.0-alpha.5"
+version = "0.2.0-alpha.6"
 edition = "2024"
 description = "Codex CLI Ultra Manager Next TUI"
 

@@ -23,7 +23,13 @@ $result = [ordered]@{
   targetVersion = $env:CCU_TARGET_VERSION
   message = $null
 }
-$result | ConvertTo-Json | Set-Content -LiteralPath $env:CCU_JOB_RESULT -Encoding utf8
+function Write-JobResult {
+  param([object]$Value)
+  $temporaryPath = "$($env:CCU_JOB_RESULT).tmp.$PID"
+  $Value | ConvertTo-Json -Compress | Set-Content -LiteralPath $temporaryPath -Encoding utf8
+  [System.IO.File]::Move($temporaryPath, $env:CCU_JOB_RESULT, $true)
+}
+Write-JobResult $result
 try {
   $managerPid = 0
   if ([int]::TryParse($env:CCU_MANAGER_PID, [ref]$managerPid) -and $managerPid -gt 0) {
@@ -35,7 +41,7 @@ try {
   }
   $result.status = 'succeeded'
   $result.message = 'CCU upgrade completed'
-  $result | ConvertTo-Json | Set-Content -LiteralPath $env:CCU_JOB_RESULT -Encoding utf8
+  Write-JobResult $result
   if ($env:CCU_REOPEN_MANAGER -eq '1' -and (Test-Path -LiteralPath $env:CCU_INSTALLED_MANAGER -PathType Leaf)) {
     Start-Process -FilePath $env:CCU_INSTALLED_MANAGER -WorkingDirectory $env:CCU_INSTALL_ROOT
   }
@@ -46,7 +52,7 @@ try {
 catch {
   $result.status = 'failed'
   $result.message = $_.Exception.Message
-  $result | ConvertTo-Json | Set-Content -LiteralPath $env:CCU_JOB_RESULT -Encoding utf8
+  Write-JobResult $result
   exit 1
 }
 `;
@@ -54,12 +60,17 @@ catch {
 const POSIX_APPLY_SCRIPT = String.raw`#!/bin/sh
 set -u
 manager_pid="\${CCU_MANAGER_PID:-0}"
-printf '{"schemaVersion":1,"status":"running","targetVersion":"%s","message":null}\n' "$CCU_TARGET_VERSION" > "$CCU_JOB_RESULT"
+write_job_result() {
+  temporary_path="$CCU_JOB_RESULT.tmp.$$"
+  printf '%s\n' "$1" > "$temporary_path"
+  mv -f -- "$temporary_path" "$CCU_JOB_RESULT"
+}
+write_job_result "{\"schemaVersion\":1,\"status\":\"running\",\"targetVersion\":\"$CCU_TARGET_VERSION\",\"message\":null}"
 if [ "$manager_pid" -gt 0 ] 2>/dev/null; then
   while kill -0 "$manager_pid" 2>/dev/null; do sleep 1; done
 fi
 if bash "$CCU_INSTALL_SCRIPT" --non-interactive --preserve-statusline; then
-  printf '{"schemaVersion":1,"status":"succeeded","targetVersion":"%s","message":"CCU upgrade completed"}\n' "$CCU_TARGET_VERSION" > "$CCU_JOB_RESULT"
+  write_job_result "{\"schemaVersion\":1,\"status\":\"succeeded\",\"targetVersion\":\"$CCU_TARGET_VERSION\",\"message\":\"CCU upgrade completed\"}"
   if [ "\${CCU_REOPEN_MANAGER:-0}" = "1" ] && [ -x "$CCU_INSTALLED_MANAGER" ]; then
     (cd "$CCU_INSTALL_ROOT" && nohup "$CCU_INSTALLED_MANAGER" >/dev/null 2>&1 &)
   fi
@@ -67,7 +78,7 @@ if bash "$CCU_INSTALL_SCRIPT" --non-interactive --preserve-statusline; then
   rm -rf -- "$CCU_STAGE_ROOT"
   exit 0
 fi
-printf '{"schemaVersion":1,"status":"failed","targetVersion":"%s","message":"CCU installer failed"}\n' "$CCU_TARGET_VERSION" > "$CCU_JOB_RESULT"
+write_job_result "{\"schemaVersion\":1,\"status\":\"failed\",\"targetVersion\":\"$CCU_TARGET_VERSION\",\"message\":\"CCU installer failed\"}"
 exit 1
 `;
 
