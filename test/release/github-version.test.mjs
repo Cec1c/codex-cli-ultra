@@ -5,7 +5,8 @@ import {
   compareCcuVersions,
   compareStableVersions,
   resolveLatestCcuRelease,
-  resolveLatestUpstreamRelease
+  resolveLatestUpstreamRelease,
+  shouldApplyCcuUpdate
 } from "../../src/release/github-version.mjs";
 
 function releaseResponse(tag, extra = {}) {
@@ -65,4 +66,28 @@ test("CCU version comparison orders Alpha builds without downgrading them", () =
   assert.equal(compareCcuVersions("0.1.8-alpha.2", "0.1.8"), -1);
   assert.equal(compareCcuVersions("0.1.8-alpha.1", "0.1.7"), 1);
   assert.equal(compareCcuVersions("0.1.8", "0.1.8"), 0);
+});
+
+test("stable CCU packages can supersede an Alpha manager when their fork is newer", () => {
+  assert.equal(
+    shouldApplyCcuUpdate("0.2.0-alpha.4", "0.1.23", {
+      currentForkVersion: "0.148.0",
+      candidateForkVersion: "0.153.4"
+    }),
+    true
+  );
+  assert.equal(
+    shouldApplyCcuUpdate("0.2.0-alpha.4", "0.1.6", {
+      currentForkVersion: "0.148.0",
+      candidateForkVersion: "0.145.0"
+    }),
+    false
+  );
+  assert.equal(
+    shouldApplyCcuUpdate("0.2.0-alpha.4", "0.1.23", {
+      currentForkVersion: "0.153.4",
+      candidateForkVersion: "0.153.4"
+    }),
+    false
+  );
 });

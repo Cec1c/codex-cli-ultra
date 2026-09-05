@@ -146,3 +146,48 @@ export function compareCcuVersions(left, right) {
   if (b.alpha === null) return -1;
   return a.alpha < b.alpha ? -1 : 1;
 }
+
+function parseStableVersion(value) {
+  if (typeof value !== "string" || !/^\d+\.\d+\.\d+$/.test(value)) {
+    return null;
+  }
+  return value.split(".").map(Number);
+}
+
+function compareVersionTuples(left, right) {
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) {
+      return left[index] < right[index] ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Decide whether a validated CCU package should replace the current manager.
+ *
+ * Strict CCU SemVer remains the default rule. An Alpha manager is also
+ * allowed to move to a numerically lower stable manager release when that
+ * package carries a newer Codex fork. CCU manager versions and fork versions
+ * are separate release streams, so comparing only the manager SemVer would
+ * otherwise make an Alpha manager permanently block the stable channel.
+ */
+export function shouldApplyCcuUpdate(
+  currentVersion,
+  candidateVersion,
+  { currentForkVersion, candidateForkVersion } = {}
+) {
+  if (compareCcuVersions(currentVersion, candidateVersion) < 0) return true;
+
+  const currentIsAlpha = /-alpha\.[1-9]\d*$/.test(currentVersion);
+  const candidateIsStable = !/-alpha\.[1-9]\d*$/.test(candidateVersion);
+  if (!currentIsAlpha || !candidateIsStable) return false;
+
+  const currentFork = parseStableVersion(currentForkVersion);
+  const candidateFork = parseStableVersion(candidateForkVersion);
+  return (
+    currentFork !== null &&
+    candidateFork !== null &&
+    compareVersionTuples(currentFork, candidateFork) < 0
+  );
+}
