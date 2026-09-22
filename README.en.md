@@ -86,12 +86,12 @@ If you choose to bypass approvals and the sandbox, `codex --yolo` remains availa
 | macOS Intel | `macos-x64.zip` | `./install.sh` |
 | macOS Apple Silicon | `macos-arm64.zip` | `./install.sh` |
 
-The examples below use `v0.1.24`. When downloading another version, replace the filenames with those from that Release.
+The examples below use `v0.1.25`. When downloading another version, replace the filenames with those from that Release.
 
 Windows PowerShell 7:
 
 ```powershell
-$archive = 'codex-cli-ultra-v0.1.24-windows-x64.zip'
+$archive = 'codex-cli-ultra-v0.1.25-windows-x64.zip'
 $expectedHash = ((Get-Content -LiteralPath "$archive.sha256" -Raw).Trim() -split '\s+')[0]
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expectedHash) {
     throw 'SHA256 mismatch'
@@ -104,7 +104,7 @@ Set-Location ($archive -replace '\.zip$', '')
 Linux x64; use the `linux-arm64` file for ARM64:
 
 ```bash
-archive='codex-cli-ultra-v0.1.24-linux-x64.zip'
+archive='codex-cli-ultra-v0.1.25-linux-x64.zip'
 sha256sum -c "$archive.sha256" &&
   unzip "$archive" &&
   cd "${archive%.zip}" &&
@@ -114,7 +114,7 @@ sha256sum -c "$archive.sha256" &&
 macOS Apple Silicon; use the `macos-x64` file for Intel:
 
 ```bash
-archive='codex-cli-ultra-v0.1.24-macos-arm64.zip'
+archive='codex-cli-ultra-v0.1.25-macos-arm64.zip'
 shasum -a 256 -c "$archive.sha256" &&
   unzip "$archive" &&
   cd "${archive%.zip}" &&
@@ -295,7 +295,7 @@ node src/cli.mjs language validate `
 
 | Component | Version format and source | What it updates |
 | --- | --- | --- |
-| CCU | `v0.1.24`; see [package.json](package.json) for the source version and [Releases](https://github.com/Cec1c/codex-cli-ultra/releases/latest) for published builds | Installer, manager, content, and distribution |
+| CCU | `v0.1.25`; see [package.json](package.json) for the source version and [Releases](https://github.com/Cec1c/codex-cli-ultra/releases/latest) for published builds | Installer, manager, content, and distribution |
 | CCU-I18N fork | `X.Y.Z-ccu.i18n.N`; the stable channel is recorded in [stable.json](release-channels/stable.json) | Codex runtime and i18n interfaces based on an upstream version |
 | OpenAI Codex | `X.Y.Z`; see [upstream Releases](https://github.com/openai/codex/releases/latest) | Official upstream builds |
 
@@ -308,7 +308,7 @@ The fork automation periodically checks upstream stable Releases. This repositor
 | Item | Status |
 | --- | --- |
 | Supported platforms | Windows x64; Linux x64/ARM64; macOS Intel/Apple Silicon |
-| CCU | `v0.1.24` |
+| CCU | `v0.1.25` |
 | CCU-I18N | [Current stable channel](release-channels/stable.json); inspect the installed version with `codex-ultra version` |
 | Reference locale | Simplified Chinese (`zh-CN`) |
 | FTL resources | The current English template and Chinese pack each contain 1,396 message keys; new interface text still needs to be integrated in the fork |

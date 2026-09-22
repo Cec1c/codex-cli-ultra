@@ -86,12 +86,12 @@ codex-ultra status
 | macOS Intel | `macos-x64.zip` | `./install.sh` |
 | macOS Apple Silicon | `macos-arm64.zip` | `./install.sh` |
 
-以下示例使用 `v0.1.24`，下载其他版本时将文件名替换为对应 Release 的名称。
+以下示例使用 `v0.1.25`，下载其他版本时将文件名替换为对应 Release 的名称。
 
 Windows PowerShell 7：
 
 ```powershell
-$archive = 'codex-cli-ultra-v0.1.24-windows-x64.zip'
+$archive = 'codex-cli-ultra-v0.1.25-windows-x64.zip'
 $expectedHash = ((Get-Content -LiteralPath "$archive.sha256" -Raw).Trim() -split '\s+')[0]
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expectedHash) {
     throw 'SHA256 mismatch'
@@ -104,7 +104,7 @@ Set-Location ($archive -replace '\.zip$', '')
 Linux x64；ARM64 使用 `linux-arm64` 文件：
 
 ```bash
-archive='codex-cli-ultra-v0.1.24-linux-x64.zip'
+archive='codex-cli-ultra-v0.1.25-linux-x64.zip'
 sha256sum -c "$archive.sha256" &&
   unzip "$archive" &&
   cd "${archive%.zip}" &&
@@ -114,7 +114,7 @@ sha256sum -c "$archive.sha256" &&
 macOS Apple Silicon；Intel 使用 `macos-x64` 文件：
 
 ```bash
-archive='codex-cli-ultra-v0.1.24-macos-arm64.zip'
+archive='codex-cli-ultra-v0.1.25-macos-arm64.zip'
 shasum -a 256 -c "$archive.sha256" &&
   unzip "$archive" &&
   cd "${archive%.zip}" &&
@@ -295,7 +295,7 @@ node src/cli.mjs language validate `
 
 | 组件 | 版本格式与来源 | 更新内容 |
 | --- | --- | --- |
-| CCU | `v0.1.24`；源码版本见 [package.json](package.json)，已发布版本见 [Releases](https://github.com/Cec1c/codex-cli-ultra/releases/latest) | 安装器、管理器、内容包与分发 |
+| CCU | `v0.1.25`；源码版本见 [package.json](package.json)，已发布版本见 [Releases](https://github.com/Cec1c/codex-cli-ultra/releases/latest) | 安装器、管理器、内容包与分发 |
 | CCU-I18N fork | `X.Y.Z-ccu.i18n.N`；稳定通道记录在 [stable.json](release-channels/stable.json) | 基于上游版本的 Codex 运行时与 i18n 接口 |
 | OpenAI Codex | `X.Y.Z`；见[上游 Releases](https://github.com/openai/codex/releases/latest) | 官方上游版本 |
 
@@ -308,7 +308,7 @@ fork 自动化定期检查上游稳定 Release；本仓库的[通道同步工作
 | 项目 | 状态 |
 | --- | --- |
 | 支持平台 | Windows x64；Linux x64/ARM64；macOS Intel/Apple Silicon |
-| CCU | `v0.1.24` |
+| CCU | `v0.1.25` |
 | CCU-I18N | [当前稳定通道](release-channels/stable.json)；已安装版本以 `codex-ultra version` 为准 |
 | 参考语言包 | 简体中文 `zh-CN` |
 | FTL 资源 | 当前英文模板与中文包各包含 1,396 个消息键；新增界面文本仍需在 fork 中接入 |
