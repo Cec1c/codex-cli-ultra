@@ -4,6 +4,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  stat,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -89,6 +90,22 @@ test("secure extraction preserves the expected Codex package layout", async () =
   assert.equal(await readFile(join(destination, "package/codex-path/rg.exe"), "utf8"), "rg");
   assert.equal(await readFile(join(destination, "LICENSES/NOTICE"), "utf8"), "notice");
   assert.deepEqual(await readdir(join(destination, "package/codex-resources")), []);
+});
+
+test("secure extraction preserves helper executability without special permission bits", {
+  skip: process.platform === "win32"
+}, async () => {
+  const root = await mkdtemp(join(tmpdir(), "codex-ultra-zip-mode-"));
+  let bytes = await zipBuffer([
+    { name: "package/codex-path/rg", content: "helper" },
+    { name: "package/codex-package.json", content: "{}" }
+  ]);
+  bytes = patchZipEntryMode(bytes, "package/codex-path/rg", 0o106777);
+  const zipPath = await writeZip(root, "runtime.zip", bytes);
+  const destination = join(root, "extract");
+  await extractZipSecure(zipPath, destination);
+  assert.equal((await stat(join(destination, "package/codex-path/rg"))).mode & 0o7777, 0o755);
+  assert.equal((await stat(join(destination, "package/codex-package.json"))).mode & 0o7777, 0o644);
 });
 
 test("secure extraction rejects traversal, absolute, drive, and backslash escapes", async () => {

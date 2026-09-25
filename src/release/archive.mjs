@@ -1,4 +1,5 @@
 import {
+  chmod,
   lstat,
   mkdir,
   open,
@@ -153,6 +154,11 @@ async function writeEntry(zip, entry, root, seen) {
     await pipeline(input, outputStream);
   } finally {
     await handle.close().catch(() => {});
+  }
+  if (process.platform !== "win32") {
+    // Keep bundled runtime helpers executable without restoring write or special bits.
+    const executable = ((entry.externalFileAttributes >>> 16) & 0o111) !== 0;
+    await chmod(output, executable ? 0o755 : 0o644);
   }
 }
 

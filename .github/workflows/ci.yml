@@ -64,7 +64,7 @@ jobs:
           components: rustfmt
       - run: npm ci
       - name: Verify cross-platform runtime contracts
-        run: node --test test/platform.test.mjs test/installer/posix-path.test.mjs test/install-script.test.mjs test/update-upgrade.test.mjs
+        run: node --test test/platform.test.mjs test/installer/posix-path.test.mjs test/installer/archive.test.mjs test/install-script.test.mjs test/update-upgrade.test.mjs
       - run: npm run build
       - name: Verify Rust manager TUI
         working-directory: tui
