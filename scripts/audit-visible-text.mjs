@@ -50,7 +50,7 @@ const include = [
   "theme_picker.rs"
 ];
 
-const localizationCallPattern = /(?:\.text(?:_with_string_arg)?|approval_text|connectors_text|experimental_text|hooks_text|keymap_(?:count_|debug_|setup_|tab_)?text|mcp_(?:label|text)|memories_text|model_popup_text|pet_picker_text|plugin_text|popup_hint_text|resume_text|review_popup_text|session_text|skills_(?:toggle_)?text|theme_text|usage_text|personality_text|permission_i18n::(?:text|preset_|ask_|approve_|auto_))/;
+const localizationCallPattern = /(?:i18n::tr(?:_format)?!|\.text(?:_with_string_arg)?|approval_text|connectors_text|experimental_text|hooks_text|keymap_(?:count_|debug_|setup_|tab_)?text|mcp_(?:label|text)|memories_text|model_popup_text|pet_picker_text|plugin_text|popup_hint_text|resume_text|review_popup_text|session_text|skills_(?:toggle_)?text|theme_text|usage_text|personality_text|permission_i18n::(?:text|preset_|ask_|approve_|auto_))/;
 const localizationKeyPattern = /"(?:agent|approval|apps|auto-review|experimental|footer|hooks|keymap|language|mcp|memories|model|onboarding|permissions|personality|pet|plugins|popup|ps|reasoning|resume|review|selection|session|skills|slash|status|stop|title|tooltip|usage)-[a-z0-9-]+"/;
 
 async function files(path) {
@@ -74,7 +74,21 @@ function category(path, line) {
 }
 
 const candidates = (await files(sourceRoot))
-  .filter((path) => include.includes(relative(sourceRoot, path).replaceAll("\\", "/")));
+  .filter((path) => {
+    const name = relative(sourceRoot, path).replaceAll("\\", "/");
+    if (name.includes("test") || name.includes("snapshots")) return false;
+    return include.includes(name) || [
+      "analytics/", "app/agent_center/", "app/agents_overview", "app/daemon_menu.rs",
+      "daemon_recovery.rs", "ccu_welcome.rs", "experimental_features.rs",
+      "bottom_pane/async_questions/", "bottom_pane/feedback_note_view.rs",
+      "bottom_pane/hooks_browser_render.rs", "bottom_pane/mentions_v2/footer.rs",
+      "bottom_pane/shortcut_overlay.rs", "bottom_pane/user_verification.rs",
+      "bottom_pane/voice_strip.rs", "bottom_pane/warnings_view_render.rs",
+      "chatwidget/copy_picker.rs", "chatwidget/goal_menu.rs", "chatwidget/realtime_settings.rs",
+      "chatwidget/tui_mode_picker.rs", "chatwidget/worktree_picker.rs",
+      "chatwidget/windows_sandbox_prompts.rs", "keymap_setup/capture.rs",
+    ].some((prefix) => name.startsWith(prefix));
+  });
 const records = [];
 const stringPattern = /"(?:[^"\\]|\\.){3,}"/g;
 for (const path of candidates) {

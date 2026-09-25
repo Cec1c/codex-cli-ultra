@@ -354,7 +354,7 @@ footer-goal-usage-limited = Goal hit usage limits (/goal resume)
 footer-goal-unmet-with-usage = Goal unmet ({ $usage })
 footer-goal-abandoned = Goal abandoned
 footer-goal-achieved-with-usage = Goal achieved ({ $usage })
-footer-goal-achieved = Goal achieved
+footer-goal-achieved = Goal achieved ({ $usage })
 footer-ide-context = IDE context
 
 # Slash command palette
@@ -368,12 +368,12 @@ slash-review-description = review my current changes and find issues
 slash-rename-description = rename the current thread
 slash-resume-description = resume a saved chat
 slash-archive-description = archive this session and exit
-slash-delete-description = permanently delete this session and exit
+slash-delete-description = permanently delete this session
 slash-clear-description = clear the terminal and start a new chat
 slash-fork-description = fork the current chat
 slash-app-description = continue this session in Codex Desktop
 slash-exit-description = exit Codex
-slash-copy-description = copy last response as Markdown
+slash-copy-description = copy the last response or part of it
 slash-raw-description = toggle raw scrollback mode for copy-friendly terminal selection
 slash-diff-description = show Git diff, including untracked files
 slash-mention-description = mention a file
@@ -396,7 +396,7 @@ slash-ide-description = include current selection, open files, and other context
 slash-personality-description = choose a communication style for Codex
 slash-plan-description = switch to Plan mode
 slash-goal-description = set or view the goal for a long-running task
-slash-agent-description = switch the active agent thread
+slash-agent-description = open the agent command center
 slash-side-description = start a side conversation in an ephemeral fork
 slash-permissions-description = choose what Codex is allowed to do
 slash-keymap-description = remap TUI shortcuts
@@ -1477,3 +1477,675 @@ ccu-welcome-commands = Useful commands
 ccu-welcome-full-access = Full access
 ccu-welcome-permissions = /permissions to review access
 ccu-update-now = Open CCU updater
+
+# Codex 0.157 interface
+experimental-request-failed = Experimental feature request failed
+experimental-page-limit = Experimental feature page exceeds requested limit
+experimental-cursor-repeat = Experimental feature pagination repeated a cursor
+experimental-page-count = Experimental feature discovery exceeded 10 pages
+experimental-timeout = Experimental feature discovery timed out
+experimental-interrupted = Feature discovery was interrupted
+experimental-save-timeout = Saving experimental features timed out; the write may still finish. Reopen /experimental to check.
+experimental-save-failed = Failed to save experimental features. Reopen /experimental to check configured values before retrying.
+experimental-readback-interrupted = Features were saved, but readback was interrupted
+experimental-overridden = Changes were saved, but the configured values differ from your selections. A higher-priority setting may override them.
+agents-unavailable = Shared agents unavailable
+agents-workload-unavailable = The agents dashboard is unavailable while workload identity is active.
+agents-not-connected = This session isn’t connected to a shared background server.
+agents-connect-remote = Connect to a remote background server to use the agents dashboard.
+agents-start-guidance = Starting a background server will not interrupt or move this session.
+agents-start-server = Start background server
+agents-open-another-terminal = Open `codex agents` in another terminal afterward
+agents-return-session = Return to this session
+agents-reconnect-failed = Reconnect failed — agent list is stale; relaunch to retry
+agents-reconnecting-stale = Reconnecting — agent list is stale
+agents-permissions-resume = Cannot resume task without preserving the selected permissions.
+agents-load-retry = Couldn't load this conversation. Please try again.
+agents-permissions-pending = Wait for permissions to update before starting a session.
+agents-permissions-differ = Permission profile has different settings.
+agents-archiving = Archiving task…
+agents-deleting = Deleting task…
+agents-action-wait = Please wait. Task switching is unavailable until this finishes.
+agents-untitled = Untitled task
+agents-archive-explanation = This stops any running work in this task and its child agents, then archives them. Their history can be restored from the resume picker.
+agents-archive-children = Archive task and child agents
+agents-delete-explanation = This stops any running work in this task and its child agents, then permanently deletes their history. This cannot be undone.
+agents-delete-children = Permanently delete task and child agents
+ui-cancel = Cancel
+agents-may-have-stopped = Work may have stopped. Resume the task to continue, or retry the action.
+agents-back = Back to agents
+agents-detail-label = Agent:{ " " }
+agents-needs-attention = Needs attention
+agents-open-review = Open task to review.
+agents-waiting-approval = Waiting for approval.
+agents-waiting-response = Waiting for your response.
+agents-task-error = Task encountered an error.
+agents-latest-activity = Latest activity
+agents-return-center = Return to command center
+agents-action-failed = Unable to complete action
+ui-unknown = Unknown
+agents-loading-task = Loading task…
+agents-start-failed = Could not start the session.
+agents-settings-failed = Could not load the new session settings.
+agents-worktree-not-applied = The server did not apply the worktree directory.
+agents-open-failed = Could not open the new session.
+agents-worktree-local = Managed worktrees require local worktree support.
+agents-project-untrusted = The source project is not trusted.
+agents-tokens-label = Tokens:{ " " }
+agents-usage-label = Est. usage:{ " " }
+agents-needs-input = Needs input
+agents-working = Working
+agents-ready = Ready
+agents-inactive = Inactive
+ui-error = Error
+agents-task-details = Task details
+ui-project = Project
+agents-model-label = Model:{ " " }
+ui-branch = Branch
+agents-prompt = Prompt
+agents-no-prompt = No prompt available.
+agents-last-message = Last message
+daemon-not-connected = Not connected to the local background server.
+daemon-title = Daemon
+daemon-remote-guidance = Manage this server on its host. Local daemon updates are unavailable for remote connections.
+daemon-cli-guidance = Run the Codex CLI to manage the daemon from this menu.
+daemon-install-stable = Install latest public stable
+daemon-use-cli = Use this CLI build
+daemon-no-package = This CLI has no local package to copy
+daemon-stable-explanation = Install the latest public stable release. Restore production updates; keep your automatic-update setting.
+daemon-confirm-update = Update daemon and exit Codex?
+daemon-update-exit = Update and exit
+experimental-subagents = Subagents
+experimental-memories = Memories
+experimental-save-pending = An experimental feature save is still in progress. Retry after it finishes.
+agents-navigate = Navigate
+ui-up = Up
+ui-down = Down
+ui-open = Open
+ui-page-up = Page up
+ui-page-down = Page down
+ui-quit = Quit
+agents-tasks = Tasks
+ui-new = New
+worktree-new = New worktree
+ui-resume = Resume
+ui-rename = Rename
+ui-stop = Stop
+ui-archive = Archive
+ui-hide = Hide
+ui-delete = Delete
+ui-view = View
+ui-filter = Filter
+ui-search = Search
+ui-group = Group
+agents-shortcuts = Task shortcuts
+ui-all = All
+agents-needs-you = Needs you
+agents-rename-prompt = Rename ›{ " " }
+agents-search-prompt = Search ›{ " " }
+ui-status = Status
+ui-model = Model
+agents-command-center = Agent command center
+worktree-creating = Creating worktree…
+agents-load-error = Error loading tasks
+agents-resize-hint = … resize to see all
+agents-reconnecting = Reconnecting…
+agents-loading = Loading tasks…
+agents-load-failed = Could not load tasks
+agents-empty = No tasks yet
+agents-no-matches = No matching tasks
+ui-updated = Updated
+agents-current = { "  " }current
+agents-voice = { "  " }voice
+experimental-loading = Loading server experiments…
+experimental-configured-hint = Checked features are configured on. Some experimental features take effect only in new tasks or after restarting the Codex server.
+experimental-saving-hint = Saving… Closing this popup will not cancel the write.
+experimental-retained-hint = Selections retained. Save to retry, or cancel to close.
+experimental-read-only = { " " }(read-only)
+experimental-saving = Saving experimental features…
+experimental-save-interrupted = Saving was interrupted. Reopen /experimental to check configured values.
+experimental-discovery-interrupted = Discovery was interrupted
+experimental-none = No server experiments available.
+experimental-unavailable = Server experiments unavailable. Reopen /experimental to retry; restart this Codex client if requests remain unanswered.
+experimental-toggle-hint = { " " }toggle
+experimental-save-hint = { " " }save
+experimental-close-hint = { " " }save/close
+feedback-scroll-disclosure = { " " }scroll disclosure
+feedback-submit-hint = to submit
+feedback-cancel-hint = to cancel
+feedback-data-title = Your data may be used to improve our models and products
+feedback-data-consent = By submitting feedback, you agree that OpenAI can use your feedback for safety purposes and internal model training, as explained in more detail{ " " }
+feedback-data-sensitive = . Please avoid sharing tented information under NDA, or privileged, HR-related, or sensitive personal information.
+feedback-data-chatgpt = Your feedback can be used to improve ChatGPT.{ " " }
+feedback-learn-more = Learn more
+tui-mode-scrollback = Scrollback
+tui-mode-scrollback-description = Use your terminal's scrollback
+tui-mode-fullscreen = Fullscreen
+tui-mode-fullscreen-description = Scroll within Codex's fullscreen view
+tui-mode-title = TUI mode for next launch
+tui-mode-restart = Restart to apply. Launch overrides still apply.
+worktree-new-location = Where should the new conversation run?
+worktree-fork-location = Where should the forked conversation run?
+worktree-current = Current checkout
+worktree-current-description = Keep using the current working directory
+worktree-new-description = Create an isolated managed checkout
+worktree-enable = Enable worktrees in your Codex configuration to create a worktree.
+worktree-require-repo = Managed worktrees require a local Git repository.
+worktree-title = Worktrees
+worktree-continue = Continue current conversation
+worktree-continue-description = Preserve this conversation in the new checkout
+worktree-fresh = Start new conversation
+worktree-fresh-description = Open a fresh conversation in the new checkout
+worktree-browse = Browse worktrees
+worktree-browse-description = Resume an owner thread or copy a working directory
+worktree-managed-title = Managed worktrees
+worktree-loading = Loading worktrees…
+worktree-pool-empty = No worktrees in this repository's configured pool
+worktree-select-hint = Select a worktree to resume, copy its path, or delete it
+worktree-no-owner = No attached thread
+worktree-owner-unavailable = Owner thread unavailable
+worktree-archived-prefix = Archived ·{ " " }
+worktree-copy-label = Worktree working directory
+worktree-resume-owner = Resume owner thread
+worktree-copy-cwd = Copy working directory
+worktree-path-encoding = Path is not valid UTF-8
+worktree-delete = Delete worktree
+worktree-switch-first = Switch to another checkout before deleting this one
+worktree-singular = Worktree
+worktree-delete-confirm = Delete this worktree?
+worktree-delete-description = Keeps thread history; may disrupt other sessions
+worktree-just-now = just now
+keymap-current-prefix = Current:{ " " }
+keymap-press-chord = Press the first key, then the second. Esc cancels.
+keymap-error-prefix = Error:{ " " }
+
+# Codex 0.157 interface
+recap-failed = Could not generate a recap. Please try again.
+recap-pending = A recap is already being generated.
+recap-empty = There is no conversation history to recap.
+hooks-table-heading = Event               Active/Installed
+hooks-event-empty = { "  " }No hooks installed for this event.
+shortcuts-compose = Compose
+shortcuts-commands = Commands
+shortcuts-mention = Mention files
+shortcuts-shell = Shell command
+shortcuts-newline = New line
+shortcuts-paste-image = Paste image
+shortcuts-editor = External editor
+shortcuts-history = Search history
+shortcuts-edit-last = Edit last message
+shortcuts-session = Session
+shortcuts-queue = Queue message
+shortcuts-send = Send message
+shortcuts-mode = Change mode
+shortcuts-reasoning-less = Less reasoning
+shortcuts-reasoning-more = More reasoning
+shortcuts-voice = Voice
+shortcuts-agents = Agents (empty prompt)
+shortcuts-inspect = Inspect activity
+shortcuts-interrupt = Interrupt
+shortcuts-transcript = Transcript (open first)
+shortcuts-open-transcript = Open transcript
+shortcuts-find = Find text
+shortcuts-scroll = Scroll
+shortcuts-selection = Start selection
+shortcuts-top-latest = Top / latest
+shortcuts-title = Keyboard shortcuts
+shortcuts-close-hint = { " " }close
+shortcuts-customize-hint = { " " }customize
+verification-confirm-hint = to confirm
+verification-cancel-hint = to cancel
+verification-approve = Verify and approve
+verification-cancel = Cancel this request
+verification-thread = Thread:{ " " }
+verification-server = Server:{ " " }
+verification-waiting = Waiting for verification…
+verification-cancel-request-hint = to cancel this request
+voice-strip-label = voice{ " " }
+voice-strip-mute = mute{ "  " }
+voice-strip-unmute-command = { " " }unmute   /voice stop
+voice-strip-mute-command = { " " }mute     /voice stop
+voice-strip-mic = { "  " }mic{ " " }
+warnings-title = Warnings
+warnings-empty = No warnings
+questions-other = Other
+questions-type-answer = Type your answer
+questions-write-answer = Other (write an answer)
+questions-no-options = No options
+questions-prev = prev question
+questions-main-prompt = main prompt
+questions-next = next question
+questions-queued = queued messages
+questions-expand = Expand terminal to read the entire option
+questions-too-long = Answer too long; shorten it before sending
+mention-insert-segment = { " " }insert ·{ " " }
+mention-close-segment = { " " }close ·{ " " }
+mention-select-segment = { " " }select ·{ " " }
+mention-filter-segment = { " " }filter
+copy-whole-status = Whole status
+copy-whole-response = Whole response
+copy-code = Code block
+copy-quote = Blockquote
+copy-title = Copy to clipboard
+goal-edit = Edit goal
+goal-edit-placeholder = Type a goal objective and press Enter
+goal-resume-question = Resume paused goal?
+goal-resume = Resume goal
+goal-resume-description = Mark it active and continue when idle
+goal-leave-paused = Leave paused
+goal-leave-paused-description = Keep it paused; use /goal resume later
+goal-title = Goal
+goal-status-label = Status:{ " " }
+goal-objective-label = Objective:{ " " }
+goal-time-label = Time used:{ " " }
+goal-tokens-label = Tokens used:{ " " }
+goal-budget-label = Token budget:{ " " }
+goal-active-commands = Commands: /goal edit, /goal pause, /goal clear
+goal-paused-commands = Commands: /goal edit, /goal resume, /goal clear
+goal-commands = Commands: /goal edit, /goal clear
+goal-status-active = active
+goal-status-paused = paused
+goal-status-blocked = stalled
+goal-status-usage-limited = usage limited
+goal-status-budget-limited = limited by budget
+goal-status-complete = complete
+model-luna-unavailable = Luna model settings are unavailable; please try /model again in a moment.
+model-select = Select Model
+model-luna-other-models = Other models return when ordinary usage is available again.
+voice-select-title = Select voice
+voice-next-conversation = Applies to your next voice conversation.
+experimental-wait-startup = Experimental features are unavailable until startup completes.
+
+# Codex 0.157 interface
+analytics-recent-sorted = Active in past 30 days · sorted by lifetime credits
+analytics-no-chats = No recent local chats.
+analytics-chat-column = { "  " }Chat
+analytics-usd-credits = Est. $ / credits
+analytics-spent-credits = Est. $ spent  Lifetime credits
+analytics-lifetime-credits = Lifetime credits
+analytics-effort = Effort
+analytics-speed = Speed
+analytics-model-effort-speed = { "  " }Model / effort / speed
+analytics-credits = Credits
+analytics-not-reported = Not reported
+analytics-breakdown-unavailable = { "  " }Breakdown unavailable
+analytics-hidden = { " " }hidden
+analytics-hide-zeros = hide zeros
+analytics-show-all = show all
+analytics-local-scope = Local chats · excludes archived chats and subagent usage
+analytics-overview = Overview
+analytics-tokens = Tokens
+analytics-usage = Usage
+analytics-messages = Messages
+analytics-plugins = Plugins
+analytics-skills = Skills
+analytics-chats = Chats
+analytics-plan = Plan
+analytics-help-reports = Tab / Shift+Tab · next / previous report
+analytics-help-mouse = In alternate screen: mouse wheel · scroll; click tabs or report controls
+analytics-help-range = r · switch between 7 and 30 days
+analytics-help-group = g · change grouping / Overview aggregation
+analytics-help-model = m · cycle model filter
+analytics-help-sort = s · change chat sort metric
+analytics-help-zeros = a · show zero-credit groups in expanded details
+analytics-help-refresh = R · refresh all reports
+analytics-help-toggle = ? · toggle this help
+analytics-shortcuts = Usage shortcuts
+analytics-all-models = All models
+analytics-sort-prefix = { " " }sort:{ " " }
+analytics-weekly = Weekly
+analytics-dashboard = Dashboard
+analytics-focus-hint = { " " }focus
+analytics-30day-credits = 30d active · lifetime credits
+analytics-local-excludes-subagents = Local chats · excludes subagents
+analytics-some-unavailable = Some estimates unavailable
+analytics-maximize = … z to maximize
+analytics-close-help = close help
+analytics-5hour-limits = 5-hour limits
+analytics-weekly-limits = Weekly limits
+analytics-no-periods = No limit periods in this date range
+analytics-history-unavailable = Limit history isn't available yet
+analytics-unavailable = Not available
+analytics-period-incomplete = { "  " }Some usage is unavailable; this period may be incomplete
+analytics-period-breakdown-unavailable = { "  " }Breakdown isn't available for this period
+analytics-turn-start-note = By turn start includes Tasks only; percentages use the full period limit
+analytics-periods-unavailable = Some periods aren't available yet
+analytics-approximate-note = Amounts and period boundaries are approximate; recent activity may be delayed
+analytics-product = Product
+analytics-profile-unavailable = Profile statistics unavailable.
+analytics-account = Account
+analytics-lifetime-tokens = Lifetime tokens
+analytics-peak-tokens = Peak tokens
+analytics-longest-chat = Longest chat
+analytics-current-streak = Current streak
+analytics-longest-streak = Longest streak
+analytics-token-activity = Token activity
+analytics-last-year = Last 12 months
+analytics-token-history-unavailable = Token activity history unavailable
+analytics-fast-mode = Fast Mode
+analytics-most-reasoning = Most used reasoning
+analytics-skills-explored = Skills explored
+analytics-total-skills = Total skills used
+analytics-total-chats = Total chats
+analytics-insights = Activity insights
+analytics-most-tools = Most used plugins and skills
+analytics-no-tools = No reported plugins or skills.
+analytics-tools-unavailable = Plugin and skill usage unavailable.
+analytics-profile-partial = Some profile statistics are unavailable.
+analytics-weekly-percent = Weekly %
+analytics-5hour-percent = 5-hour %
+analytics-balance-credits = Balance credits
+analytics-no-task-usage = No task usage reported.
+analytics-debited-note = Credits debited from balance · includes adjustments
+analytics-full-limit-note = Recorded usage / current full limit · may exceed 100%
+analytics-partial-suffix = { " " }· partial
+analytics-task-unavailable = { "  " }Task usage unavailable.
+analytics-task-scope = Local chats · includes discovered descendants · excludes archived roots
+analytics-partial-ranking = Partial ranking · 100 most recently active chats
+analytics-invalid-token-date = Invalid token report date.
+ui-other = Other
+analytics-token-breakdown-unavailable = Token breakdown is not available in this report.
+analytics-invalid-token-count = Invalid token count.
+analytics-tokens-not-reported = Token counts were not reported.
+analytics-uncached-input = Uncached input
+analytics-cached-input = Cached input
+analytics-output = Output
+analytics-surface = Surface
+analytics-feature = Feature
+analytics-turn-start = Turn start
+analytics-reasoning = Reasoning
+analytics-token-type = Token type
+analytics-request-interrupted = Request interrupted. Press R to retry.
+analytics-request-timeout = Request timed out. Press R to retry.
+analytics-loading = Loading…
+analytics-no-history = No history has been reported.
+analytics-load-failed = Couldn't load analytics. Press R to retry.
+analytics-invalid-date = Analytics returned an invalid date.
+analytics-unsupported-grouping = Unsupported message count grouping.
+analytics-amount-not-reported = Plan usage amount was not reported.
+analytics-invalid-amount = Analytics returned an invalid amount.
+analytics-messages-unavailable = Message count is unavailable.
+analytics-turns-unavailable = Turn count is unavailable.
+analytics-tool-activity-unavailable = Tool activity is unavailable.
+analytics-image-generation = Image generation
+analytics-automations = Automations
+analytics-auto-review = Auto review
+analytics-review-classifier = Auto review classifier
+analytics-thread-title = Thread title
+analytics-system = System
+analytics-workspace-agents = Workspace agents
+analytics-memory-consolidation = Memory consolidation
+analytics-desktop = Desktop app
+analytics-web = Web
+analytics-work-web = Work web
+analytics-work-desktop = Work desktop
+analytics-work-mobile = Work mobile
+analytics-mobile = Mobile
+analytics-exec = Exec
+analytics-code-review = Code review
+analytics-user-messages = User messages
+analytics-goals = Goals
+analytics-queued = Queued messages
+analytics-queued-now = Queued messages run now
+analytics-scheduled = Scheduled automations
+analytics-automations-now = Automations run now
+analytics-followups = Scheduled follow-ups
+analytics-followups-now = Follow-ups run now
+analytics-agent-tasks = Agent-created tasks
+analytics-agent-followups = Agent follow-ups
+analytics-fast = Fast
+analytics-standard = Standard
+analytics-invalid-plan-time = Invalid plan history timestamp.
+analytics-too-many-periods = Plan history contains too many periods.
+analytics-unsupported-window = Unsupported plan history window.
+analytics-invalid-period = Invalid plan history period.
+analytics-account-unsupported = Analytics is not available for this account type.
+
+slash-tui-description = choose the TUI mode for the next launch
+
+slash-daemon-description = Manage the local background server
+
+slash-warnings-description = view retained warnings and diagnostic details
+
+slash-recap-description = summarize the current conversation now
+
+slash-cd-description = change the current working directory
+
+slash-worktree-description = start or continue a conversation in a new worktree
+
+slash-pwd-description = show the current working directory
+
+slash-export-description = export the conversation as markdown
+
+slash-voice-description = start or stop voice; use /voice settings to choose a voice
+
+slash-subagents-description = switch between this session's subagents
+
+daemon-host-embedded-warning = This terminal does not allow a detached background server. Continuing in this process; tasks will stop when Codex exits.
+
+keymap-set-key-chord = Set key chord
+
+keymap-set-key-chord-description = Capture two consecutive keys for this action
+
+keymap-replace-key-chord = Replace with key chord
+
+keymap-add-key-chord = Add key chord
+
+resume-status-active = Active
+
+resume-status-archived = Archived
+
+feedback-success-share-internal = You can share this in #codex-feedback:
+
+hooks-context-unlimited = unlimited
+
+hooks-context-limit = limit: { $limit } approximate tokens
+
+hooks-detail-context = Context
+
+hooks-event-session-end = SessionEnd
+
+hooks-event-interrupt = Interrupt
+
+hooks-event-session-end-description = Right before a session ends
+
+hooks-event-interrupt-description = Right before an interrupted turn is aborted
+
+reasoning-effort-persistent = Persistent
+
+auto-review-action = Action
+
+permissions-full-access-cyber-recommend-auto-review = We strongly recommend selecting "Approve for me" instead, and customizing the reviewer policy for your use case.
+
+permissions-full-access-cyber-recommend-ask = We strongly recommend selecting "Ask for approval" instead.
+
+permissions-full-access-cyber-risk = Cyber models carry a higher risk of dangerous actions.
+
+permissions-full-access-cyber-safeguards = Ensure proper safeguards are in place before granting full access.
+
+slash-archive-session-subtitle = Are you sure? This will archive the current session
+
+slash-archive-session-confirm = Yes, archive
+
+mcp-auth-unknown = Unknown
+
+mention-type-task = Task
+
+# Codex 0.157 interface
+daemon-incompatible-title = Background server has incompatible feature settings
+daemon-unavailable-title = Cannot use the background server
+daemon-restart-features = Restart will use these shared feature settings:
+daemon-restart-warning = These settings persist and can disable functionality for other clients. Restart may interrupt active or queued work.
+daemon-run-embedded = Run without daemon this time
+daemon-restart-settings = Restart with these settings
+daemon-unmanaged = This server is not managed by Codex.
+daemon-restart-cannot-fix = Restart cannot resolve this compatibility check.
+footer-cycle-label = shift+tab to cycle
+footer-cycle-suffix = { " " }to cycle)
+footer-agents-hint = { " " }for agents
+footer-side-prefix = Side{ " " }
+footer-side-label = Side
+footer-switch-hint = { " " }to switch
+footer-close-hint = { " " }to close
+footer-side-hint = { " " }for side
+footer-context-full = 100% context left
+picker-disabled-suffix = { " " }(disabled)
+sandbox-setup-description = Set up the Codex agent sandbox to protect your files and control network access. Learn more <https://developers.openai.com/codex/windows>
+sandbox-required-description = Your organization requires the default Codex agent sandbox to continue. Set it up to protect your files and control network access.
+sandbox-learn-more = Learn more <https://developers.openai.com/codex/windows>
+sandbox-setup-default = Set up default sandbox (requires Administrator permissions)
+sandbox-use-non-admin = Use non-admin sandbox (higher risk if prompt injected)
+sandbox-setup-admin-failed = Couldn't set up your sandbox with Administrator permissions
+sandbox-non-admin-warning = You can still use Codex in a non-admin sandbox. It carries greater risk if prompt injected.
+sandbox-default-required = Your organization requires the default sandbox before Codex can continue.
+sandbox-retry-admin = Try setting up admin sandbox again
+sandbox-continue-non-admin = Use Codex with non-admin sandbox
+sandbox-input-disabled = Input disabled until setup completes.
+sandbox-setting-up = Setting up sandbox...
+sandbox-wait = Hang tight, this may take a few minutes
+
+experimental-feature-analytics-plan-history-name = Analytics plan history
+
+experimental-feature-analytics-plan-history-description = Preview five-hour and weekly allowance history for consumer accounts in /analytics.
+
+experimental-feature-network-proxy-name = Network proxy
+
+experimental-feature-network-proxy-description = Apply network proxy restrictions to sandboxed sessions that already have network access.
+
+experimental-feature-prevent-idle-sleep-name = Prevent sleep while running
+
+experimental-feature-prevent-idle-sleep-description = Keep your computer awake while Codex is running a thread.
+
+keymap-replace-key-chord-selected = Replace `{ $binding }` with a two-stroke key chord
+
+daemon-without-reason = Running without the shared background server: { $value }.
+
+experimental-feature-unadvertised = The server did not advertise experimental feature `{ $name }`
+
+experimental-readback-failed = Features were saved, but configured values could not be refreshed: { $error }
+
+analytics-chat-page = Showing { $count }–{ $count } of { $count } chats
+
+analytics-chat-page-range = Showing { $value }–{ $end } of { $count } chats
+
+analytics-help-report-number = 1–{ $value } · open a report directly
+
+analytics-help-chart-selection = { $value } / { $value2 } · select chart day or plan window
+
+analytics-help-period-selection = { $value } / { $value2 } · select chat or plan period; scroll Overview
+
+analytics-help-expand = { $value } · expand or collapse details
+
+analytics-help-scroll = { $value } / { $value2 } · scroll report
+
+analytics-help-focus = z · dashboard / focused report; { $value } · focus dashboard card
+
+analytics-help-back = { $value } · back; q / ctrl+c · close usage
+
+analytics-report-updated = Report updated { $value } UTC
+
+analytics-updated = Updated · { $value } UTC
+
+analytics-group-by = By { $value }
+
+analytics-as-of = Usage as of { $value } UTC · * current at last update
+
+analytics-available-since = Available since { $value } UTC
+
+analytics-usage-plan = Usage · { $plan }
+
+analytics-days = { $days } days
+
+analytics-statistics-as-of = Statistics as of { $value }
+
+analytics-task-sorted = Usage estimates · active in past 30 days · sorted by { $value }
+
+analytics-ranking-partial = Partial ranking · { $partial } partial · { $missing } unavailable
+
+analytics-updated-delay = Updated { $value } UTC · recent activity may be delayed
+
+analytics-top-chats = Showing top { $value } of { $count } chats
+
+agents-rename-target-gone = The rename target disappeared. Unsubmitted title: { $value }
+
+agents-session-unavailable = Agent session { $root_thread_id } is unavailable: { $error }
+
+agents-load-settings-failed = Failed to load task settings: { $error }
+
+agents-attach-failed = Failed to attach to task: { $error }
+
+agents-load-project-failed = Failed to load project settings: { $error }
+
+agents-load-new-settings-failed = Failed to load new session settings: { $error }
+
+agents-stop-failed = Failed to stop background task: { $error }
+
+agents-confirm-archive = Archive “{ $name }”?
+
+agents-confirm-delete = Permanently delete “{ $name }”?
+
+agents-start-session-failed = Failed to start session: { $error }
+
+worktree-creation-failed = Worktree creation task failed: { $error }
+
+agents-input-tokens = { $value } in
+
+agents-output-tokens = { $value } out
+
+agents-credit-count = { $value } credits
+
+daemon-running-version = Running daemon: { $value }
+
+daemon-cli-package-description = Use this CLI package v{ $version } from { $value }. Copy the complete package and pin it against automatic updates.
+
+voice-read-failed = Failed to read voice settings: { $error }
+
+voice-not-applied = Voice preference was saved but not applied: { $value }
+
+voice-effective-read-failed = Voice preference was saved, but effective settings could not be read: { $error }
+
+voice-save-failed = Failed to save voice: { $error }
+
+agents-group-header =   Group: { $grouping }  { $group_key }
+
+agents-visible-count = { $count } of { $total }
+
+footer-goal-pursuing = Pursuing goal ({ $usage })
+
+footer-goal-unmet = Goal unmet ({ $usage })
+
+footer-context-left = { $percent }% context left
+
+warnings-page = Warnings · { $value } of { $value2 } · { $value3 }
+
+questions-page = { $current } of { $total }
+
+questions-option-index = option { $value }/{ $value2 }
+
+copy-language-code = { $language } code
+
+goal-objective-message = Goal: { $objective }
+
+voice-saved = Voice set to { $value }. Applies to your next voice conversation.
+
+worktree-list-failed = Cannot list managed worktrees: { $error }
+
+worktree-title-named = Worktree: { $value }
+
+worktree-minutes-ago = { $value }m ago
+
+worktree-hours-ago = { $value }h ago
+
+worktree-days-ago = { $value }d ago
+
+keymap-chord-first = First key: { $first }. Press the second key. Esc cancels.
+
+keymap-add-key-chord-selected = Keep `{ $binding }` and add a two-stroke key chord
+
+keymap-binding-key-chord = { $binding } (key chord)
+
+keymap-capture-chord-replacement = Replace `{ $binding }` with a two-stroke key chord
+
+picker-disabled-description = { $desc } (disabled: { $reason })
+
+picker-disabled-reason = disabled: { $reason }

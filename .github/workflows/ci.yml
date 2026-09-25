@@ -29,6 +29,8 @@ jobs:
       - run: npm run build
       - name: Fetch fork source for visible-text audit
         run: git clone --filter=blob:none --depth 1 https://github.com/Cec1c/codex.git .upstream/codex
+      - name: Verify runtime localization keys exist in the language pack
+        run: npm run runtime-i18n:audit -- .upstream/codex
       - name: Verify deterministic visible-text audit twice
         shell: pwsh
         run: |

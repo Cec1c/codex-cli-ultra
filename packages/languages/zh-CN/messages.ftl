@@ -354,7 +354,7 @@ footer-goal-usage-limited = 目标已达到用量限制（使用 /goal resume �
 footer-goal-unmet-with-usage = 目标未完成（{ $usage }）
 footer-goal-abandoned = 目标已放弃
 footer-goal-achieved-with-usage = 目标已完成（{ $usage }）
-footer-goal-achieved = 目标已完成
+footer-goal-achieved = 目标已完成（{ $usage }）
 footer-ide-context = IDE 上下文
 
 # 斜杠命令面板
@@ -368,12 +368,12 @@ slash-review-description = 审查当前更改并查找问题
 slash-rename-description = 重命名当前对话
 slash-resume-description = 恢复已保存的聊天
 slash-archive-description = 归档本次会话并退出
-slash-delete-description = 永久删除本次会话并退出
+slash-delete-description = 永久删除当前会话
 slash-clear-description = 清空终端并开始新聊天
 slash-fork-description = 从当前聊天创建分支
 slash-app-description = 在 Codex Desktop 中继续本次会话
 slash-exit-description = 退出 Codex
-slash-copy-description = 将上一条回复复制为 Markdown
+slash-copy-description = 复制最近回复的全部或部分内容
 slash-raw-description = 切换原始滚屏模式，方便在终端中选择和复制
 slash-diff-description = 显示 Git 差异（包括未跟踪文件）
 slash-mention-description = 引用一个文件
@@ -396,7 +396,7 @@ slash-ide-description = 包含 IDE 中的当前选区、已打开文件和其他
 slash-personality-description = 选择 Codex 的沟通风格
 slash-plan-description = 切换到计划模式
 slash-goal-description = 设置或查看长时间任务的目标
-slash-agent-description = 切换当前智能体线程
+slash-agent-description = 打开智能体任务中心
 slash-side-description = 在临时分支中开启旁路对话
 slash-permissions-description = 选择允许 Codex 执行的操作
 slash-keymap-description = 重新绑定 TUI 快捷键
@@ -1477,3 +1477,675 @@ ccu-welcome-commands = 常用命令
 ccu-welcome-full-access = 完全访问权限
 ccu-welcome-permissions = /permissions 查看访问权限
 ccu-update-now = 打开 CCU 更新器
+
+# Codex 0.157 interface
+experimental-request-failed = 请求实验功能失败
+experimental-page-limit = 实验功能分页超出请求数量限制
+experimental-cursor-repeat = 实验功能分页游标重复
+experimental-page-count = 实验功能列表超过 10 页
+experimental-timeout = 获取实验功能超时
+experimental-interrupted = 获取功能列表已中断
+experimental-save-timeout = 保存实验功能超时，写入可能仍会完成。请重新打开 /experimental 检查。
+experimental-save-failed = 保存实验功能失败。重试前请重新打开 /experimental 检查配置值。
+experimental-readback-interrupted = 功能已保存，但读取结果时中断
+experimental-overridden = 更改已保存，但配置值与所选项不同，可能被更高优先级的设置覆盖。
+agents-unavailable = 共享智能体不可用
+agents-workload-unavailable = 使用工作负载身份时，智能体面板不可用。
+agents-not-connected = 当前会话未连接共享后台服务。
+agents-connect-remote = 连接远程后台服务后即可使用智能体面板。
+agents-start-guidance = 启动后台服务不会中断或迁移当前会话。
+agents-start-server = 启动后台服务
+agents-open-another-terminal = 启动后在另一终端运行 `codex agents`
+agents-return-session = 返回当前会话
+agents-reconnect-failed = 重连失败，智能体列表已过期；请重新启动后重试
+agents-reconnecting-stale = 正在重连，智能体列表已过期
+agents-permissions-resume = 无法在保留所选权限的前提下恢复任务。
+agents-load-retry = 无法加载此对话，请重试。
+agents-permissions-pending = 请等待权限更新完成后再启动会话。
+agents-permissions-differ = 权限配置中的设置不同。
+agents-archiving = 正在归档任务…
+agents-deleting = 正在删除任务…
+agents-action-wait = 请稍候，操作完成前无法切换任务。
+agents-untitled = 未命名任务
+agents-archive-explanation = 这会停止当前任务及其子智能体中正在运行的工作，然后将它们归档。可在恢复会话菜单中还原其历史记录。
+agents-archive-children = 归档任务及子智能体
+agents-delete-explanation = 这会停止当前任务及其子智能体中正在运行的工作，并永久删除其历史记录。此操作无法撤销。
+agents-delete-children = 永久删除任务及子智能体
+ui-cancel = 取消
+agents-may-have-stopped = 工作可能已停止。请恢复任务继续工作，或重试此操作。
+agents-back = 返回智能体列表
+agents-detail-label = 智能体：
+agents-needs-attention = 需要处理
+agents-open-review = 打开任务查看。
+agents-waiting-approval = 等待批准。
+agents-waiting-response = 等待你的回复。
+agents-task-error = 任务遇到错误。
+agents-latest-activity = 最近活动
+agents-return-center = 返回任务中心
+agents-action-failed = 无法完成操作
+ui-unknown = 未知
+agents-loading-task = 正在加载任务…
+agents-start-failed = 无法启动会话。
+agents-settings-failed = 无法加载新会话设置。
+agents-worktree-not-applied = 服务器未应用工作树目录。
+agents-open-failed = 无法打开新会话。
+agents-worktree-local = 托管工作树需要本地工作树支持。
+agents-project-untrusted = 源项目尚未受信任。
+agents-tokens-label = Token：
+agents-usage-label = 预计用量：
+agents-needs-input = 等待输入
+agents-working = 工作中
+agents-ready = 就绪
+agents-inactive = 未运行
+ui-error = 错误
+agents-task-details = 任务详情
+ui-project = 项目
+agents-model-label = 模型：
+ui-branch = 分支
+agents-prompt = 提示词
+agents-no-prompt = 暂无提示词。
+agents-last-message = 最后一条消息
+daemon-not-connected = 未连接本地后台服务。
+daemon-title = 后台服务
+daemon-remote-guidance = 请在服务器所在主机上管理服务。远程连接不支持更新本地后台服务。
+daemon-cli-guidance = 请通过 Codex CLI 使用此菜单管理后台服务。
+daemon-install-stable = 安装官方最新稳定版
+daemon-use-cli = 使用当前 CLI 构建版本
+daemon-no-package = 当前 CLI 没有可复制的本地完整安装包
+daemon-stable-explanation = 安装官方最新稳定版并恢复正式版更新来源，保留当前自动更新设置。
+daemon-confirm-update = 更新后台服务并退出 Codex？
+daemon-update-exit = 更新并退出
+experimental-subagents = 子智能体
+experimental-memories = 记忆
+experimental-save-pending = 实验功能仍在保存中，请完成后再试。
+agents-navigate = 导航
+ui-up = 上移
+ui-down = 下移
+ui-open = 打开
+ui-page-up = 上一页
+ui-page-down = 下一页
+ui-quit = 退出
+agents-tasks = 任务
+ui-new = 新建
+worktree-new = 新建工作树
+ui-resume = 恢复
+ui-rename = 重命名
+ui-stop = 停止
+ui-archive = 归档
+ui-hide = 隐藏
+ui-delete = 删除
+ui-view = 视图
+ui-filter = 筛选
+ui-search = 搜索
+ui-group = 分组
+agents-shortcuts = 任务快捷键
+ui-all = 全部
+agents-needs-you = 等待你处理
+agents-rename-prompt = 重命名 ›{ " " }
+agents-search-prompt = 搜索 ›{ " " }
+ui-status = 状态
+ui-model = 模型
+agents-command-center = 智能体任务中心
+worktree-creating = 正在创建工作树…
+agents-load-error = 加载任务失败
+agents-resize-hint = … 调整窗口大小以查看全部
+agents-reconnecting = 正在重连…
+agents-loading = 正在加载任务…
+agents-load-failed = 无法加载任务
+agents-empty = 暂无任务
+agents-no-matches = 没有匹配的任务
+ui-updated = 更新时间
+agents-current = { "  " }当前
+agents-voice = { "  " }语音
+experimental-loading = 正在加载服务器实验功能…
+experimental-configured-hint = 勾选表示已配置启用。部分实验功能仅对新任务生效，或需要重启 Codex 服务。
+experimental-saving-hint = 正在保存… 关闭此弹窗不会取消写入。
+experimental-retained-hint = 已保留所选项。保存可重试，取消可关闭。
+experimental-read-only = { " " }（只读）
+experimental-saving = 正在保存实验功能…
+experimental-save-interrupted = 保存已中断。请重新打开 /experimental 检查配置值。
+experimental-discovery-interrupted = 获取列表已中断
+experimental-none = 服务器暂无可用实验功能。
+experimental-unavailable = 服务器实验功能不可用。请重新打开 /experimental 重试；若请求一直没有响应，请重启 Codex 客户端。
+experimental-toggle-hint = { " " }切换
+experimental-save-hint = { " " }保存
+experimental-close-hint = { " " }保存/关闭
+feedback-scroll-disclosure = { " " }滚动查看数据说明
+feedback-submit-hint = 提交
+feedback-cancel-hint = 取消
+feedback-data-title = 你的数据可能用于改进我们的模型和产品
+feedback-data-consent = 提交反馈即表示你同意 OpenAI 将反馈用于安全工作和内部模型训练，详情请参阅
+feedback-data-sensitive = 。请勿分享受保密协议限制的信息，以及享有保密特权、人事相关或敏感个人信息。
+feedback-data-chatgpt = 你的反馈可用于改进 ChatGPT。
+feedback-learn-more = 了解更多
+tui-mode-scrollback = 终端滚动模式
+tui-mode-scrollback-description = 使用终端自身的滚动历史
+tui-mode-fullscreen = 全屏模式
+tui-mode-fullscreen-description = 在 Codex 全屏视图内滚动
+tui-mode-title = 下次启动时的界面模式
+tui-mode-restart = 重启后生效，启动参数仍可覆盖此设置。
+worktree-new-location = 新对话应在哪个目录运行？
+worktree-fork-location = 分叉后的对话应在哪个目录运行？
+worktree-current = 当前工作副本
+worktree-current-description = 继续使用当前工作目录
+worktree-new-description = 创建隔离的托管工作副本
+worktree-enable = 请先在 Codex 配置中启用工作树功能。
+worktree-require-repo = 托管工作树需要本地 Git 仓库。
+worktree-title = 工作树
+worktree-continue = 继续当前对话
+worktree-continue-description = 在新工作副本中保留此对话
+worktree-fresh = 开始新对话
+worktree-fresh-description = 在新工作副本中打开全新对话
+worktree-browse = 浏览工作树
+worktree-browse-description = 恢复关联会话或复制工作目录
+worktree-managed-title = 托管工作树
+worktree-loading = 正在加载工作树…
+worktree-pool-empty = 此仓库配置的工作树池中暂无工作树
+worktree-select-hint = 选择工作树以恢复会话、复制路径或删除
+worktree-no-owner = 未关联会话
+worktree-owner-unavailable = 关联会话不可用
+worktree-archived-prefix = 已归档 ·{ " " }
+worktree-copy-label = 工作树工作目录
+worktree-resume-owner = 恢复关联会话
+worktree-copy-cwd = 复制工作目录
+worktree-path-encoding = 路径不是有效的 UTF-8 文本
+worktree-delete = 删除工作树
+worktree-switch-first = 删除前请先切换到其他工作副本
+worktree-singular = 工作树
+worktree-delete-confirm = 删除此工作树？
+worktree-delete-description = 保留会话历史；可能中断其他会话
+worktree-just-now = 刚刚
+keymap-current-prefix = 当前：
+keymap-press-chord = 请依次按下第一个键和第二个键，Esc 取消。
+keymap-error-prefix = 错误：
+
+# Codex 0.157 interface
+recap-failed = 无法生成回顾，请重试。
+recap-pending = 正在生成回顾。
+recap-empty = 暂无可回顾的对话历史。
+hooks-table-heading = 事件                启用/已安装
+hooks-event-empty = { "  " }此事件未安装任何钩子。
+shortcuts-compose = 编写
+shortcuts-commands = 命令
+shortcuts-mention = 引用文件
+shortcuts-shell = Shell 命令
+shortcuts-newline = 换行
+shortcuts-paste-image = 粘贴图片
+shortcuts-editor = 外部编辑器
+shortcuts-history = 搜索历史
+shortcuts-edit-last = 编辑上一条消息
+shortcuts-session = 会话
+shortcuts-queue = 将消息加入队列
+shortcuts-send = 发送消息
+shortcuts-mode = 切换模式
+shortcuts-reasoning-less = 降低推理强度
+shortcuts-reasoning-more = 提高推理强度
+shortcuts-voice = 语音
+shortcuts-agents = 智能体（输入框为空时）
+shortcuts-inspect = 查看活动
+shortcuts-interrupt = 中断
+shortcuts-transcript = 会话记录（先打开）
+shortcuts-open-transcript = 打开会话记录
+shortcuts-find = 查找文本
+shortcuts-scroll = 滚动
+shortcuts-selection = 开始选择
+shortcuts-top-latest = 顶部 / 最新
+shortcuts-title = 键盘快捷键
+shortcuts-close-hint = { " " }关闭
+shortcuts-customize-hint = { " " }自定义
+verification-confirm-hint = 确认
+verification-cancel-hint = 取消
+verification-approve = 验证并批准
+verification-cancel = 取消此请求
+verification-thread = 会话：
+verification-server = 服务器：
+verification-waiting = 等待验证…
+verification-cancel-request-hint = 取消此请求
+voice-strip-label = 语音{ " " }
+voice-strip-mute = 静音{ "  " }
+voice-strip-unmute-command = { " " }取消静音   /voice stop
+voice-strip-mute-command = { " " }静音     /voice stop
+voice-strip-mic = { "  " }麦克风{ " " }
+warnings-title = 警告
+warnings-empty = 暂无警告
+questions-other = 其他
+questions-type-answer = 输入你的回答
+questions-write-answer = 其他（填写回答）
+questions-no-options = 无可选项
+questions-prev = 上一问题
+questions-main-prompt = 主输入框
+questions-next = 下一问题
+questions-queued = 队列消息
+questions-expand = 扩大终端窗口以查看完整选项
+questions-too-long = 回答过长，请缩短后再发送
+mention-insert-segment = { " " }插入 ·{ " " }
+mention-close-segment = { " " }关闭 ·{ " " }
+mention-select-segment = { " " }选择 ·{ " " }
+mention-filter-segment = { " " }筛选
+copy-whole-status = 完整状态
+copy-whole-response = 完整回复
+copy-code = 代码块
+copy-quote = 引用块
+copy-title = 复制到剪贴板
+goal-edit = 编辑目标
+goal-edit-placeholder = 输入目标内容，按 Enter 确认
+goal-resume-question = 恢复暂停的目标？
+goal-resume = 恢复目标
+goal-resume-description = 将目标设为进行中，并在空闲时继续
+goal-leave-paused = 保持暂停
+goal-leave-paused-description = 保持暂停，之后可用 /goal resume 恢复
+goal-title = 目标
+goal-status-label = 状态：
+goal-objective-label = 目标：
+goal-time-label = 已用时间：
+goal-tokens-label = 已用 Token：
+goal-budget-label = Token 预算：
+goal-active-commands = 命令：/goal edit、/goal pause、/goal clear
+goal-paused-commands = 命令：/goal edit、/goal resume、/goal clear
+goal-commands = 命令：/goal edit、/goal clear
+goal-status-active = 进行中
+goal-status-paused = 已暂停
+goal-status-blocked = 受阻
+goal-status-usage-limited = 用量受限
+goal-status-budget-limited = 预算已用尽
+goal-status-complete = 已完成
+model-luna-unavailable = Luna 模型设置暂不可用，请稍后重试 /model。
+model-select = 选择模型
+model-luna-other-models = 常规用量恢复可用后，其他模型将重新显示。
+voice-select-title = 选择声音
+voice-next-conversation = 将在下一次语音对话中生效。
+experimental-wait-startup = 启动完成前无法使用实验功能。
+
+# Codex 0.157 interface
+analytics-recent-sorted = 近 30 天活跃 · 按累计点数排序
+analytics-no-chats = 近期没有本地对话。
+analytics-chat-column = { "  " }对话
+analytics-usd-credits = 预计美元 / 点数
+analytics-spent-credits = 预计美元支出  累计点数
+analytics-lifetime-credits = 累计点数
+analytics-effort = 推理强度
+analytics-speed = 速度
+analytics-model-effort-speed = { "  " }模型 / 推理强度 / 速度
+analytics-credits = 点数
+analytics-not-reported = 未报告
+analytics-breakdown-unavailable = { "  " }明细不可用
+analytics-hidden = { " " }已隐藏
+analytics-hide-zeros = 隐藏零值
+analytics-show-all = 显示全部
+analytics-local-scope = 本地对话 · 不含已归档对话和子智能体用量
+analytics-overview = 概览
+analytics-tokens = Token
+analytics-usage = 用量
+analytics-messages = 消息
+analytics-plugins = 插件
+analytics-skills = 技能
+analytics-chats = 对话
+analytics-plan = 方案
+analytics-help-reports = Tab / Shift+Tab · 下一份 / 上一份报表
+analytics-help-mouse = 在备用屏幕中：鼠标滚轮滚动；点击页签或报表控件进行操作
+analytics-help-range = r · 切换 7 天 / 30 天
+analytics-help-group = g · 切换分组 / 概览聚合方式
+analytics-help-model = m · 切换模型筛选
+analytics-help-sort = s · 切换对话排序指标
+analytics-help-zeros = a · 在展开的明细中显示零点数组
+analytics-help-refresh = R · 刷新全部报表
+analytics-help-toggle = ? · 显示或隐藏帮助
+analytics-shortcuts = 用量页快捷键
+analytics-all-models = 全部模型
+analytics-sort-prefix = { " " }排序：
+analytics-weekly = 每周
+analytics-dashboard = 总览面板
+analytics-focus-hint = { " " }聚焦
+analytics-30day-credits = 30 天活跃 · 累计点数
+analytics-local-excludes-subagents = 本地对话 · 不含子智能体
+analytics-some-unavailable = 部分估算不可用
+analytics-maximize = … 按 z 最大化
+analytics-close-help = 关闭帮助
+analytics-5hour-limits = 5 小时限额
+analytics-weekly-limits = 每周限额
+analytics-no-periods = 此日期范围内没有限额周期
+analytics-history-unavailable = 限额历史暂不可用
+analytics-unavailable = 不可用
+analytics-period-incomplete = { "  " }部分用量不可用，此周期的数据可能不完整
+analytics-period-breakdown-unavailable = { "  " }此周期的明细不可用
+analytics-turn-start-note = 按轮次开始时间分组仅包含任务；百分比以完整周期限额为基数
+analytics-periods-unavailable = 部分周期暂不可用
+analytics-approximate-note = 用量与周期边界为近似值；近期活动的数据可能有延迟
+analytics-product = 产品
+analytics-profile-unavailable = 账户统计不可用。
+analytics-account = 账户
+analytics-lifetime-tokens = 累计 Token
+analytics-peak-tokens = Token 峰值
+analytics-longest-chat = 最长对话
+analytics-current-streak = 当前连续使用天数
+analytics-longest-streak = 最长连续使用天数
+analytics-token-activity = Token 活动
+analytics-last-year = 最近 12 个月
+analytics-token-history-unavailable = Token 活动历史不可用
+analytics-fast-mode = 快速模式
+analytics-most-reasoning = 最常用推理强度
+analytics-skills-explored = 已探索技能
+analytics-total-skills = 技能使用总次数
+analytics-total-chats = 对话总数
+analytics-insights = 活动统计
+analytics-most-tools = 最常用插件和技能
+analytics-no-tools = 暂无插件或技能使用记录。
+analytics-tools-unavailable = 插件和技能用量不可用。
+analytics-profile-partial = 部分账户统计不可用。
+analytics-weekly-percent = 周限额 %
+analytics-5hour-percent = 5 小时限额 %
+analytics-balance-credits = 余额点数
+analytics-no-task-usage = 暂无任务用量记录。
+analytics-debited-note = 从余额扣除的点数 · 包含调整
+analytics-full-limit-note = 已记录用量 / 当前完整限额 · 可能超过 100%
+analytics-partial-suffix = { " " }· 数据不完整
+analytics-task-unavailable = { "  " }任务用量不可用。
+analytics-task-scope = 本地对话 · 包含已发现的子会话 · 不含已归档的根会话
+analytics-partial-ranking = 部分排名 · 最近活跃的 100 个对话
+analytics-invalid-token-date = Token 报表日期无效。
+ui-other = 其他
+analytics-token-breakdown-unavailable = 此报表不提供 Token 明细。
+analytics-invalid-token-count = Token 数量无效。
+analytics-tokens-not-reported = 未报告 Token 数量。
+analytics-uncached-input = 未缓存输入
+analytics-cached-input = 缓存输入
+analytics-output = 输出
+analytics-surface = 使用入口
+analytics-feature = 功能
+analytics-turn-start = 轮次开始时间
+analytics-reasoning = 推理
+analytics-token-type = Token 类型
+analytics-request-interrupted = 请求已中断，按 R 重试。
+analytics-request-timeout = 请求超时，按 R 重试。
+analytics-loading = 正在加载…
+analytics-no-history = 暂无历史记录。
+analytics-load-failed = 无法加载统计，按 R 重试。
+analytics-invalid-date = 统计数据返回了无效日期。
+analytics-unsupported-grouping = 不支持此消息数分组方式。
+analytics-amount-not-reported = 未报告方案用量。
+analytics-invalid-amount = 统计数据返回了无效数量。
+analytics-messages-unavailable = 消息数不可用。
+analytics-turns-unavailable = 轮次数不可用。
+analytics-tool-activity-unavailable = 工具活动不可用。
+analytics-image-generation = 图像生成
+analytics-automations = 自动任务
+analytics-auto-review = 自动审核
+analytics-review-classifier = 自动审核分类器
+analytics-thread-title = 会话标题
+analytics-system = 系统
+analytics-workspace-agents = 工作区智能体
+analytics-memory-consolidation = 记忆整合
+analytics-desktop = 桌面应用
+analytics-web = 网页
+analytics-work-web = Work 网页版
+analytics-work-desktop = Work 桌面版
+analytics-work-mobile = Work 移动版
+analytics-mobile = 移动端
+analytics-exec = 执行
+analytics-code-review = 代码审查
+analytics-user-messages = 用户消息
+analytics-goals = 目标
+analytics-queued = 队列消息
+analytics-queued-now = 立即运行的队列消息
+analytics-scheduled = 定时自动任务
+analytics-automations-now = 立即运行的自动任务
+analytics-followups = 定时跟进
+analytics-followups-now = 立即运行的跟进
+analytics-agent-tasks = 智能体创建的任务
+analytics-agent-followups = 智能体跟进
+analytics-fast = 快速
+analytics-standard = 标准
+analytics-invalid-plan-time = 方案历史时间戳无效。
+analytics-too-many-periods = 方案历史包含过多周期。
+analytics-unsupported-window = 不支持此方案历史窗口。
+analytics-invalid-period = 方案历史周期无效。
+analytics-account-unsupported = 此账户类型不支持用量统计。
+
+slash-tui-description = 选择下次启动时的终端界面模式
+
+slash-daemon-description = 管理本地后台服务
+
+slash-warnings-description = 查看保留的警告和诊断详情
+
+slash-recap-description = 立即回顾当前对话
+
+slash-cd-description = 更改当前工作目录
+
+slash-worktree-description = 在新工作树中开始或继续对话
+
+slash-pwd-description = 显示当前工作目录
+
+slash-export-description = 将对话导出为 Markdown
+
+slash-voice-description = 开始或停止语音；使用 /voice settings 选择声音
+
+slash-subagents-description = 切换当前会话中的子智能体
+
+daemon-host-embedded-warning = 此终端不允许启动独立后台服务，将在当前进程中继续运行；退出 Codex 时任务会停止。
+
+keymap-set-key-chord = 设置两段式快捷键
+
+keymap-set-key-chord-description = 为此操作录入连续按下的两个键
+
+keymap-replace-key-chord = 替换为两段式快捷键
+
+keymap-add-key-chord = 添加两段式快捷键
+
+resume-status-active = 未归档
+
+resume-status-archived = 已归档
+
+feedback-success-share-internal = 可在 #codex-feedback 中分享：
+
+hooks-context-unlimited = 无限制
+
+hooks-context-limit = 上限：约 { $limit } 个 Token
+
+hooks-detail-context = 上下文
+
+hooks-event-session-end = 会话结束
+
+hooks-event-interrupt = 中断
+
+hooks-event-session-end-description = 会话结束之前
+
+hooks-event-interrupt-description = 被中断的轮次终止之前
+
+reasoning-effort-persistent = 持续
+
+auto-review-action = 操作
+
+permissions-full-access-cyber-recommend-auto-review = 强烈建议选择“替我审批”，并根据实际用途自定义审核策略。
+
+permissions-full-access-cyber-recommend-ask = 强烈建议选择“请求批准”。
+
+permissions-full-access-cyber-risk = 网络安全模型执行危险操作的风险更高。
+
+permissions-full-access-cyber-safeguards = 授予完全访问权限前，请确保已采取适当的保护措施。
+
+slash-archive-session-subtitle = 确定归档当前会话吗？
+
+slash-archive-session-confirm = 是，归档
+
+mcp-auth-unknown = 未知
+
+mention-type-task = 任务
+
+# Codex 0.157 interface
+daemon-incompatible-title = 后台服务的功能设置不兼容
+daemon-unavailable-title = 无法使用后台服务
+daemon-restart-features = 重启后将使用以下共享功能设置：
+daemon-restart-warning = 这些设置会持久保存，并可能禁用其他客户端的功能。重启可能中断正在执行或排队的工作。
+daemon-run-embedded = 本次不使用后台服务
+daemon-restart-settings = 使用这些设置重启
+daemon-unmanaged = 此服务不由 Codex 管理。
+daemon-restart-cannot-fix = 重启无法解决此兼容性问题。
+footer-cycle-label = shift+tab 切换
+footer-cycle-suffix = { " " }切换）
+footer-agents-hint = { " " }查看智能体
+footer-side-prefix = 侧边对话{ " " }
+footer-side-label = 侧边对话
+footer-switch-hint = { " " }切换
+footer-close-hint = { " " }关闭
+footer-side-hint = { " " }打开侧边对话
+footer-context-full = 上下文剩余 100%
+picker-disabled-suffix = { " " }（已禁用）
+sandbox-setup-description = 设置 Codex 智能体沙箱以保护文件并控制网络访问。了解更多 <https://developers.openai.com/codex/windows>
+sandbox-required-description = 你的组织要求启用默认 Codex 智能体沙箱。请完成设置以保护文件并控制网络访问。
+sandbox-learn-more = 了解更多 <https://developers.openai.com/codex/windows>
+sandbox-setup-default = 设置默认沙箱（需要管理员权限）
+sandbox-use-non-admin = 使用非管理员沙箱（遭受提示注入时风险较高）
+sandbox-setup-admin-failed = 无法以管理员权限设置沙箱
+sandbox-non-admin-warning = 仍可在非管理员沙箱中使用 Codex，但遭受提示注入时风险较高。
+sandbox-default-required = 你的组织要求先完成默认沙箱设置才能继续使用 Codex。
+sandbox-retry-admin = 重试设置管理员沙箱
+sandbox-continue-non-admin = 使用非管理员沙箱运行 Codex
+sandbox-input-disabled = 设置完成前无法输入。
+sandbox-setting-up = 正在设置沙箱…
+sandbox-wait = 请稍候，这可能需要几分钟
+
+experimental-feature-analytics-plan-history-name = 方案用量历史
+
+experimental-feature-analytics-plan-history-description = 在 /analytics 中预览个人账户的 5 小时及每周用量历史。
+
+experimental-feature-network-proxy-name = 网络代理
+
+experimental-feature-network-proxy-description = 对已获网络访问权限的沙箱会话应用网络代理限制。
+
+experimental-feature-prevent-idle-sleep-name = 运行时防止休眠
+
+experimental-feature-prevent-idle-sleep-description = 在 Codex 运行会话期间保持电脑唤醒。
+
+keymap-replace-key-chord-selected = 将 `{ $binding }` 替换为两段式快捷键
+
+daemon-without-reason = 不使用共享后台服务运行：{ $value }。
+
+experimental-feature-unadvertised = 服务器未提供实验功能 `{ $name }`
+
+experimental-readback-failed = 功能已保存，但无法刷新配置值：{ $error }
+
+analytics-chat-page = 显示 { $count }–{ $count }，共 { $count } 个对话
+
+analytics-chat-page-range = 显示 { $value }–{ $end }，共 { $count } 个对话
+
+analytics-help-report-number = 1–{ $value } · 直接打开报表
+
+analytics-help-chart-selection = { $value } / { $value2 } · 选择图表日期或方案窗口
+
+analytics-help-period-selection = { $value } / { $value2 } · 选择对话或方案周期；滚动概览
+
+analytics-help-expand = { $value } · 展开或折叠明细
+
+analytics-help-scroll = { $value } / { $value2 } · 滚动报表
+
+analytics-help-focus = z · 切换总览 / 单份报表；{ $value } · 聚焦总览卡片
+
+analytics-help-back = { $value } · 返回；q / ctrl+c · 关闭用量页
+
+analytics-report-updated = 报表更新于 { $value } UTC
+
+analytics-updated = 更新于 { $value } UTC
+
+analytics-group-by = 按{ $value }
+
+analytics-as-of = 用量截至 { $value } UTC · * 表示上次更新时的当前周期
+
+analytics-available-since = 自 { $value } UTC 起可用
+
+analytics-usage-plan = 用量 · { $plan }
+
+analytics-days = { $days } 天
+
+analytics-statistics-as-of = 统计截至 { $value }
+
+analytics-task-sorted = 用量估算 · 近 30 天活跃 · 按{ $value }排序
+
+analytics-ranking-partial = 部分排名 · { $partial } 项数据不完整 · { $missing } 项不可用
+
+analytics-updated-delay = 更新于 { $value } UTC · 近期活动可能延迟显示
+
+analytics-top-chats = 显示前 { $value } 个，共 { $count } 个对话
+
+agents-rename-target-gone = 重命名目标已不存在。未提交的标题：{ $value }
+
+agents-session-unavailable = 智能体会话 { $root_thread_id } 不可用：{ $error }
+
+agents-load-settings-failed = 加载任务设置失败：{ $error }
+
+agents-attach-failed = 连接任务失败：{ $error }
+
+agents-load-project-failed = 加载项目设置失败：{ $error }
+
+agents-load-new-settings-failed = 加载新会话设置失败：{ $error }
+
+agents-stop-failed = 停止后台任务失败：{ $error }
+
+agents-confirm-archive = 归档“{ $name }”？
+
+agents-confirm-delete = 永久删除“{ $name }”？
+
+agents-start-session-failed = 启动会话失败：{ $error }
+
+worktree-creation-failed = 创建工作树失败：{ $error }
+
+agents-input-tokens = 输入 { $value }
+
+agents-output-tokens = 输出 { $value }
+
+agents-credit-count = { $value } 点数
+
+daemon-running-version = 后台服务运行版本：{ $value }
+
+daemon-cli-package-description = 使用来自 { $value } 的当前 CLI 安装包 v{ $version }。将复制完整安装包，并锁定版本以避免自动更新。
+
+voice-read-failed = 读取声音设置失败：{ $error }
+
+voice-not-applied = 声音偏好已保存但未生效：{ $value }
+
+voice-effective-read-failed = 声音偏好已保存，但无法读取实际设置：{ $error }
+
+voice-save-failed = 保存声音失败：{ $error }
+
+agents-group-header = { "  " }分组：{ $grouping }  { $group_key }
+
+agents-visible-count = { $count } / { $total }
+
+footer-goal-pursuing = 正在推进目标（{ $usage }）
+
+footer-goal-unmet = 目标未完成（{ $usage }）
+
+footer-context-left = 上下文剩余 { $percent }%
+
+warnings-page = 警告 · { $value } / { $value2 } · { $value3 }
+
+questions-page = { $current } / { $total }
+
+questions-option-index = 选项 { $value }/{ $value2 }
+
+copy-language-code = { $language } 代码
+
+goal-objective-message = 目标：{ $objective }
+
+voice-saved = 声音已设为 { $value }，将在下一次语音对话中生效。
+
+worktree-list-failed = 无法列出托管工作树：{ $error }
+
+worktree-title-named = 工作树：{ $value }
+
+worktree-minutes-ago = { $value } 分钟前
+
+worktree-hours-ago = { $value } 小时前
+
+worktree-days-ago = { $value } 天前
+
+keymap-chord-first = 第一个键：{ $first }。请按下第二个键，Esc 取消。
+
+keymap-add-key-chord-selected = 保留 `{ $binding }` 并添加两段式快捷键
+
+keymap-binding-key-chord = { $binding }（两段式快捷键）
+
+keymap-capture-chord-replacement = 将 `{ $binding }` 替换为两段式快捷键
+
+picker-disabled-description = { $desc }（已禁用：{ $reason }）
+
+picker-disabled-reason = 已禁用：{ $reason }
