@@ -1469,3 +1469,11 @@ feedback-connectivity-diagnostics = Connectivity diagnostics
 feedback-yes = Yes
 feedback-upload-yes-description = Share the current Codex session logs and diagnostics with the team for troubleshooting.
 feedback-no = No
+
+## Claude-style CCU interface
+ccu-welcome-back = Welcome back!
+ccu-welcome-tips = Tips for getting started
+ccu-welcome-commands = Useful commands
+ccu-welcome-full-access = Full access
+ccu-welcome-permissions = /permissions to review access
+ccu-update-now = Open CCU updater

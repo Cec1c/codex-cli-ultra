@@ -30,7 +30,7 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
   });
 
   assert.equal(result.language.locale, "zh-CN");
-  assert.equal(result.language.messages, 1396);
+  assert.equal(result.language.messages, 1402);
   assert.equal(result.contentRoot, join(installRoot, "content"));
   assert.equal(await readFile(join(codexHome, "ui-language"), "utf8"), "zh-CN\n");
   assert.equal(await readFile(join(codexHome, "ui-theme"), "utf8"), "my.custom.theme\n");
@@ -55,11 +55,12 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
   );
   assert.equal(theme.statusLine.separator, " │ ");
   assert.equal(theme.statusLine.modelReasoningStyle, "bracketed");
-  assert.equal(theme.statusLine.modelEmojis.length, 20);
-  assert.equal(theme.statusLine.palette.length, 12);
+  assert.deepEqual(theme.statusLine.modelEmojis, ["🐱"]);
+  assert.equal(theme.statusLine.palette.length, 0);
   assert.equal(theme.statusLine.randomizePalette, false);
   assert.equal(theme.statusLine.softenColors, false);
-  assert.equal(theme.welcome.border, "#89DCEB");
+  assert.equal(theme.welcome.border, "#ED8796");
+  assert.equal(theme.interface.layout, "claude");
   assert.equal(
     JSON.parse(
       await readFile(join(installRoot, "themes", "ccu.hermes", "theme.json"), "utf8")
@@ -82,7 +83,7 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
     installRoot,
     env: { CODEX_HOME: codexHome }
   });
-  assert.equal(cachedResult.language.messages, 1396);
+  assert.equal(cachedResult.language.messages, 1402);
   assert.equal(cachedResult.contentRoot, join(installRoot, "content"));
 
   const originalConfig = [

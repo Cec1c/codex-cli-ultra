@@ -1469,3 +1469,11 @@ feedback-connectivity-diagnostics = 连接诊断
 feedback-yes = 是
 feedback-upload-yes-description = 与团队共享当前 Codex 会话日志和诊断信息，以便排查问题。
 feedback-no = 否
+
+## Claude-style CCU interface
+ccu-welcome-back = 欢迎回来！
+ccu-welcome-tips = 开始使用
+ccu-welcome-commands = 常用命令
+ccu-welcome-full-access = 完全访问权限
+ccu-welcome-permissions = /permissions 查看访问权限
+ccu-update-now = 打开 CCU 更新器

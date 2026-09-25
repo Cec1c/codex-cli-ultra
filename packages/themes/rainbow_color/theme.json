@@ -2,49 +2,17 @@
   "schemaVersion": 1,
   "type": "theme",
   "id": "rainbow_color",
-  "displayName": "Rainbow Color",
-  "version": "1.0.0",
+  "displayName": "Claude Code Style",
+  "version": "2.0.0",
   "statusLine": {
     "separator": " │ ",
     "progressWidth": 10,
     "filled": "█",
-    "empty": "░",
+    "empty": "█",
     "modelEmojis": [
-      "🦊",
-      "🐱",
-      "🐶",
-      "🐼",
-      "🐨",
-      "🐰",
-      "🦁",
-      "🐯",
-      "🐸",
-      "🐵",
-      "🦄",
-      "🐙",
-      "🦋",
-      "🌟",
-      "🔥",
-      "💎",
-      "🎯",
-      "🚀",
-      "⚡",
-      "🌈"
+      "🐱"
     ],
-    "palette": [
-      "#F5E0DC",
-      "#F2CDCD",
-      "#F5C2E7",
-      "#CBA6F7",
-      "#FAB387",
-      "#F9E2AF",
-      "#A6E3A1",
-      "#94E2D5",
-      "#89DCEB",
-      "#74C7EC",
-      "#CDD6F4",
-      "#6C7086"
-    ],
+    "palette": [],
     "randomizePalette": false,
     "softenColors": false,
     "modelReasoningStyle": "bracketed",
@@ -54,28 +22,32 @@
       "progress": "#A6E3A1",
       "time": "#F9E2AF",
       "quota": "#FAB387",
-      "separator": "#CBA6F7"
+      "separator": "#CBA6F7",
+      "progressEmpty": "#3B4A42",
+      "percent": "#74C7EC",
+      "activeTime": "#89DCEB",
+      "permissions": "#FF6B80"
     }
   },
   "welcome": {
-    "title": "#89DCEB",
-    "version": "#F5E0DC",
-    "label": "#89DCEB",
-    "model": "#F2CDCD",
-    "path": "#A6E3A1",
-    "permissions": "#FAB387",
-    "border": "#89DCEB",
-    "command": "#89DCEB",
-    "badge": "#F5C2E7"
+    "title": "#FF6B80",
+    "version": "#A5ADCB",
+    "label": "#FF6B80",
+    "model": "#CAD3F5",
+    "path": "#A5ADCB",
+    "permissions": "#FF6B80",
+    "border": "#ED8796",
+    "command": "#CAD3F5",
+    "badge": "#FF6B80"
   },
   "statusCard": {
-    "border": "#89DCEB",
-    "title": "#89DCEB",
+    "border": "#ED8796",
+    "title": "#FF6B80",
     "version": "#F5E0DC",
-    "label": "#89DCEB",
-    "model": "#F2CDCD",
-    "path": "#A6E3A1",
-    "permissions": "#FAB387",
+    "label": "#A5ADCB",
+    "model": "#F5E0DC",
+    "path": "#CAD3F5",
+    "permissions": "#FF6B80",
     "usage": "#89DCEB",
     "progress": "#A6E3A1",
     "percent": "#74C7EC",
@@ -84,10 +56,17 @@
     "value": "#CDD6F4"
   },
   "dialog": {
-    "selection": "#89DCEB",
+    "selection": "#FF6B80",
     "background": null
   },
   "composer": {
     "background": null
+  },
+  "interface": {
+    "layout": "claude",
+    "foreground": "#CAD3F5",
+    "muted": "#A5ADCB",
+    "userBackground": "#5B6078",
+    "rule": "#A5ADCB"
   }
 }

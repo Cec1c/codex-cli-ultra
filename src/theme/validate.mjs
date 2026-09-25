@@ -51,7 +51,7 @@ export function validateThemePack(value) {
   assertAllowedKeys(
     value,
     ["schemaVersion", "type", "id", "displayName", "version", "statusLine", "welcome"],
-    ["statusCard", "dialog", "composer"],
+    ["statusCard", "dialog", "composer", "interface"],
     "theme"
   );
   if (value.schemaVersion !== 1 || value.type !== "theme") {
@@ -94,9 +94,10 @@ export function validateThemePack(value) {
     throw new Error("theme.statusLine.palette must contain up to 32 colors");
   }
   assertRecord(value.statusLine.colors, "theme.statusLine.colors");
-  assertExactKeys(
+  assertAllowedKeys(
     value.statusLine.colors,
     ["model", "usage", "progress", "time", "quota", "separator"],
+    ["progressEmpty", "percent", "activeTime", "permissions"],
     "theme.statusLine.colors"
   );
   const randomizePalette = value.statusLine.randomizePalette ?? true;
@@ -154,6 +155,18 @@ export function validateThemePack(value) {
     };
   }
 
+  let ui;
+  if (value.interface !== undefined) {
+    assertRecord(value.interface, "theme.interface");
+    assertExactKeys(value.interface, ["layout", "foreground", "muted", "userBackground", "rule"], "theme.interface");
+    if (value.interface.layout !== "claude") {
+      throw new Error("theme.interface.layout must be claude");
+    }
+    ui = Object.fromEntries(Object.entries(value.interface).map(([key, entry]) => [
+      key, key === "layout" ? entry : color(entry, `theme.interface.${key}`)
+    ]));
+  }
+
   return {
     schemaVersion: 1,
     type: "theme",
@@ -187,6 +200,7 @@ export function validateThemePack(value) {
     ),
     ...(statusCard === undefined ? {} : { statusCard }),
     ...(dialog === undefined ? {} : { dialog }),
-    ...(composer === undefined ? {} : { composer })
+    ...(composer === undefined ? {} : { composer }),
+    ...(ui === undefined ? {} : { interface: ui })
   };
 }

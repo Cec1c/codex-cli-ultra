@@ -136,7 +136,7 @@ test("bundled Hermes theme uses the Macchiato-inspired color roles", async () =>
   ]);
 });
 
-test("bundled rainbow_color theme matches the approved V3 palette", async () => {
+test("bundled default theme carries Claude layout and independently colored status details", async () => {
   const source = JSON.parse(
     await readFile(
       new URL("../packages/themes/rainbow_color/theme.json", import.meta.url),
@@ -152,10 +152,28 @@ test("bundled rainbow_color theme matches the approved V3 palette", async () => 
     progress: "#a6e3a1",
     time: "#f9e2af",
     quota: "#fab387",
-    separator: "#cba6f7"
+    separator: "#cba6f7",
+    progressEmpty: "#3b4a42",
+    percent: "#74c7ec",
+    activeTime: "#89dceb",
+    permissions: "#ff6b80"
   });
-  assert.equal(validated.welcome.border, "#89dceb");
-  assert.equal(validated.statusCard.label, "#89dceb");
+  assert.equal(validated.interface.layout, "claude");
+  assert.equal(validated.interface.userBackground, "#5b6078");
+  assert.equal(validated.welcome.border, "#ed8796");
+  assert.equal(validated.statusCard.label, "#a5adcb");
   assert.equal(validated.dialog.background, null);
   assert.equal(validated.composer.background, null);
+});
+
+test("theme validator rejects invalid interface colors and unknown layout contracts", () => {
+  const source = themePack();
+  source.interface = {
+    layout: "claude", foreground: "#CAD3F5", muted: "#A5ADCB",
+    userBackground: "#5B6078", rule: "invalid"
+  };
+  assert.throws(() => validateThemePack(source), /interface.rule must be a #RRGGBB color/);
+  source.interface.rule = "#A5ADCB";
+  source.interface.layout = "unknown";
+  assert.throws(() => validateThemePack(source), /layout must be claude/);
 });
