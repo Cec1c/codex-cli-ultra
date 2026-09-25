@@ -2149,3 +2149,13 @@ keymap-capture-chord-replacement = Replace `{ $binding }` with a two-stroke key 
 picker-disabled-description = { $desc } (disabled: { $reason })
 
 picker-disabled-reason = disabled: { $reason }
+
+status-permissions-workspace = Workspace
+
+status-permissions-custom = Custom permissions
+
+warnings-count-one = { $count } warning
+
+warnings-count-many = { $count } warnings
+
+warnings-view-hint = { " " }to view

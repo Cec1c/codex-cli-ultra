@@ -30,7 +30,7 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
   });
 
   assert.equal(result.language.locale, "zh-CN");
-  assert.equal(result.language.messages, 1958);
+  assert.equal(result.language.messages, 1963);
   assert.equal(result.contentRoot, join(installRoot, "content"));
   assert.equal(await readFile(join(codexHome, "ui-language"), "utf8"), "zh-CN\n");
   assert.equal(await readFile(join(codexHome, "ui-theme"), "utf8"), "my.custom.theme\n");
@@ -83,7 +83,7 @@ test("content sync migrates the legacy zh-Hans preference and preserves the them
     installRoot,
     env: { CODEX_HOME: codexHome }
   });
-  assert.equal(cachedResult.language.messages, 1958);
+  assert.equal(cachedResult.language.messages, 1963);
   assert.equal(cachedResult.contentRoot, join(installRoot, "content"));
 
   const originalConfig = [

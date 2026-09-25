@@ -2149,3 +2149,13 @@ keymap-capture-chord-replacement = 将 `{ $binding }` 替换为两段式快捷�
 picker-disabled-description = { $desc }（已禁用：{ $reason }）
 
 picker-disabled-reason = 已禁用：{ $reason }
+
+status-permissions-workspace = 工作区
+
+status-permissions-custom = 自定义权限
+
+warnings-count-one = { $count } 条警告
+
+warnings-count-many = { $count } 条警告
+
+warnings-view-hint = { " " }查看
