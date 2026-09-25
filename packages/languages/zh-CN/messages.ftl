@@ -2159,3 +2159,15 @@ warnings-count-one = { $count } 条警告
 warnings-count-many = { $count } 条警告
 
 warnings-view-hint = { " " }查看
+
+warnings-hint-copy = 复制
+
+warnings-hint-warning = 切换警告
+
+warnings-hint-scroll = 滚动
+
+warnings-source-startup = 启动
+
+warnings-source-warning = 警告
+
+warnings-source-deprecation = 弃用提示

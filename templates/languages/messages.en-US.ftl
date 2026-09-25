@@ -2159,3 +2159,15 @@ warnings-count-one = { $count } warning
 warnings-count-many = { $count } warnings
 
 warnings-view-hint = { " " }to view
+
+warnings-hint-copy = copy
+
+warnings-hint-warning = warning
+
+warnings-hint-scroll = scroll
+
+warnings-source-startup = Startup
+
+warnings-source-warning = Warning
+
+warnings-source-deprecation = Deprecation
