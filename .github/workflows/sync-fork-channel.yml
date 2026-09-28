@@ -1,8 +1,7 @@
 name: Sync fork release channel
 
 on:
-  schedule:
-    - cron: "47 */6 * * *"
+  # Explicitly sync after choosing to publish a new fork release.
   workflow_dispatch:
 
 concurrency:
@@ -15,6 +14,7 @@ permissions:
 
 jobs:
   sync:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
