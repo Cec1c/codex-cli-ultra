@@ -11,9 +11,9 @@
 [![Stars](https://img.shields.io/github/stars/Cec1c/codex-cli-ultra?style=flat-square&label=Stars&color=E3B341)](https://github.com/Cec1c/codex-cli-ultra/stargazers)
 [![许可：GPLv3](https://img.shields.io/static/v1?label=%E8%AE%B8%E5%8F%AF&message=GPLv3&color=2563EB&style=flat-square)](LICENSE)
 
-为 Codex CLI 提供界面本地化、跨平台安装管理，以及可选的主题与状态栏扩展。
+为 Codex CLI 安装界面语言包、调整主题与状态栏，并通过 CCU Manager 管理版本更新。
 
-CCU 将语言包与 Codex 运行时分开维护，通过 CCU-I18N fork 加载外部 Fluent FTL 翻译。当前参考语言包为简体中文。
+CCU 是社区维护的扩展，通过 CCU-I18N fork 加载独立的 Fluent FTL 语言包。当前参考语言包为简体中文，支持 Windows、Linux 和 macOS 安装。
 
 [English](README.en.md) ｜ [安装与卸载](#安装与卸载) ｜ [CCU Manager](#ccu-manager) ｜ [文档与贡献](#文档与贡献) ｜ [Linux DO](https://linux.do)
 
@@ -31,7 +31,7 @@ CCU 将语言包与 Codex 运行时分开维护，通过 CCU-I18N fork 加载外
 当前截图使用简体中文语言包。其他语言可基于 [英文模板](templates/languages/messages.en-US.ftl) 开发，具体流程见 [贡献指南](CONTRIBUTING.md)。
 
 > [!NOTE]
-> 截图中的终端背景、字体和配色来自独立的终端配置；CCU 负责图中 Codex 界面的本地化和可选状态栏。
+> 截图展示简体中文界面与可选状态栏。终端背景、字体和配色可在你使用的终端中配置。
 
 <table>
   <tr>
@@ -53,7 +53,7 @@ CCU 将语言包与 Codex 运行时分开维护，通过 CCU-I18N fork 加载外
 - Windows 安装需要 PowerShell 7；Linux/macOS 安装需要 Bash
 
 > [!IMPORTANT]
-> Release ZIP 已包含经过 manifest、文件大小和 SHA256 校验的 fork 二进制，但仍需要本机安装 Node.js 24+。官方 Codex 为可选项：安装 CCU 时若检测到它，会登记为故障回退目标；没有官方版也可以独立使用。
+> 先安装 Node.js 24+，再使用包含 fork 二进制的 Release ZIP。安装器会按 manifest 校验文件大小和 SHA256。已有官方 Codex 时，安装器会将其登记为故障回退目标；其余情况使用独立安装模式。
 
 可选：若希望保留官方 Codex 作为回退目标，可先安装：
 
@@ -76,7 +76,7 @@ codex-ultra status
 
 `codex --version` 应显示带 `ccu.i18n` 的 fork 版本，`codex --i18n-self-check` 应成功完成自检，`codex-ultra status` 则列出管理器、fork 和官方版的本地状态。随后运行 `codex` 开始使用，或运行 `ccu-manager` 打开管理界面。
 
-需要跳过审批与沙箱时，可以自行选择 `codex --yolo`；它不是验证安装所需的参数。
+`codex --yolo` 用于跳过审批与沙箱，按会话需要选择。
 
 | 系统 | Release 文件后缀 | 安装入口 |
 | --- | --- | --- |
@@ -132,7 +132,7 @@ codex-ultra uninstall
 # 或运行 Release 包中的 uninstall.cmd / ./uninstall.sh
 ```
 
-卸载会移除 CCU 的命令入口和受其管理的配置。若原先安装了官方 Codex，新终端中的 `codex` 会重新使用官方版；独立安装模式下，卸载不会额外安装官方 Codex。
+卸载会移除 CCU 的命令入口和受其管理的配置。原先安装了官方 Codex 时，新终端中的 `codex` 会恢复为官方版；独立安装用户如需继续使用 Codex，可安装官方包。
 
 ### 我非要源码安装
 
@@ -154,7 +154,7 @@ npm ci
 ./install.sh
 ```
 
-本仓库只编译 CCU 管理器，不编译完整的 Codex Rust 项目。运行 CCU-I18N 仍需要符合发布 manifest 的 fork 二进制。
+本仓库构建 CCU 管理器，并搭配符合发布 manifest 的 CCU-I18N fork 二进制运行。
 
 安装器按以下顺序查找 fork Release：
 
@@ -202,7 +202,7 @@ npm ci
 这些管理命令支持 `--json`，便于脚本读取结果。
 
 > [!IMPORTANT]
-> `upgrade` 更新完整 CCU 发布包，`update` 更新 fork。希望一并获取新版管理器、语言包和主题时，使用 `codex-ultra upgrade` 或 Manager 的 `u` 键；`content sync` 只同步已有内容源，不会下载新的 CCU 发布包。
+> 更新管理器、语言包、主题和 fork，使用 `codex-ultra upgrade` 或 Manager 的 `u` 键。单独更新 fork 使用 `update`；同步已有语言包与主题内容源使用 `content sync`。
 
 ## 工作原理
 
@@ -225,7 +225,7 @@ CCU-I18N fork ── i18n API + built-in English fallback
 CCU manager ── install / update / uninstall / sync
 ```
 
-官方 npm Codex 是可选回退目标；没有官方版时，CCU 以 standalone 状态安装并直接启动已校验的 fork。若已登记官方版且 fork 状态无效，启动器才回退到官方二进制。
+CCU 默认启动已校验的 fork。fork 状态无效且已登记官方 npm Codex 时，启动器使用官方版回退；独立安装模式直接使用 fork。
 
 是的，这么追着codex的更新其实很累很低效，但相关维护人员暂时并没有理会我的关于添加i18n接口的issues，尽管我当时提交了一版示范
 
@@ -259,7 +259,7 @@ codex-cli-ultra/
 └── uninstall.ps1 / uninstall.cmd / uninstall.sh
 ```
 
-`dist/`、`tui/target/` 和 `artifacts/` 为构建产物，不是语言包或主题的维护入口。
+`dist/`、`tui/target/` 和 `artifacts/` 保存构建产物；语言包与主题在上方对应源码目录维护。
 
 ## 语言包格式
 
@@ -318,7 +318,7 @@ fork 自动化定期检查上游稳定 Release；本仓库的[通道同步工作
 项目已有 Windows x64 回归与 Linux x64 真环境安装/卸载冒烟记录。五个平台均已提供 Release 资产，Linux ARM64 和两种 macOS 架构已接入构建矩阵。
 
 > [!NOTE]
-> macOS 仍需要真人实机验收。CI 构建不能替代 Gatekeeper、终端配置与浏览器联动的设备测试，具体验证步骤见 [macOS 验收清单](docs/macos-testing.md)。
+> macOS 的 Gatekeeper、终端配置与浏览器联动仍待实机验收，步骤见 [macOS 验收清单](docs/macos-testing.md)。
 
 ## 文档与贡献
 
@@ -341,6 +341,6 @@ fork 自动化定期检查上游稳定 Release；本仓库的[通道同步工作
 
 本项目使用 [GNU General Public License v3.0](LICENSE)。语言包需在 manifest 中单独声明许可证。
 
-## 非官方说明
+## 项目归属
 
-Codex-Cli-Ultra 是非官方社区项目，与 OpenAI 不存在隶属、赞助或背书关系。Codex 和 OpenAI 是其各自权利人的名称或商标。
+Codex-Cli-Ultra 由社区独立维护。Codex 和 OpenAI 的名称及商标归各自权利人所有。

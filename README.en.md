@@ -11,9 +11,9 @@
 [![Stars](https://img.shields.io/github/stars/Cec1c/codex-cli-ultra?style=flat-square&label=Stars&color=E3B341)](https://github.com/Cec1c/codex-cli-ultra/stargazers)
 [![License: GPLv3](https://img.shields.io/static/v1?label=License&message=GPLv3&color=2563EB&style=flat-square)](LICENSE)
 
-Interface localization, cross-platform installation management, and optional themes and status-line extensions for Codex CLI.
+Install language packs for Codex CLI, customize its theme and status line, and manage updates through CCU Manager.
 
-CCU maintains language packs separately from the Codex runtime. The CCU-I18N fork loads external Fluent FTL translations, with Simplified Chinese as the current reference language pack.
+CCU is a community-maintained extension whose CCU-I18N fork loads independent Fluent FTL language packs. Simplified Chinese is the reference pack, with installers for Windows, Linux, and macOS.
 
 [简体中文](README.md) ｜ [Installation](#installation-and-removal) ｜ [CCU Manager](#ccu-manager) ｜ [Docs and Contributing](#documentation-and-contributing) ｜ [Linux DO](https://linux.do)
 
@@ -31,7 +31,7 @@ CCU maintains language packs separately from the Codex runtime. The CCU-I18N for
 The current screenshots use the Simplified Chinese language pack. Other locales can be built from the [English template](templates/languages/messages.en-US.ftl); see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 > [!NOTE]
-> The terminal background, font, and colors are provided by a separate terminal configuration. CCU provides the localized Codex interface and the optional status line shown in the screenshots.
+> The screenshots show the Simplified Chinese interface and optional status line. Configure the terminal background, font, and colors in your terminal application.
 
 <table>
   <tr>
@@ -53,7 +53,7 @@ The current screenshots use the Simplified Chinese language pack. Other locales 
 - PowerShell 7 on Windows; Bash on Linux and macOS
 
 > [!IMPORTANT]
-> The Release ZIP includes a fork binary verified against its manifest, file size, and SHA256. Node.js 24+ must still be installed on your system. Official Codex is optional: if detected during installation, CCU records it as a failure fallback; CCU can also run independently without it.
+> Install Node.js 24+ first, then use a Release ZIP containing the fork binary. The installer checks file sizes and SHA256 against the manifest. An existing official Codex installation is registered as a failure fallback; otherwise CCU uses standalone mode.
 
 Optional: install official Codex first if you want to retain it as a fallback:
 
@@ -76,7 +76,7 @@ codex-ultra status
 
 `codex --version` should report a fork version containing `ccu.i18n`, and `codex --i18n-self-check` should complete successfully. `codex-ultra status` lists the local manager, fork, and official Codex state. Then run `codex` to start a session, or `ccu-manager` to open the management interface.
 
-If you choose to bypass approvals and the sandbox, `codex --yolo` remains available. It is not required to verify the installation.
+Use `codex --yolo` when you choose to run a session with approvals and the sandbox bypassed.
 
 | System | Release suffix | Installer |
 | --- | --- | --- |
@@ -132,7 +132,7 @@ codex-ultra uninstall
 # or run uninstall.cmd / ./uninstall.sh from the Release package
 ```
 
-Removal cleans up CCU's command entry points and the configuration it manages. If official Codex was already installed, `codex` in a new terminal returns to that build. Removing a standalone CCU installation does not install official Codex for you.
+Removal cleans up CCU's command entry points and managed configuration. If official Codex was already installed, a new terminal uses that build. Standalone users can install the official package to continue using Codex after removal.
 
 ### Source installation
 
@@ -154,7 +154,7 @@ npm ci
 ./install.sh
 ```
 
-This repository builds the CCU manager, not the complete Codex Rust project. CCU-I18N still requires a fork binary that follows the Release manifest contract.
+This repository builds the CCU manager, which runs alongside a CCU-I18N fork binary matching the Release manifest contract.
 
 The installer resolves the fork Release in this order:
 
@@ -202,7 +202,7 @@ Run `ccu-manager` to open the Rust / Ratatui management interface. It has three 
 These management commands support `--json` for use in scripts.
 
 > [!IMPORTANT]
-> `upgrade` updates the full CCU package; `update` updates the fork. Use `codex-ultra upgrade` or the Manager's `u` key to get a new manager, language packs, and themes together. `content sync` uses the existing content source and does not download a new CCU package.
+> Use `codex-ultra upgrade` or the Manager's `u` key to update the manager, language packs, themes, and fork together. Use `update` for the fork alone, or `content sync` to synchronize existing language-pack and theme sources.
 
 ## Architecture
 
@@ -225,7 +225,7 @@ CCU-I18N fork ── i18n API + built-in English fallback
 CCU manager ── install / update / uninstall / sync
 ```
 
-Official npm Codex is an optional fallback. Without it, CCU installs in standalone mode and launches the verified fork directly. The launcher falls back to an official binary only when one was recorded and the fork state is invalid.
+CCU launches the verified fork by default. If its state is invalid and an official npm Codex installation was registered, the launcher uses that fallback. Standalone mode uses the fork directly.
 
 Yes, keeping up with Codex updates this way is tiring and inefficient. The maintainers have not responded to my issues about adding an i18n interface, even though I submitted a demonstration at the time.
 
@@ -259,7 +259,7 @@ codex-cli-ultra/
 └── uninstall.ps1 / uninstall.cmd / uninstall.sh
 ```
 
-`dist/`, `tui/target/`, and `artifacts/` are generated build outputs rather than maintenance entry points for languages or themes.
+`dist/`, `tui/target/`, and `artifacts/` hold build outputs. Maintain language packs and themes in the source directories shown above.
 
 ## Language-pack format
 
@@ -318,7 +318,7 @@ The fork automation periodically checks upstream stable Releases. This repositor
 The project has Windows x64 regression and real Linux x64 install/remove smoke-test records. Release assets are available for all five platforms, and Linux ARM64 and both macOS architectures are included in the build matrix.
 
 > [!NOTE]
-> macOS still requires real-device acceptance. CI builds cannot replace device testing of Gatekeeper, terminal configuration, and browser integration. See the [macOS test checklist](docs/macos-testing.md) for the procedure.
+> Gatekeeper, terminal configuration, and browser integration on macOS still await real-device acceptance. Follow the [macOS test checklist](docs/macos-testing.md).
 
 ## Documentation and contributing
 
@@ -341,6 +341,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 This project is licensed under the [GNU General Public License v3.0](LICENSE). Language packs must declare their own license in the manifest.
 
-## Unofficial project notice
+## Project ownership
 
-Codex-Cli-Ultra is an unofficial community project and is not affiliated with, sponsored by, or endorsed by OpenAI. Codex and OpenAI are names or trademarks of their respective owners.
+Codex-Cli-Ultra is independently maintained by the community. Codex and OpenAI names and trademarks belong to their respective owners.
