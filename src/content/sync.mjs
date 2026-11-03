@@ -3,6 +3,7 @@ import {
   cp,
   lstat,
   mkdir,
+  readdir,
   readFile,
   rename,
   rm,
@@ -18,6 +19,7 @@ import {
 } from "./statusline-config.mjs";
 
 const PRIMARY_THEME_ID = "rainbow_color";
+const DEFAULT_LANGUAGE_LOCALE = "zh-CN";
 const PRIMARY_THEME_DIRECTORY = "rainbow_color";
 const HERMES_THEME_ID = "ccu.hermes";
 const HERMES_THEME_DIRECTORY = "ccu-hermes";
@@ -112,11 +114,10 @@ async function replaceFileAtomic(source, destination, fsOps = {}) {
 }
 
 async function resolveContentLayout(contentRoot) {
-  const repoLanguage = join(contentRoot, "packages", "languages", "zh-CN");
-  const packagedLanguage = join(contentRoot, "languages", "zh-CN");
-  if (await exists(repoLanguage)) {
+  const repoLanguages = join(contentRoot, "packages", "languages");
+  if (await exists(repoLanguages)) {
     return {
-      language: repoLanguage,
+      languages: repoLanguages,
       catalog: join(contentRoot, "research", "codex-0.144.5", "tui-messages.jsonl"),
       template: join(contentRoot, "templates", "languages", "messages.en-US.ftl"),
       themes: [PRIMARY_THEME_DIRECTORY, HERMES_THEME_DIRECTORY].map((directory) =>
@@ -126,7 +127,7 @@ async function resolveContentLayout(contentRoot) {
     };
   }
   return {
-    language: packagedLanguage,
+    languages: join(contentRoot, "languages"),
     catalog: join(contentRoot, "catalog", "tui-messages.jsonl"),
     template: join(contentRoot, "catalog", "messages.en-US.ftl"),
     themes: [PRIMARY_THEME_DIRECTORY, HERMES_THEME_DIRECTORY].map((directory) =>
@@ -136,11 +137,36 @@ async function resolveContentLayout(contentRoot) {
   };
 }
 
+export async function validateBundledLanguagePacks({
+  languagesRoot,
+  catalogPath,
+  templatePath
+}) {
+  const entries = await readdir(languagesRoot, { withFileTypes: true });
+  const languages = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (entry.isSymbolicLink()) {
+      throw new Error(`bundled language pack must not be a symbolic link: ${entry.name}`);
+    }
+    if (!entry.isDirectory()) continue;
+    const packRoot = join(languagesRoot, entry.name);
+    const language = await validateLanguagePack({ packRoot, catalogPath, templatePath });
+    if (language.locale !== entry.name) {
+      throw new Error(`language pack directory ${entry.name} must match locale ${language.locale}`);
+    }
+    languages.push({ packRoot, ...language });
+  }
+  if (!languages.some(({ locale }) => locale === DEFAULT_LANGUAGE_LOCALE)) {
+    throw new Error(`missing default language: ${DEFAULT_LANGUAGE_LOCALE}`);
+  }
+  return languages;
+}
+
 async function cacheBundledContent({
   contentRoot,
   installRoot,
   layout,
-  language,
+  languages,
   themes,
   fsOps
 }) {
@@ -148,11 +174,13 @@ async function cacheBundledContent({
   if (resolve(contentRoot).toLowerCase() === resolve(cacheRoot).toLowerCase()) {
     return cacheRoot;
   }
-  await replaceDirectoryAtomic(
-    layout.language,
-    join(cacheRoot, "languages", language.locale),
-    fsOps
-  );
+  for (const language of languages) {
+    await replaceDirectoryAtomic(
+      language.packRoot,
+      join(cacheRoot, "languages", language.locale),
+      fsOps
+    );
+  }
   for (const themePath of themes) {
     await replaceDirectoryAtomic(
       themePath,
@@ -194,11 +222,12 @@ export async function syncBundledContent(options) {
   const installRoot = resolve(options.installRoot);
   const codexHome = resolveCodexHome(options.env);
   const layout = await resolveContentLayout(contentRoot);
-  const language = await validateLanguagePack({
-    packRoot: layout.language,
+  const languages = await validateBundledLanguagePacks({
+    languagesRoot: layout.languages,
     catalogPath: layout.catalog,
     templatePath: layout.template
   });
+  const language = languages.find(({ locale }) => locale === DEFAULT_LANGUAGE_LOCALE);
   const themes = await Promise.all(layout.themes.map(async (themePath) =>
     validateThemePack(
       JSON.parse(await (options.readFile ?? readFile)(join(themePath, "theme.json"), "utf8"))
@@ -210,16 +239,18 @@ export async function syncBundledContent(options) {
     contentRoot,
     installRoot,
     layout,
-    language,
+    languages,
     themes: layout.themes,
     fsOps: options.fsOps
   });
 
-  await replaceDirectoryAtomic(
-    layout.language,
-    join(installRoot, "languages", language.locale),
-    options.fsOps
-  );
+  for (const bundledLanguage of languages) {
+    await replaceDirectoryAtomic(
+      bundledLanguage.packRoot,
+      join(installRoot, "languages", bundledLanguage.locale),
+      options.fsOps
+    );
+  }
   for (let index = 0; index < themes.length; index += 1) {
     await replaceDirectoryAtomic(
       layout.themes[index],

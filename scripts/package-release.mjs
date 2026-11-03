@@ -14,6 +14,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import yazl from "yazl";
 
 import { RUNTIME_PLATFORM } from "../src/config/constants.mjs";
+import { validateBundledLanguagePacks } from "../src/content/sync.mjs";
 import {
   ccuUpdateManifestName,
   validateCcuUpdateManifest
@@ -108,6 +109,11 @@ const forkReleaseOption = option("--fork-release-dir");
 if (!forkReleaseOption) throw new Error("--fork-release-dir is required");
 const forkReleaseDir = resolve(forkReleaseOption);
 const skipBuild = process.argv.includes("--skip-build");
+const languages = await validateBundledLanguagePacks({
+  languagesRoot: join(root, "packages", "languages"),
+  catalogPath: join(root, "research", "codex-0.144.5", "tui-messages.jsonl"),
+  templatePath: join(root, "templates", "languages", "messages.en-US.ftl")
+});
 await mkdir(output, { recursive: true });
 
 const manifestName = forkManifestName(RUNTIME_PLATFORM);
@@ -154,10 +160,9 @@ await copy(
   join(stage, "bin", RUNTIME_PLATFORM.managerName),
   0o755
 );
-await copy(
-  join(root, "packages", "languages", "zh-CN"),
-  join(stage, "content", "languages", "zh-CN")
-);
+for (const language of languages) {
+  await copy(language.packRoot, join(stage, "content", "languages", language.locale));
+}
 await copy(
   join(root, "packages", "themes", "rainbow_color"),
   join(stage, "content", "themes", "rainbow_color")
