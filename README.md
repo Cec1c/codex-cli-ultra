@@ -310,8 +310,8 @@ fork 自动化定期检查上游稳定 Release；本仓库的[通道同步工作
 | 支持平台 | Windows x64；Linux x64/ARM64；macOS Intel/Apple Silicon |
 | CCU | `v0.1.27` |
 | CCU-I18N | [当前稳定通道](release-channels/stable.json)；已安装版本以 `codex-ultra version` 为准 |
-| 参考语言包 | 简体中文 `zh-CN` |
-| FTL 资源 | 当前英文模板与中文包各包含 1,396 个消息键；新增界面文本仍需在 fork 中接入 |
+| 语言包 | 简体中文 `zh-CN`；巴西葡萄牙语 `pt-BR`（`/language pt-BR`） |
+| FTL 资源 | 当前英文模板与语言包各包含 1,969 个消息键；运行时覆盖范围取决于 CCU-I18N 版本 |
 | 回退机制 | 按消息回退到内置英文 |
 | 个性化 | 全新安装默认启用 Rainbow Color 状态栏；已有选择在升级时保留，Hermes 旧主题仍随包提供 |
 
