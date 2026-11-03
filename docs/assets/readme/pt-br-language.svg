@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="340" viewBox="0 0 1000 340" role="img" aria-label="Seletor de idioma do Codex CLI com Português do Brasil selecionado">
+  <rect width="1000" height="340" rx="12" fill="#10151d"/>
+  <g font-family="Menlo, Consolas, monospace" font-size="17" fill="#e6edf3">
+    <text x="22" y="35" xml:space="preserve"></text>
+    <text x="22" y="61" xml:space="preserve">  Selecionar idioma</text>
+    <text x="22" y="87" xml:space="preserve">  Os pacotes de idioma são gerenciados pelo CCU. Reinicie o Codex após selecio</text>
+    <text x="22" y="113" xml:space="preserve"></text>
+    <text x="22" y="139" xml:space="preserve">  Digite para buscar idiomas</text>
+    <text x="22" y="165" xml:space="preserve"></text>
+    <text x="22" y="191" xml:space="preserve">  Inglês                              Integrado ao Codex e sempre disponível.</text>
+    <rect x="12" y="197" width="976" height="26" rx="3" fill="#204b44"/>
+    <text x="22" y="217" xml:space="preserve">› Português (Brasil) (pt-BR) (atual)  pt-BR · codex-cli-ultra.pt-BR</text>
+    <text x="22" y="243" xml:space="preserve">  简体中文 (zh-CN)                    zh-CN · codex-cli-ultra.zh-CN</text>
+    <text x="22" y="269" xml:space="preserve"></text>
+    <text x="22" y="295" xml:space="preserve">  enter selecionar · esc voltar</text>
+  </g>
+</svg>

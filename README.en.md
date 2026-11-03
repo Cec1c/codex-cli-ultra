@@ -263,6 +263,10 @@ codex-cli-ultra/
 
 ## Language-pack format
 
+Bundled locales include Simplified Chinese (`zh-CN`) and Brazilian Portuguese (`pt-BR`). In CCU-I18N, run `/language pt-BR` and restart Codex to use Brazilian Portuguese; `/language en` restores the built-in English interface. These packs require the community CCU-I18N runtime; official Codex binaries do not load them.
+
+All bundled language packs are validated, included in release archives, and synchronized on updates. Existing language selections and separately installed packs are preserved. Translation changes can ship independently of the runtime while its i18n API remains compatible.
+
 Each language pack contains a manifest and an FTL resource:
 
 ```text
@@ -310,8 +314,8 @@ The fork automation periodically checks upstream stable Releases. This repositor
 | Supported platforms | Windows x64; Linux x64/ARM64; macOS Intel/Apple Silicon |
 | CCU | `v0.1.27` |
 | CCU-I18N | [Current stable channel](release-channels/stable.json); inspect the installed version with `codex-ultra version` |
-| Reference locale | Simplified Chinese (`zh-CN`) |
-| FTL resources | The current English template and Chinese pack each contain 1,396 message keys; new interface text still needs to be integrated in the fork |
+| Bundled locales | Simplified Chinese (`zh-CN`); Brazilian Portuguese (`pt-BR`) |
+| FTL resources | The English template and bundled packs each contain 1,969 message keys; runtime coverage depends on the CCU-I18N version |
 | Fallback | Built-in English per message |
 | Customization | Fresh installs enable the Rainbow Color status line by default; upgrades preserve existing choices and retain the legacy Hermes theme |
 

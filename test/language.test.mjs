@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { validateLanguagePack } from "../src/language/validate.mjs";
 
@@ -476,6 +477,25 @@ test("validateLanguagePack rejects a whitespace-only manifest license", async ()
     validateLanguagePack({ packRoot, catalogPath }),
     /manifest license must be a non-empty string/
   );
+});
+
+test("every bundled language pack matches the current English template and resource hash", async (t) => {
+  const languagesRoot = new URL("../packages/languages/", import.meta.url);
+  const catalogPath = new URL("../research/codex-0.144.5/tui-messages.jsonl", import.meta.url);
+  const templatePath = new URL("../templates/languages/messages.en-US.ftl", import.meta.url);
+  for (const entry of await readdir(languagesRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    await t.test(entry.name, async () => {
+      const packRoot = new URL(`${entry.name}/`, languagesRoot);
+      const result = await validateLanguagePack({
+        packRoot: fileURLToPath(packRoot),
+        catalogPath,
+        templatePath
+      });
+      assert.equal(result.locale, entry.name);
+      assert.ok(result.messageCount > 0);
+    });
+  }
 });
 
 test("the zh-CN language pack manifest declares GPL-3.0-only", async () => {

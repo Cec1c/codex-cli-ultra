@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "type": "language",
+  "id": "codex-cli-ultra.pt-BR",
+  "locale": "pt-BR",
+  "displayName": "Brazilian Portuguese",
+  "nativeName": "Português (Brasil)",
+  "license": "GPL-3.0-only",
+  "i18nApi": {
+    "min": 1,
+    "max": 1
+  },
+  "catalogVersion": 1,
+  "fallbackLocales": [],
+  "resources": [
+    {
+      "path": "messages.ftl",
+      "sha256": "sha256:d9421b6319d913e8dff1ca991cf6bfcdd9d5a1a008d1f4ccf4e8badcc52f477b"
+    }
+  ]
+}

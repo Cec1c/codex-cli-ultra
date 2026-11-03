@@ -61,6 +61,22 @@ $stage = Assert-ChildPath -Root $output -Candidate (Join-Path $output $name) -La
 $zip = Assert-ChildPath -Root $output -Candidate (Join-Path $output "$name.zip") -Label 'Release ZIP'
 $updateManifestPath = Assert-ChildPath -Root $output -Candidate (Join-Path $output 'ccu-update-manifest.json') -Label 'CCU update manifest'
 
+$languagePacks = @(Get-ChildItem -LiteralPath (Join-Path $root 'packages\languages') -Directory | Sort-Object Name)
+if (-not ($languagePacks | Where-Object Name -CEQ 'zh-CN')) {
+    throw 'Missing default language: zh-CN'
+}
+foreach ($languagePack in $languagePacks) {
+    if ($languagePack.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        throw "Bundled language pack must not be a symbolic link: $($languagePack.Name)"
+    }
+    $validation = & node (Join-Path $root 'src\cli.mjs') language validate --pack $languagePack.FullName --catalog (Join-Path $root 'research\codex-0.144.5\tui-messages.jsonl') --template (Join-Path $root 'templates\languages\messages.en-US.ftl')
+    if ($LASTEXITCODE -ne 0) { throw "Language pack validation failed: $($languagePack.Name)" }
+    $language = $validation | ConvertFrom-Json -ErrorAction Stop
+    if ([string]$language.locale -cne $languagePack.Name) {
+        throw "Language pack directory $($languagePack.Name) must match locale $($language.locale)"
+    }
+}
+
 Push-Location $root
 try {
     npm run build
@@ -82,7 +98,9 @@ New-Item -ItemType Directory -Path (Join-Path $stage 'fork-release') -Force | Ou
 Copy-Item -LiteralPath (Join-Path $root 'dist\codex-ultra.mjs') -Destination (Join-Path $stage 'bin')
 Copy-Item -LiteralPath (Join-Path $root 'dist\launcher.mjs') -Destination (Join-Path $stage 'bin')
 Copy-Item -LiteralPath (Join-Path $root 'tui\target\release\ccu-manager.exe') -Destination (Join-Path $stage 'bin')
-Copy-Item -LiteralPath (Join-Path $root 'packages\languages\zh-CN') -Destination (Join-Path $stage 'content\languages\zh-CN') -Recurse
+foreach ($languagePack in $languagePacks) {
+    Copy-Item -LiteralPath $languagePack.FullName -Destination (Join-Path (Join-Path $stage 'content\languages') $languagePack.Name) -Recurse
+}
 Copy-Item -LiteralPath (Join-Path $root 'packages\themes\rainbow_color') -Destination (Join-Path $stage 'content\themes\rainbow_color') -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'packages\themes\ccu-hermes') -Destination (Join-Path $stage 'content\themes\ccu-hermes') -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'research\codex-0.144.5\tui-messages.jsonl') -Destination (Join-Path $stage 'content\catalog\tui-messages.jsonl')

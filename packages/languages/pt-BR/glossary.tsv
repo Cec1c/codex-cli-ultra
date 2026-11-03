@@ -1,0 +1,93 @@
+en	pt-BR
+agent	agente
+subagent	subagente
+session	sessão
+chat	conversa
+thread	conversa
+prompt	prompt
+composer	campo de mensagem
+approval	aprovação
+permission	permissão
+sandbox	sandbox
+workspace	área de trabalho
+worktree	worktree
+branch	branch
+commit	commit
+pull request	pull request
+repository	repositório
+review	revisão
+diff	diff
+file	arquivo
+folder	pasta
+directory	diretório
+path	caminho
+settings	configurações
+preferences	preferências
+shortcut	atalho
+key binding	atalho de teclado
+key chord	sequência de teclas
+model	modelo
+reasoning	raciocínio
+reasoning effort	esforço de raciocínio
+context	contexto
+context window	janela de contexto
+remaining	restante
+usage	uso
+usage limit	limite de uso
+quota	cota
+token	token
+input	entrada
+output	saída
+background	segundo plano
+working	trabalhando
+thinking	pensando
+ready	pronto
+inactive	inativo
+needs input	aguardando resposta
+warning	aviso
+error	erro
+retry	tentar novamente
+resume	retomar
+continue	continuar
+fork	criar uma ramificação
+archive	arquivar
+delete	excluir
+remove	remover
+cancel	cancelar
+allow	permitir
+deny	negar
+enable	ativar
+disable	desativar
+save	salvar
+load	carregar
+copy	copiar
+paste	colar
+export	exportar
+import	importar
+sign in	entrar
+sign out	sair da conta
+account	conta
+provider	provedor
+connection	conexão
+connector	conector
+skill	skill
+plugin	plugin
+hook	hook
+theme	tema
+status line	barra de status
+terminal title	título do terminal
+tool	ferramenta
+run	executar
+startup	inicialização
+fallback	alternativa
+memory	memória
+feature	recurso
+experimental	experimental
+selection	seleção
+selected	selecionado
+clear	limpar
+refresh	atualizar
+reset	redefinir
+install	instalar
+uninstall	desinstalar
+upgrade	atualizar
