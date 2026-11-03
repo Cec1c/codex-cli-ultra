@@ -36,7 +36,7 @@ async function contentFixture(t) {
     id: "fixture.greeting",
     ftlKey: "fixture-greeting",
     mvpStatus: "wired",
-    args: [{ name: "name", sample: "Ihering" }]
+    args: [{ name: "name", sample: "Ada" }]
   }) + "\n");
   await writeFile(join(templateRoot, "messages.en-US.ftl"), "fixture-greeting = Hello { $name }!\n");
   async function language(locale, greeting) {
